@@ -309,12 +309,50 @@ class PosTransaction(Transaction):
     customer_name = models.CharField(max_length=255, blank=True, null=True, verbose_name="Customer Name")
     customer_phone = models.CharField(max_length=20, blank=True, null=True, verbose_name="Customer Phone")
 
+    # Discount fields (restored — migration 0009)
+    discount_amount = models.DecimalField(
+        decimal_places=2,
+        default=0,
+        max_digits=10,
+        help_text='Discount applied to this transaction'
+    )
+    discount_type = models.CharField(
+        blank=True,
+        choices=[
+            ('', 'None'),
+            ('fixed', 'Fixed Amount'),
+            ('percentage', 'Percentage'),
+            ('sc', 'Senior Citizen (20%)'),
+            ('pwd', 'PWD (20%)'),
+            ('promo', 'Promo'),
+        ],
+        default='',
+        help_text='Type of discount applied',
+        max_length=20,
+    )
+    discount_id_number = models.CharField(
+        blank=True,
+        default='',
+        help_text='SC/PWD ID number for audit trail',
+        max_length=50
+    )
+    shift = models.ForeignKey(
+        'Shift',
+        blank=True,
+        null=True,
+        on_delete=models.SET_NULL,
+        related_name='transactions'
+    )
+    voided_at = models.DateTimeField(blank=True, null=True)
+
     class Meta:
         ordering = ['-created_at']
         indexes = [
             models.Index(fields=['-created_at']),
             models.Index(fields=['transaction_no']),
             models.Index(fields=['payment_method']),
+            models.Index(fields=['status'], name='canteen_pos_status_idx'),
+            models.Index(fields=['shift'], name='canteen_pos_shift_idx'),
         ]
 
     def __str__(self):
@@ -561,6 +599,23 @@ class BusinessProfile(models.Model):
     track_inventory = models.BooleanField(default=True, verbose_name='Track Inventory')
     vat_enabled = models.BooleanField(default=False, verbose_name='VAT Enabled')
     vat_rate = models.DecimalField(max_digits=5, decimal_places=2, default=12.0, verbose_name='VAT Rate (%)')
+    # Per-type discount configuration (restored — migration 0009)
+    sc_discount_enabled = models.BooleanField(default=True, verbose_name='SC Discount Enabled')
+    sc_discount_rate = models.DecimalField(
+        decimal_places=2, default=20.0, max_digits=5, verbose_name='SC Discount Rate (%)'
+    )
+    pwd_discount_enabled = models.BooleanField(default=True, verbose_name='PWD Discount Enabled')
+    pwd_discount_rate = models.DecimalField(
+        decimal_places=2, default=20.0, max_digits=5, verbose_name='PWD Discount Rate (%)'
+    )
+    promo_discount_enabled = models.BooleanField(default=False, verbose_name='Promo Discount Enabled')
+
+    @classmethod
+    def get_instance(cls):
+        instance = cls.objects.first()
+        if not instance:
+            instance = cls.objects.create()
+        return instance
 
     class Meta:
         db_table = 'business_profile'

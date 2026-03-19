@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="manifest" href="manifest.json">
-    <link rel="icon" type="image/svg+xml" href="assets/tarsier-icon.svg">
+    <link rel="icon" type="image/png" href="assets/tarsier-icon.png">
     <script>if(localStorage.getItem('darkMode')==='true')document.documentElement.classList.add('dark');</script>
     <title>TarsierPOS</title>
     <link rel="stylesheet" href="styles.css">
@@ -162,15 +162,10 @@
                 });
 
                 const data = await response.json();
-                console.log('Login response:', response.status);
 
                 if (response.ok) {
                     // Store JWT tokens in localStorage
                     setToken(data.access, data.refresh);
-                    console.log('Token stored:', localStorage.getItem('access_token'));
-                    
-                    // Redirect to POS
-                    console.log('Redirecting to POS...');
                     window.location.href = 'index.html';
                 } else {
                     // Show error

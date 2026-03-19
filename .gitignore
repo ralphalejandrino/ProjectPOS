@@ -8,3 +8,4 @@ __pycache__/
 *.LEGACY-BACKUP
 ADMIN_CREDENTIALS.txt
 wheels/
+.agents/

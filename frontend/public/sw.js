@@ -1,4 +1,4 @@
-const CACHE_NAME = 'tarsierpos-v2';
+const CACHE_NAME = 'tarsierpos-v3';
 const ASSETS = [
   'index.html',
   'login.html',
@@ -16,7 +16,7 @@ const ASSETS = [
   'manifest.json',
   'icon-192.png',
   'icon-512.png',
-  'assets/tarsier-icon.svg',
+  'assets/tarsier-icon.png',
   'assets/gcash-logo.png',
   'assets/maya-logo.png',
   'icons/tarsier-logo.png'

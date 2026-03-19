@@ -89,44 +89,32 @@ class PosTransactionViewSet(viewsets.ViewSet):
         for backend in list(self.filter_backends):
             transactions = backend().filter_queryset(request, transactions, self)
 
-        # Apply pagination
-        paginator = PageNumberPagination()
-        page = paginator.paginate_queryset(transactions, request, view=self)
-        
-        if page is not None:
-            data = [{
+        def _serialize_tx(t):
+            amt = t.total_amount
+            total = float(amt.amount) if hasattr(amt, 'amount') else float(amt)
+            return {
                 'id': t.id,
                 'transaction_no': t.transaction_no,
-                'total': float(t.total_amount.amount) if hasattr(t.total_amount, 'amount') else float(t.total_amount),
-                'total_amount': float(t.total_amount.amount) if hasattr(t.total_amount, 'amount') else float(t.total_amount),
+                'total': total,
+                'total_amount': total,
                 'status': t.status,
                 'void': t.void,
                 'payment_method': t.payment_method,
                 'created_at': t.created_at.isoformat(),
-                'gcash_reference': t.gcash_reference if hasattr(t, 'gcash_reference') else None,
+                'gcash_reference': t.gcash_reference,
                 'items_count': t.items_count,
-                'discount_amount':    float(t.discount_amount) if t.discount_amount else 0.0,
-                'discount_type':      t.discount_type or '',
+                'discount_amount': float(t.discount_amount) if t.discount_amount else 0.0,
+                'discount_type': t.discount_type or '',
                 'discount_id_number': t.discount_id_number or '',
-            } for t in page]
-            return paginator.get_paginated_response(data)
+            }
 
-        data = [{
-            'id': t.id,
-            'transaction_no': t.transaction_no,
-            'total': float(t.total_amount.amount) if hasattr(t.total_amount, 'amount') else float(t.total_amount),
-            'total_amount': float(t.total_amount.amount) if hasattr(t.total_amount, 'amount') else float(t.total_amount),
-            'status': t.status,
-            'void': t.void,
-            'payment_method': t.payment_method,
-            'created_at': t.created_at.isoformat(),
-            'gcash_reference': t.gcash_reference if hasattr(t, 'gcash_reference') else None,
-            'items_count': t.items_count,
-            'discount_amount':    float(t.discount_amount) if t.discount_amount else 0.0,
-            'discount_type':      t.discount_type or '',
-            'discount_id_number': t.discount_id_number or '',
-        } for t in transactions]
-        return Response(data)
+        # Apply pagination
+        paginator = PageNumberPagination()
+        page = paginator.paginate_queryset(transactions, request, view=self)
+        if page is not None:
+            return paginator.get_paginated_response([_serialize_tx(t) for t in page])
+
+        return Response([_serialize_tx(t) for t in transactions])
 
     def retrieve(self, request, pk=None):
         """Get transaction details including items"""

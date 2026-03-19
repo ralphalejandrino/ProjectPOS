@@ -6,7 +6,7 @@
     <title>X-Report — TarsierPOS</title>
     <script>if(localStorage.getItem('darkMode')==='true')document.documentElement.classList.add('dark');</script>
     <link rel="manifest" href="manifest.json">
-    <link rel="icon" type="image/svg+xml" href="assets/tarsier-icon.svg">
+    <link rel="icon" type="image/png" href="assets/tarsier-icon.png">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <link rel="stylesheet" href="styles.css">
@@ -20,6 +20,7 @@
     </style>
 </head>
 <body class="bg-gray-50">
+    <script>if (!localStorage.getItem('access_token')) { window.location.href = 'login.html'; }</script>
 
     <!-- NAVIGATION -->
     <nav class="bg-gradient-to-r from-blue-600 to-blue-800 text-white shadow-lg sticky top-0 z-50 no-print">
