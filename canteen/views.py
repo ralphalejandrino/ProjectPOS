@@ -333,17 +333,26 @@ class PosTransactionViewSet(viewsets.ViewSet):
         voided = all_qs.filter(void=True)
 
         # --- Totals ---
-        gross = float(completed.aggregate(total=Sum('total_amount'))['total'] or 0)
+        _gross_raw = completed.aggregate(total=Sum('total_amount'))['total'] or 0
+        gross = float(_gross_raw)  # float kept for JSON serialisation — Decimal used for VAT math only
         transaction_count = completed.count()
         average_transaction = round(gross / transaction_count, 2) if transaction_count else 0
 
         # --- VAT breakdown (rate read from BusinessProfile) ---
         from .models import BusinessProfile as _BP
+        from decimal import Decimal, ROUND_HALF_UP
         _bp = _BP.get_instance()
         if _bp.vat_enabled:
-            _vat_rate = float(_bp.vat_rate)
-            vat_amount = round(gross * _vat_rate / (100 + _vat_rate), 2)
-            net_of_vat = round(gross - vat_amount, 2)
+            _gross_d = Decimal(str(_gross_raw))
+            _vat_rate_d = Decimal(str(_bp.vat_rate))
+            vat_amount = float(
+                (_gross_d * _vat_rate_d / (Decimal('100') + _vat_rate_d))
+                .quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+            )
+            net_of_vat = float(
+                (_gross_d - Decimal(str(vat_amount)))
+                .quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+            )
         else:
             vat_amount = 0.0
             net_of_vat = gross
@@ -1209,6 +1218,13 @@ class ShiftViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN
             )
         return super().update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        """Shifts are financial audit records and must never be deleted."""
+        return Response(
+            {'error': 'Shifts cannot be deleted. They are permanent audit records.'},
+            status=status.HTTP_405_METHOD_NOT_ALLOWED
+        )
 
     @action(detail=False, methods=['post'], url_path='open', permission_classes=[IsCashierOrAbove])
     def open_shift(self, request):
