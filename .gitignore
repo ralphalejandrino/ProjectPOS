@@ -1,0 +1,10 @@
+venv/
+__pycache__/
+*.pyc
+.env
+*.OLD
+*.backup
+*.working
+*.LEGACY-BACKUP
+ADMIN_CREDENTIALS.txt
+wheels/

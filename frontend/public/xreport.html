@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>X-Report — TarsierPOS</title>
+    <script>if(localStorage.getItem('darkMode')==='true')document.documentElement.classList.add('dark');</script>
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/svg+xml" href="assets/tarsier-icon.svg">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="shared-styles.css">
+    <style>
+        @media print {
+            .no-print { display: none !important; }
+            nav { display: none !important; }
+            body { background: white; }
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+
+    <!-- NAVIGATION -->
+    <nav class="bg-gradient-to-r from-blue-600 to-blue-800 text-white shadow-lg sticky top-0 z-50 no-print">
+        <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+            <div class="flex items-center space-x-3">
+                <span class="text-3xl">🍽️</span>
+                <div>
+                    <h1 class="text-xl font-bold text-white" id="site-name">TarsierPOS</h1>
+                    <p class="text-blue-200 text-sm" id="site-tagline">Point of Sale System</p>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-4">
+                <span id="live-clock" class="text-sm font-mono tabular-nums text-blue-100 hidden sm:block"></span>
+                <div class="text-right hidden sm:block border-r border-blue-400 pr-4 mr-2">
+                    <p class="text-sm font-bold text-white leading-tight" id="userName"></p>
+                    <p class="text-[10px] text-blue-200 uppercase tracking-widest font-black leading-tight" id="userRole"></p>
+                </div>
+                <div class="relative">
+                    <button id="menu-button" class="bg-blue-700 hover:bg-blue-800 px-4 py-2 rounded-lg font-medium transition flex items-center space-x-2">
+                        <span>☰ Menu</span>
+                        <span id="menu-arrow">▼</span>
+                    </button>
+                    <div id="dropdown-menu" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl z-50">
+                        <a href="index.html" class="block px-4 py-3 text-gray-700 hover:bg-gray-100 rounded-t-lg">🏪 POS</a>
+                        <a href="inventory.html" class="block px-4 py-3 text-gray-700 hover:bg-gray-100">📦 Inventory</a>
+                        <a href="dashboard.html" class="block px-4 py-3 text-gray-700 hover:bg-gray-100">📊 Dashboard</a>
+                        <a href="xreport.html" class="block px-4 py-3 text-blue-600 bg-blue-50 font-bold">📊 X-Report</a>
+                        <a href="zreport.html" class="block px-4 py-3 text-gray-700 hover:bg-gray-100">📋 Z-Report</a>
+                        <a href="settings.html" class="block px-4 py-3 text-gray-700 hover:bg-gray-100">⚙️ Settings</a>
+                        <a href="#" onclick="logout(); return false;" class="block px-4 py-3 text-red-600 hover:bg-red-50 rounded-b-lg">🚪 Logout</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- MAIN CONTENT -->
+    <div class="container mx-auto px-4 py-6 max-w-3xl">
+
+        <!-- Header -->
+        <div class="flex items-center justify-between mb-6 no-print">
+            <div>
+                <h2 class="text-2xl font-bold text-gray-800">📊 X-Report</h2>
+                <p class="text-gray-500 text-sm mt-1">Current shift sales summary</p>
+            </div>
+            <div class="flex space-x-2">
+                <button onclick="fetchReport()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition">
+                    ↻ Refresh
+                </button>
+                <button onclick="thermalPrintXReport()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition">
+                    🖨️ Thermal Print
+                </button>
+            </div>
+        </div>
+
+        <!-- Status area -->
+        <div id="status-area"></div>
+
+        <!-- Report content (hidden until loaded) -->
+        <div id="report-content" class="hidden">
+
+            <!-- Shift info -->
+            <div class="bg-white rounded-xl shadow p-4 mb-4">
+                <div class="flex justify-between text-sm text-gray-600">
+                    <div><span class="font-semibold">Cashier:</span> <span id="rpt-cashier"></span></div>
+                    <div><span class="font-semibold">Shift opened:</span> <span id="rpt-opened"></span></div>
+                </div>
+                <div class="text-xs text-gray-400 mt-1 text-right">Generated: <span id="rpt-generated"></span></div>
+            </div>
+
+            <!-- Summary cards -->
+            <div class="grid grid-cols-2 gap-4 mb-4">
+                <div class="bg-white rounded-xl shadow p-4 text-center">
+                    <div class="text-xs text-gray-500 uppercase tracking-wide mb-1">Gross Sales</div>
+                    <div class="text-2xl font-bold text-green-600" id="rpt-gross"></div>
+                </div>
+                <div class="bg-white rounded-xl shadow p-4 text-center">
+                    <div class="text-xs text-gray-500 uppercase tracking-wide mb-1">Net Sales</div>
+                    <div class="text-2xl font-bold text-blue-600" id="rpt-net"></div>
+                </div>
+                <div class="bg-white rounded-xl shadow p-4 text-center">
+                    <div class="text-xs text-gray-500 uppercase tracking-wide mb-1">Transactions</div>
+                    <div class="text-2xl font-bold text-gray-800" id="rpt-txn-count"></div>
+                </div>
+                <div class="bg-white rounded-xl shadow p-4 text-center">
+                    <div class="text-xs text-gray-500 uppercase tracking-wide mb-1">Voids</div>
+                    <div class="text-2xl font-bold text-red-500" id="rpt-void-count"></div>
+                </div>
+            </div>
+
+            <!-- Payment method breakdown -->
+            <div class="bg-white rounded-xl shadow p-4 mb-4">
+                <h3 class="font-bold text-gray-700 mb-3 text-sm uppercase tracking-wide">Payment Breakdown</h3>
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="text-gray-500 border-b">
+                            <th class="text-left pb-2">Method</th>
+                            <th class="text-right pb-2">Count</th>
+                            <th class="text-right pb-2">Subtotal</th>
+                        </tr>
+                    </thead>
+                    <tbody id="rpt-by-method"></tbody>
+                </table>
+            </div>
+
+            <!-- Void detail -->
+            <div class="bg-white rounded-xl shadow p-4 text-sm text-gray-600">
+                <div class="flex justify-between">
+                    <span>Void Total</span>
+                    <span class="font-semibold text-red-500" id="rpt-void-total"></span>
+                </div>
+                <div class="flex justify-between mt-1">
+                    <span>Average Transaction</span>
+                    <span class="font-semibold" id="rpt-avg"></span>
+                </div>
+            </div>
+
+        </div><!-- end #report-content -->
+    </div>
+
+    <script src="config.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // Role gate: allow cashier AND manager/admin (xreport is cashier-accessible)
+            const role = getUserRole();
+            if (!role) {
+                window.location.href = 'login.html';
+                return;
+            }
+
+            loadSiteName();
+            loadColorScheme();
+            setupMenu();
+            fetchReport();
+        });
+
+        function setupMenu() {
+            const menuButton = document.getElementById('menu-button');
+            const dropdownMenu = document.getElementById('dropdown-menu');
+            const menuArrow = document.getElementById('menu-arrow');
+            if (!menuButton) return;
+            menuButton.addEventListener('click', (e) => {
+                e.stopPropagation();
+                dropdownMenu.classList.toggle('hidden');
+                menuArrow.textContent = dropdownMenu.classList.contains('hidden') ? '▼' : '▲';
+            });
+            document.addEventListener('click', () => {
+                dropdownMenu.classList.add('hidden');
+                menuArrow.textContent = '▼';
+            });
+        }
+
+        let currentXReportData = null;
+
+        async function thermalPrintXReport() {
+            if (!currentXReportData) return;
+            try {
+                authenticatedFetch(`${API_BASE}/transactions/print_xreport/`, {
+                    method: 'POST',
+                    body: JSON.stringify(currentXReportData)
+                });
+            } catch(e) { /* non-fatal */ }
+        }
+
+        function fmt(n) {
+            return '₱' + parseFloat(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+        }
+
+        function fmtDatetime(iso) {
+            if (!iso) return '—';
+            const d = new Date(iso);
+            return d.toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' });
+        }
+
+        async function fetchReport() {
+            const statusArea = document.getElementById('status-area');
+            const content = document.getElementById('report-content');
+            statusArea.innerHTML = `
+                <div class="bg-blue-50 border border-blue-200 rounded-xl p-6 text-center text-blue-600 mb-4">
+                    Loading shift report...
+                </div>`;
+            content.classList.add('hidden');
+
+            try {
+                const res = await authenticatedFetch(`${API_BASE}/transactions/xreport/`);
+                const data = await res.json();
+
+                if (res.status === 404 || data.error) {
+                    statusArea.innerHTML = `
+                        <div class="bg-yellow-50 border border-yellow-300 rounded-xl p-6 text-center mb-4">
+                            <div class="text-4xl mb-3">⏸️</div>
+                            <div class="text-lg font-bold text-yellow-700 mb-1">No Open Shift</div>
+                            <div class="text-yellow-600 text-sm">${data.error || 'Start a shift first to generate an X-Report.'}</div>
+                        </div>`;
+                    return;
+                }
+
+                if (!res.ok) {
+                    throw new Error(`Server error: ${res.status}`);
+                }
+
+                statusArea.innerHTML = '';
+                content.classList.remove('hidden');
+                currentXReportData = data;
+
+                document.getElementById('rpt-cashier').textContent = data.cashier;
+                document.getElementById('rpt-opened').textContent = fmtDatetime(data.opened_at);
+                document.getElementById('rpt-generated').textContent = fmtDatetime(data.generated_at);
+                document.getElementById('rpt-gross').textContent = fmt(data.gross_sales);
+                document.getElementById('rpt-net').textContent = fmt(data.net_sales);
+                document.getElementById('rpt-txn-count').textContent = data.transaction_count;
+                document.getElementById('rpt-void-count').textContent = data.void_count;
+                document.getElementById('rpt-void-total').textContent = fmt(data.void_total);
+                document.getElementById('rpt-avg').textContent = fmt(data.average_transaction);
+
+                const methodLabels = { cash: '💵 Cash', gcash: '💙 GCash', maya: '💚 Maya' };
+                const tbody = document.getElementById('rpt-by-method');
+                tbody.innerHTML = '';
+                data.by_payment_method.forEach(row => {
+                    const tr = document.createElement('tr');
+                    tr.className = 'border-b last:border-0';
+                    tr.innerHTML = `
+                        <td class="py-2">${methodLabels[row.payment_method] || row.payment_method}</td>
+                        <td class="py-2 text-right text-gray-500">${row.count}</td>
+                        <td class="py-2 text-right font-semibold">${fmt(row.subtotal)}</td>`;
+                    tbody.appendChild(tr);
+                });
+
+            } catch (err) {
+                statusArea.innerHTML = `
+                    <div class="bg-red-50 border border-red-300 rounded-xl p-6 text-center mb-4">
+                        <div class="text-4xl mb-3">⚠️</div>
+                        <div class="text-lg font-bold text-red-700 mb-1">Error Loading Report</div>
+                        <div class="text-red-600 text-sm">${err.message}</div>
+                    </div>`;
+            }
+        }
+
+        async function logout() {
+            clearTokens();
+            window.location.href = 'login.html';
+        }
+    </script>
+<script>
+(function(){
+    try {
+        const tok = localStorage.getItem('access_token');
+        if (tok) {
+            const p = JSON.parse(atob(tok.split('.')[1]));
+            const uEl = document.getElementById('userName');
+            const rEl = document.getElementById('userRole');
+            if (uEl) uEl.textContent = p.username || 'User';
+            if (rEl) rEl.textContent = p.role || '';
+        }
+    } catch(e) {}
+    function tick() {
+        const prefs = (() => { try { return JSON.parse(localStorage.getItem('clock_prefs') || '{}'); } catch(e) { return {}; } })();
+        const use12 = prefs.format !== '24h';
+        const tz = prefs.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+        const el = document.getElementById('live-clock');
+        if (el) el.textContent = new Date().toLocaleTimeString('en-PH', {hour:'2-digit', minute:'2-digit', second:'2-digit', hour12: use12, timeZone: tz});
+    }
+    tick(); setInterval(tick, 1000);
+})();
+</script>
+<script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js')
+      .catch(err => console.warn('SW registration failed:', err));
+  }
+</script>
+</body>
+</html>

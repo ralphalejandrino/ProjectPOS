@@ -1,0 +1,1161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="manifest" href="manifest.json">
+    <title>Settings — TarsierPOS</title>
+    <script>if(localStorage.getItem('darkMode')==='true')document.documentElement.classList.add('dark');</script>
+    <link rel="icon" type="image/svg+xml" href="assets/tarsier-icon.svg">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="shared-styles.css">
+</head>
+<body class="bg-gray-50">
+
+    <!-- NAVIGATION -->
+    <nav class="bg-gradient-to-r from-blue-600 to-blue-800 text-white shadow-lg sticky top-0 z-50">
+        <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+            <div class="flex items-center space-x-3">
+                <span class="text-3xl">🍽️</span>
+                <div>
+                    <h1 class="text-xl font-bold text-white" id="site-name">TarsierPOS</h1>
+                    <p class="text-blue-200 text-sm" id="site-tagline">AI Powered Point of Sale System</p>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-4">
+                <span id="live-clock" class="text-sm font-mono tabular-nums text-blue-100 hidden sm:block"></span>
+                <div class="text-right hidden sm:block border-r border-blue-400 pr-4 mr-2">
+                    <p class="text-sm font-bold text-white leading-tight" id="userName"></p>
+                    <p class="text-[10px] text-blue-200 uppercase tracking-widest font-black leading-tight" id="userRole"></p>
+                </div>
+                <div class="relative">
+                    <button id="menu-button" class="bg-blue-700 hover:bg-blue-800 px-4 py-2 rounded-lg font-medium transition flex items-center space-x-2">
+                        <span>☰ Menu</span>
+                        <span id="menu-arrow">▼</span>
+                    </button>
+                    <div id="dropdown-menu" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl z-50">
+                        <a href="index.html" class="block px-4 py-3 text-gray-700 hover:bg-gray-100 rounded-t-lg">🏪 POS</a>
+                        <a href="inventory.html" class="block px-4 py-3 text-gray-700 hover:bg-gray-100">📦 Inventory</a>
+                        <a href="dashboard.html" class="block px-4 py-3 text-gray-700 hover:bg-gray-100">📊 Dashboard</a>
+                        <a href="settings.html" class="block px-4 py-3 text-blue-600 bg-blue-50 font-bold">⚙️ Settings</a>
+                        <a href="#" onclick="logout(); return false;" class="block px-4 py-3 text-red-600 hover:bg-red-50 rounded-b-lg">🚪 Logout</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="h-[calc(100vh-73px)] overflow-y-auto bg-gray-50">
+    <!-- MAIN CONTENT -->
+    <div class="container mx-auto px-4 py-6 max-w-4xl">
+
+        <!-- PAGE HEADER -->
+        <div class="mb-6">
+            <h2 class="text-3xl font-bold text-gray-800">⚙️ Settings</h2>
+            <p class="text-gray-600">Configure your POS system</p>
+        </div>
+
+        <!-- TAB BAR -->
+        <div class="flex border-b border-gray-200 mb-6 overflow-x-auto">
+            <button onclick="switchTab('general')" id="tab-btn-general"
+                class="px-5 py-3 text-sm border-b-2 whitespace-nowrap transition-colors">General</button>
+            <button onclick="switchTab('appearance')" id="tab-btn-appearance"
+                class="px-5 py-3 text-sm border-b-2 whitespace-nowrap transition-colors">Appearance</button>
+            <button onclick="switchTab('payments')" id="tab-btn-payments"
+                class="px-5 py-3 text-sm border-b-2 whitespace-nowrap transition-colors">Payments</button>
+            <button onclick="switchTab('hardware')" id="tab-btn-hardware"
+                class="px-5 py-3 text-sm border-b-2 whitespace-nowrap transition-colors">Hardware</button>
+            <button onclick="switchTab('users')" id="tab-btn-users"
+                class="px-5 py-3 text-sm border-b-2 whitespace-nowrap transition-colors">Users</button>
+        </div>
+
+        <!-- TAB: GENERAL -->
+        <div id="tab-general" class="space-y-6">
+
+            <!-- BUSINESS INFORMATION -->
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h3 class="text-xl font-bold text-gray-800 mb-4">🏪 Business Information</h3>
+                <form class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Business Name</label>
+                        <input type="text" id="business-name" value="My Store" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Tagline / Slogan</label>
+                        <input type="text" id="business-tagline" placeholder="Tagline or slogan"
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Business Logo</label>
+                        <div class="flex items-center space-x-4">
+                            <img id="logo-preview" src="" alt="Logo" class="w-16 h-16 object-contain rounded border border-gray-200 hidden">
+                            <div>
+                                <input type="file" id="logo-file" accept="image/*" class="hidden" onchange="uploadLogo()">
+                                <button type="button" onclick="document.getElementById('logo-file').click()"
+                                    class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm rounded-lg">
+                                    Upload Logo
+                                </button>
+                                <p class="text-xs text-gray-400 mt-1">PNG or JPG, shown in page header</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Contact Number</label>
+                            <input type="tel" id="contact-number" value="+63 912 345 6789" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                            <input type="email" id="email" value="store@example.com" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Address</label>
+                        <textarea id="address" rows="2" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">123 Main Street, City, Philippines</textarea>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">TIN (Tax Identification Number)</label>
+                        <input type="text" id="tin" placeholder="e.g. 123-456-789-000"
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <button type="button" onclick="saveBusinessInfo()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition">
+                        Save Business Info
+                    </button>
+                </form>
+            </div>
+
+            <!-- SYSTEM PREFERENCES -->
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h3 class="text-xl font-bold text-gray-800 mb-4">🔧 System Preferences</h3>
+                <form class="space-y-4">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Currency</label>
+                            <select id="currency" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                <option value="PHP">₱ PHP - Philippine Peso</option>
+                                <option value="USD">$ USD - US Dollar</option>
+                                <option value="EUR">€ EUR - Euro</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Tax Rate (%)</label>
+                            <input type="number" id="tax-rate" value="12" step="0.1" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Low Stock Threshold</label>
+                        <input type="number" id="low-stock-threshold" value="10" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <p class="text-xs text-gray-500 mt-1">Alert when stock falls below this number</p>
+                    </div>
+                    <button type="button" onclick="saveSystemSettings()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition">
+                        Save System Settings
+                    </button>
+                </form>
+            </div>
+
+            <!-- CLOCK SETTINGS -->
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h3 class="text-xl font-bold text-gray-800 mb-4">🕐 Clock Settings</h3>
+                <form class="space-y-4">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Time Format</label>
+                            <select id="clock-format" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                <option value="12h">12-hour (AM/PM)</option>
+                                <option value="24h">24-hour</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Timezone</label>
+                            <select id="clock-timezone" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                <option value="">System default</option>
+                                <option value="Asia/Manila">Asia/Manila (PHT)</option>
+                                <option value="Asia/Singapore">Asia/Singapore (SGT)</option>
+                                <option value="Asia/Tokyo">Asia/Tokyo (JST)</option>
+                                <option value="UTC">UTC</option>
+                                <option value="America/New_York">America/New_York (ET)</option>
+                                <option value="America/Los_Angeles">America/Los_Angeles (PT)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button type="button" onclick="saveClockSettings()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition">
+                        Save Clock Settings
+                    </button>
+                </form>
+            </div>
+
+            <!-- ABOUT SYSTEM -->
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h3 class="text-xl font-bold text-gray-800 mb-4">ℹ️ About System</h3>
+                <div class="space-y-2 text-sm text-gray-600">
+                    <p><strong>System Name:</strong> TarsierPOS — Point of Sale</p>
+                    <p><strong>Version:</strong> 1.0.0 MVP</p>
+                    <p><strong>Backend:</strong> Django 4.2 + Django REST Framework</p>
+                    <p><strong>Frontend:</strong> HTML5 + Tailwind CSS + Vanilla JS</p>
+                    <p><strong>Database:</strong> SQLite (Development)</p>
+                    <p class="pt-2 border-t">
+                        <strong>Developer:</strong> Ralph<br>
+                        <strong>Target Market:</strong> Philippine SMEs
+                    </p>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- TAB: APPEARANCE -->
+        <div id="tab-appearance" class="hidden space-y-6">
+
+            <!-- COLOR SCHEME -->
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
+                <h3 class="text-lg font-semibold text-gray-800 mb-4">🎨 Color Scheme</h3>
+                <div class="flex gap-3 flex-wrap mb-4">
+                    <button onclick="applyColor('#a9a9a9')" class="w-10 h-10 rounded-full border-2 border-gray-200 hover:scale-110 transition" style="background:#a9a9a9" title="Dark Gray"></button>
+                    <button onclick="applyColor('#22D3EE')" class="w-10 h-10 rounded-full border-2 border-gray-200 hover:scale-110 transition" style="background:#22D3EE" title="Neon Cyan"></button>
+                    <button onclick="applyColor('#6366F1')" class="w-10 h-10 rounded-full border-2 border-gray-200 hover:scale-110 transition" style="background:#6366F1" title="Indigo"></button>
+                    <button onclick="applyColor('#22C55E')" class="w-10 h-10 rounded-full border-2 border-gray-200 hover:scale-110 transition" style="background:#22C55E" title="Emerald"></button>
+                    <button onclick="applyColor('#FB923C')" class="w-10 h-10 rounded-full border-2 border-gray-200 hover:scale-110 transition" style="background:#FB923C" title="Soft Orange"></button>
+                </div>
+                <div class="flex gap-2 items-center">
+                    <input type="color" id="custom-color" value="#1d4ed8" class="w-10 h-10 rounded cursor-pointer border border-gray-200">
+                    <span class="text-sm text-gray-600">Custom color</span>
+                    <button onclick="applyColor(document.getElementById('custom-color').value)"
+                        class="ml-2 px-3 py-1 bg-gray-100 text-gray-700 text-sm rounded-lg hover:bg-gray-200">Apply</button>
+                </div>
+            </div>
+
+            <!-- DARK MODE -->
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                <h3 class="text-lg font-semibold text-gray-800 mb-4">🌙 Dark Mode</h3>
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="font-medium text-gray-700">Enable Dark Mode</p>
+                        <p class="text-sm text-gray-500">Switch to dark theme across all pages</p>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="dark-mode-toggle" class="sr-only peer" onchange="toggleDarkMode(this.checked)">
+                        <div class="w-11 h-6 bg-gray-200 peer-checked:bg-blue-600 rounded-full peer peer-focus:ring-2 peer-focus:ring-blue-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full"></div>
+                    </label>
+                </div>
+            </div>
+
+            <!-- INVENTORY TRACKING -->
+            <div class="bg-white rounded-xl border border-gray-200 p-6">
+                <h3 class="text-base font-semibold text-gray-800 mb-1">🗃️ Inventory Tracking</h3>
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-gray-700">Track stock on every sale</p>
+                        <p class="text-xs text-gray-500 mt-0.5">Turn off if you don't manage inventory</p>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="track-inventory" class="sr-only peer">
+                        <div class="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:bg-blue-600
+                                    after:content-[''] after:absolute after:top-[2px] after:left-[2px]
+                                    after:bg-white after:rounded-full after:h-5 after:w-5
+                                    after:transition-all peer-checked:after:translate-x-full"></div>
+                    </label>
+                </div>
+                <button onclick="saveAppearanceSettings()"
+                        class="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700">
+                    Save Appearance Settings
+                </button>
+            </div>
+
+        </div>
+
+        <!-- TAB: PAYMENTS -->
+        <div id="tab-payments" class="hidden space-y-6">
+
+            <!-- PAYMENT METHODS -->
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h3 class="text-xl font-bold text-gray-800 mb-4">💳 Payment Methods</h3>
+                <div class="space-y-3">
+                    <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div class="flex items-center space-x-3">
+                            <span class="text-2xl">💵</span>
+                            <div>
+                                <p class="font-medium text-gray-900">Cash</p>
+                                <p class="text-sm text-gray-600">Accept physical currency</p>
+                            </div>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" checked class="sr-only peer" disabled>
+                            <div class="w-11 h-6 bg-green-600 rounded-full peer peer-focus:ring-4 peer-focus:ring-blue-300"></div>
+                        </label>
+                    </div>
+
+                    <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div class="flex items-center space-x-3">
+                            <span class="text-2xl">📱</span>
+                            <div>
+                                <p class="font-medium text-gray-900">GCash</p>
+                                <p class="text-sm text-gray-600">Philippine e-wallet</p>
+                            </div>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="enable-gcash" checked class="sr-only peer" onchange="togglePaymentMethod('gcash', this.checked)">
+                            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                        </label>
+                    </div>
+                    <div id="gcash-qr-section" class="mt-3">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">GCash QR Code</label>
+                        <div id="gcash-qr-preview" class="mb-2 hidden">
+                            <img id="gcash-qr-img" src="" alt="GCash QR" class="w-40 h-40 object-contain border rounded">
+                        </div>
+                        <input type="file" id="gcash-qr-upload" accept="image/*" class="text-sm">
+                        <button onclick="uploadQR('gcash')" class="mt-2 px-3 py-1 bg-blue-600 text-white text-sm rounded">Upload QR</button>
+                    </div>
+
+                    <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div class="flex items-center space-x-3">
+                            <span class="text-2xl">💳</span>
+                            <div>
+                                <p class="font-medium text-gray-900">Maya</p>
+                                <p class="text-sm text-gray-600">PayMaya e-wallet</p>
+                            </div>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="enable-maya" checked class="sr-only peer" onchange="togglePaymentMethod('maya', this.checked)">
+                            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                        </label>
+                    </div>
+                    <div id="maya-qr-section" class="mt-3">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Maya QR Code</label>
+                        <div id="maya-qr-preview" class="mb-2 hidden">
+                            <img id="maya-qr-img" src="" alt="Maya QR" class="w-40 h-40 object-contain border rounded">
+                        </div>
+                        <input type="file" id="maya-qr-upload" accept="image/*" class="text-sm">
+                        <button onclick="uploadQR('maya')" class="mt-2 px-3 py-1 bg-blue-600 text-white text-sm rounded">Upload QR</button>
+                    </div>
+
+                    <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div class="flex items-center space-x-3">
+                            <span class="text-2xl">💳</span>
+                            <div>
+                                <p class="font-medium text-gray-900">Credit/Debit Card</p>
+                                <p class="text-sm text-gray-600">Visa, Mastercard, etc.</p>
+                            </div>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="enable-card" checked class="sr-only peer" onchange="togglePaymentMethod('card', this.checked)">
+                            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ORDER SETTINGS -->
+            <div class="bg-white rounded-xl border border-gray-200 p-6">
+                <h3 class="text-base font-semibold text-gray-800 mb-4">🧾 Order Settings</h3>
+
+                <!-- VAT -->
+                <div class="border-b border-gray-100 pb-4 mb-4">
+                    <div class="flex items-center justify-between mb-2">
+                        <div>
+                            <p class="text-sm font-semibold text-gray-700">VAT</p>
+                            <p class="text-xs text-gray-500">Include VAT on receipts and reports</p>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="vat-enabled" class="sr-only peer">
+                            <div class="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:bg-blue-600
+                                        after:content-[''] after:absolute after:top-[2px] after:left-[2px]
+                                        after:bg-white after:rounded-full after:h-5 after:w-5
+                                        after:transition-all peer-checked:after:translate-x-full"></div>
+                        </label>
+                    </div>
+                    <div id="vat-rate-row" class="hidden flex items-center gap-3 mt-2">
+                        <label class="text-sm text-gray-600">VAT Rate (%)</label>
+                        <input type="number" id="vat-rate" min="0" max="100" step="0.01"
+                               class="w-24 border border-gray-300 rounded-lg px-3 py-1.5 text-sm"
+                               placeholder="12.00">
+                    </div>
+                </div>
+
+                <!-- SC Discount -->
+                <div class="border-b border-gray-100 pb-4 mb-4">
+                    <div class="flex items-center justify-between mb-2">
+                        <div>
+                            <p class="text-sm font-semibold text-gray-700">Senior Citizen Discount</p>
+                            <p class="text-xs text-gray-500">Applied at payment time — requires OSCA ID</p>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="sc-discount-enabled" class="sr-only peer">
+                            <div class="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:bg-blue-600
+                                        after:content-[''] after:absolute after:top-[2px] after:left-[2px]
+                                        after:bg-white after:rounded-full after:h-5 after:w-5
+                                        after:transition-all peer-checked:after:translate-x-full"></div>
+                        </label>
+                    </div>
+                    <div class="flex items-center gap-3 mt-2">
+                        <label class="text-sm text-gray-600">Discount Rate (%)</label>
+                        <input type="number" id="sc-discount-rate" min="0" max="100" step="0.01"
+                               class="w-24 border border-gray-300 rounded-lg px-3 py-1.5 text-sm"
+                               placeholder="20.00">
+                    </div>
+                </div>
+
+                <!-- PWD Discount -->
+                <div class="border-b border-gray-100 pb-4 mb-4">
+                    <div class="flex items-center justify-between mb-2">
+                        <div>
+                            <p class="text-sm font-semibold text-gray-700">PWD Discount</p>
+                            <p class="text-xs text-gray-500">Applied at payment time — requires PWD ID</p>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="pwd-discount-enabled" class="sr-only peer">
+                            <div class="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:bg-blue-600
+                                        after:content-[''] after:absolute after:top-[2px] after:left-[2px]
+                                        after:bg-white after:rounded-full after:h-5 after:w-5
+                                        after:transition-all peer-checked:after:translate-x-full"></div>
+                        </label>
+                    </div>
+                    <div class="flex items-center gap-3 mt-2">
+                        <label class="text-sm text-gray-600">Discount Rate (%)</label>
+                        <input type="number" id="pwd-discount-rate" min="0" max="100" step="0.01"
+                               class="w-24 border border-gray-300 rounded-lg px-3 py-1.5 text-sm"
+                               placeholder="20.00">
+                    </div>
+                </div>
+
+                <!-- Promo Discount -->
+                <div>
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm font-semibold text-gray-700">Promo Discount</p>
+                            <p class="text-xs text-gray-500">Cashier enters % at payment time — for store promos</p>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="promo-discount-enabled" class="sr-only peer">
+                            <div class="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:bg-blue-600
+                                        after:content-[''] after:absolute after:top-[2px] after:left-[2px]
+                                        after:bg-white after:rounded-full after:h-5 after:w-5
+                                        after:transition-all peer-checked:after:translate-x-full"></div>
+                        </label>
+                    </div>
+                </div>
+
+                <button onclick="saveOrderSettings()"
+                        class="mt-6 w-full py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700">
+                    Save Order Settings
+                </button>
+            </div>
+
+        </div>
+
+        <!-- TAB: HARDWARE -->
+        <div id="tab-hardware" class="hidden space-y-6">
+
+          <div class="space-y-6">
+            <!-- RECEIPT SETTINGS -->
+            <div class="bg-white rounded-lg shadow p-6">
+                <h3 class="text-lg font-semibold text-gray-800 mb-4">🧾 Receipt Settings</h3>
+                <form class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Receipt Header</label>
+                        <input type="text" id="receipt-header" value="Thank you for your purchase!" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Receipt Footer</label>
+                        <input type="text" id="receipt-footer" value="Please come again!" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <input type="checkbox" id="show-logo" checked class="w-4 h-4 text-blue-600 rounded">
+                        <label for="show-logo" class="text-sm text-gray-700">Show business logo on receipt</label>
+                    </div>
+                    <button type="button" onclick="saveReceiptSettings()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition">
+                        Save Receipt Settings
+                    </button>
+                </form>
+            </div>
+
+            <hr class="border-gray-200">
+
+            <div class="bg-white rounded-lg shadow p-6">
+              <h3 class="text-lg font-semibold text-gray-800 mb-4">🖨️ Receipt Printer</h3>
+              <div class="space-y-4">
+                <div class="flex items-center justify-between">
+                  <div>
+                    <p class="font-medium text-gray-700">Enable Receipt Printer</p>
+                    <p class="text-sm text-gray-500">Automatically print on every completed sale</p>
+                  </div>
+                  <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" id="printer-enabled" class="sr-only peer">
+                    <div class="w-11 h-6 bg-gray-200 peer-checked:bg-blue-600 rounded-full peer
+                                peer-focus:ring-2 peer-focus:ring-blue-500 after:content-['']
+                                after:absolute after:top-[2px] after:left-[2px] after:bg-white
+                                after:rounded-full after:h-5 after:w-5 after:transition-all
+                                peer-checked:after:translate-x-full"></div>
+                  </label>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">Printer IP Address</label>
+                  <input type="text" id="printer-ip" placeholder="e.g. 192.168.1.100"
+                         class="w-full max-w-xs px-3 py-2 border border-gray-300 rounded-lg
+                                focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">Printer Port</label>
+                  <input type="number" id="printer-port" placeholder="9100"
+                         class="w-full max-w-xs px-3 py-2 border border-gray-300 rounded-lg
+                                focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+                  <p class="text-xs text-gray-400 mt-1">Default is 9100 for most ESC/POS network printers</p>
+                </div>
+                <button onclick="savePrinterSettings()"
+                        class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg
+                               text-sm font-medium transition">
+                  Save Printer Settings
+                </button>
+                <button onclick="testPrinter()"
+                        class="ml-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700
+                               rounded-lg text-sm font-medium transition border border-gray-300">
+                  🧪 Test Print
+                </button>
+              </div>
+            </div>
+
+            <div class="bg-white rounded-lg shadow p-6">
+              <h3 class="text-lg font-semibold text-gray-800 mb-2">💰 Cash Drawer</h3>
+              <p class="text-sm text-gray-500 mb-4">
+                Kick signal is sent automatically on every completed sale and when No Sale is triggered.
+                No separate configuration needed — uses the printer connection above.
+              </p>
+              <button onclick="testCashDrawer()"
+                      class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700
+                             rounded-lg text-sm font-medium transition border border-gray-300">
+                🧪 Test Cash Drawer
+              </button>
+            </div>
+
+            <div class="bg-white rounded-lg shadow p-6">
+              <h3 class="text-lg font-semibold text-gray-800 mb-2">📷 Barcode Scanner</h3>
+              <p class="text-sm text-gray-500">
+                Bluetooth or USB HID scanners work automatically on the POS screen — no configuration needed.
+                The scanner acts as a keyboard. Make sure products have SKU codes set in Inventory.
+              </p>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- TAB: USERS -->
+        <div id="tab-users" class="hidden space-y-6">
+
+            <!-- USER MANAGEMENT -->
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
+                <h3 class="text-lg font-semibold text-gray-800 mb-4">👥 User Management</h3>
+
+                <!-- User list -->
+                <div id="user-list" class="mb-6 space-y-2">
+                    <p class="text-gray-400 text-sm">Loading users...</p>
+                </div>
+
+                <!-- Create user form -->
+                <div class="border-t pt-4">
+                    <h4 class="font-medium text-gray-700 mb-3">Create New Account</h4>
+                    <div class="grid grid-cols-2 gap-3 mb-3">
+                        <input type="text" id="new-username" placeholder="Username"
+                            class="border rounded-lg p-2 text-sm">
+                        <input type="password" id="new-password" placeholder="Password (min 6 chars)"
+                            class="border rounded-lg p-2 text-sm">
+                    </div>
+                    <div class="grid grid-cols-2 gap-3 mb-3">
+                        <input type="email" id="new-email" placeholder="Email (optional)"
+                            class="border rounded-lg p-2 text-sm">
+                        <select id="new-role" class="border rounded-lg p-2 text-sm">
+                            <option value="cashier">Cashier</option>
+                            <option value="manager">Manager</option>
+                        </select>
+                    </div>
+                    <button onclick="createUser()"
+                        class="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700">
+                        Create Account
+                    </button>
+                    <p id="create-user-error" class="text-red-500 text-sm mt-2 hidden"></p>
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- SUCCESS MODAL -->
+    <div id="success-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-2xl p-8 max-w-md w-full mx-4">
+            <div class="text-center">
+                <div class="text-6xl mb-4">✅</div>
+                <h3 class="text-2xl font-bold mb-2 text-gray-800">Settings Saved!</h3>
+                <p class="text-gray-600 mb-6">Your changes have been saved successfully.</p>
+                <button onclick="closeSuccessModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg font-bold transition">
+                    OK
+                </button>
+            </div>
+        </div>
+    </div>
+    </div>
+
+    <!-- SCRIPTS -->
+    <script src="config.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const role = getUserRole();
+            if (!role || role === 'cashier') {
+                window.location.href = 'index.html';
+            }
+            attachEventListeners();
+            loadBusinessProfile();
+            loadSettings();
+            loadQRPreviews();
+            loadPaymentMethodStates();
+            loadUsers();
+            loadSiteName();
+            loadColorScheme();
+            switchTab('general');
+            // Init dark mode toggle
+            const dmToggle = document.getElementById('dark-mode-toggle');
+            if (dmToggle) dmToggle.checked = localStorage.getItem('darkMode') === 'true';
+            // Show/hide VAT rate row in Payments tab
+            const vatEnabledEl = document.getElementById('vat-enabled');
+            if (vatEnabledEl) {
+                vatEnabledEl.addEventListener('change', function() {
+                    document.getElementById('vat-rate-row').classList.toggle('hidden', !this.checked);
+                });
+            }
+        });
+
+        function switchTab(name) {
+            const tabs = ['general', 'appearance', 'payments', 'hardware', 'users'];
+            tabs.forEach(t => {
+                document.getElementById('tab-' + t).classList.add('hidden');
+                const btn = document.getElementById('tab-btn-' + t);
+                btn.style.color = '#6b7280';
+                btn.style.borderBottomColor = 'transparent';
+                btn.style.fontWeight = '500';
+            });
+            document.getElementById('tab-' + name).classList.remove('hidden');
+            if (name === 'hardware') loadPrinterSettings();
+            const active = document.getElementById('tab-btn-' + name);
+            active.style.color = 'var(--color-primary, #1d4ed8)';
+            active.style.borderBottomColor = 'var(--color-primary, #1d4ed8)';
+            active.style.fontWeight = '600';
+        }
+
+        function attachEventListeners() {
+            const menuButton = document.getElementById('menu-button');
+            const dropdown = document.getElementById('dropdown-menu');
+            const arrow = document.getElementById('menu-arrow');
+
+            menuButton.addEventListener('click', function(e) {
+                e.stopPropagation();
+                dropdown.classList.toggle('hidden');
+                arrow.textContent = dropdown.classList.contains('hidden') ? '▼' : '▲';
+            });
+
+            document.addEventListener('click', function(e) {
+                if (!dropdown.contains(e.target) && !menuButton.contains(e.target)) {
+                    dropdown.classList.add('hidden');
+                    arrow.textContent = '▼';
+                }
+            });
+        }
+
+        function loadSettings() {
+            // System/receipt preferences from localStorage (business info loaded from backend via loadBusinessProfile)
+            const settings = {
+                showLogo: localStorage.getItem('showLogo') !== 'false',
+                currency: localStorage.getItem('currency') || 'PHP',
+                taxRate: localStorage.getItem('taxRate') || '12',
+            };
+
+            document.getElementById('show-logo').checked = settings.showLogo;
+            document.getElementById('currency').value = settings.currency;
+            document.getElementById('tax-rate').value = settings.taxRate;
+        }
+
+        async function loadBusinessProfile() {
+            try {
+                const response = await authenticatedFetch(`${API_BASE}/business/`);
+                const data = await response.json();
+                document.getElementById('business-name').value = data.business_name || '';
+                document.getElementById('business-tagline').value = data.tagline || '';
+                document.getElementById('contact-number').value = data.contact_number || '';
+                document.getElementById('email').value = data.email || '';
+                document.getElementById('address').value = data.address || '';
+                document.getElementById('tin').value = data.tin || '';
+                document.getElementById('receipt-header').value = data.receipt_header || '';
+                document.getElementById('receipt-footer').value = data.receipt_footer || '';
+                document.getElementById('low-stock-threshold').value = data.low_stock_threshold ?? 10;
+                const nameEl = document.getElementById('site-name');
+                const tagEl = document.getElementById('site-tagline');
+                if (nameEl) nameEl.textContent = data.business_name;
+                if (tagEl) tagEl.textContent = data.tagline;
+                if (data.logo) {
+                    document.getElementById('logo-preview').src = data.logo;
+                    document.getElementById('logo-preview').classList.remove('hidden');
+                    applyLogoToHeader(data.logo);
+                }
+                if (data.color_scheme) applyColorSchemeSync(data.color_scheme);
+                // Payments tab — Order Settings
+                const vatEl = document.getElementById('vat-enabled');
+                const vatRateEl = document.getElementById('vat-rate');
+                const vatRateRow = document.getElementById('vat-rate-row');
+                if (vatEl) vatEl.checked = !!data.vat_enabled;
+                if (vatRateEl) vatRateEl.value = data.vat_rate || 12;
+                if (vatRateRow) vatRateRow.classList.toggle('hidden', !data.vat_enabled);
+                const scEl = document.getElementById('sc-discount-enabled');
+                if (scEl) scEl.checked = data.sc_discount_enabled !== false;
+                const scRateEl = document.getElementById('sc-discount-rate');
+                if (scRateEl) scRateEl.value = data.sc_discount_rate || 20;
+                const pwdEl = document.getElementById('pwd-discount-enabled');
+                if (pwdEl) pwdEl.checked = data.pwd_discount_enabled !== false;
+                const pwdRateEl = document.getElementById('pwd-discount-rate');
+                if (pwdRateEl) pwdRateEl.value = data.pwd_discount_rate || 20;
+                const promoEl = document.getElementById('promo-discount-enabled');
+                if (promoEl) promoEl.checked = !!data.promo_discount_enabled;
+                // Appearance tab — Inventory Tracking
+                const trackEl = document.getElementById('track-inventory');
+                if (trackEl) trackEl.checked = data.track_inventory !== false;
+            } catch (e) {
+                console.error('Failed to load business profile:', e);
+            }
+        }
+
+        async function saveOrderSettings() {
+            const payload = {
+                vat_enabled: document.getElementById('vat-enabled').checked,
+                vat_rate: parseFloat(document.getElementById('vat-rate').value) || 12,
+                sc_discount_enabled: document.getElementById('sc-discount-enabled').checked,
+                sc_discount_rate: parseFloat(document.getElementById('sc-discount-rate').value) || 20,
+                pwd_discount_enabled: document.getElementById('pwd-discount-enabled').checked,
+                pwd_discount_rate: parseFloat(document.getElementById('pwd-discount-rate').value) || 20,
+                promo_discount_enabled: document.getElementById('promo-discount-enabled').checked,
+            };
+            try {
+                const resp = await authenticatedFetch(`${API_BASE}/business/update/`, {
+                    method: 'PATCH',
+                    body: JSON.stringify(payload)
+                });
+                const data = await resp.json();
+                if (data.success) {
+                    localStorage.removeItem('biz_profile');
+                    showSuccessModal();
+                } else {
+                    alert('Failed to save order settings.');
+                }
+            } catch (e) {
+                alert('Error saving order settings: ' + e.message);
+            }
+        }
+
+        async function saveAppearanceSettings() {
+            const payload = {
+                track_inventory: document.getElementById('track-inventory').checked,
+            };
+            try {
+                const resp = await authenticatedFetch(`${API_BASE}/business/update/`, {
+                    method: 'PATCH',
+                    body: JSON.stringify(payload)
+                });
+                const data = await resp.json();
+                if (data.success) {
+                    localStorage.removeItem('biz_profile');
+                    showSuccessModal();
+                } else {
+                    alert('Failed to save appearance settings.');
+                }
+            } catch (e) {
+                alert('Error saving appearance settings: ' + e.message);
+            }
+        }
+
+        function toggleDarkMode(enabled) {
+            localStorage.setItem('darkMode', enabled ? 'true' : 'false');
+            document.documentElement.classList.toggle('dark', enabled);
+        }
+
+        async function saveBusinessInfo() {
+            const payload = {
+                business_name: document.getElementById('business-name').value.trim(),
+                tagline: document.getElementById('business-tagline').value.trim(),
+                contact_number: document.getElementById('contact-number').value.trim(),
+                email: document.getElementById('email').value.trim(),
+                address: document.getElementById('address').value.trim(),
+                tin: document.getElementById('tin').value.trim(),
+                receipt_header: document.getElementById('receipt-header').value.trim(),
+                receipt_footer: document.getElementById('receipt-footer').value.trim(),
+                low_stock_threshold: parseInt(document.getElementById('low-stock-threshold').value) || 10,
+            };
+            try {
+                const response = await authenticatedFetch(`${API_BASE}/business/update/`, {
+                    method: 'PATCH',
+                    body: JSON.stringify(payload)
+                });
+                const data = await response.json();
+                if (data.success) {
+                    showSuccessModal();
+                    const nameEl = document.getElementById('site-name');
+                    const tagEl = document.getElementById('site-tagline');
+                    if (nameEl) nameEl.textContent = payload.business_name;
+                    if (tagEl) tagEl.textContent = payload.tagline;
+                    // Invalidate full cache so next load re-fetches fresh values
+                    localStorage.removeItem('biz_profile');
+                }
+            } catch (e) {
+                alert('Error saving business info: ' + e.message);
+            }
+        }
+
+        async function saveReceiptSettings() {
+            localStorage.setItem('showLogo', document.getElementById('show-logo').checked);
+            try {
+                const response = await authenticatedFetch(`${API_BASE}/business/update/`, {
+                    method: 'PATCH',
+                    body: JSON.stringify({
+                        receipt_header: document.getElementById('receipt-header').value.trim(),
+                        receipt_footer: document.getElementById('receipt-footer').value.trim(),
+                    })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    localStorage.removeItem('biz_profile');
+                    showSuccessModal();
+                } else {
+                    alert('Failed to save receipt settings.');
+                }
+            } catch (e) {
+                alert('Error saving receipt settings: ' + e.message);
+            }
+        }
+
+        async function saveSystemSettings() {
+            localStorage.setItem('currency', document.getElementById('currency').value);
+            localStorage.setItem('taxRate', document.getElementById('tax-rate').value);
+            try {
+                const response = await authenticatedFetch(`${API_BASE}/business/update/`, {
+                    method: 'PATCH',
+                    body: JSON.stringify({
+                        low_stock_threshold: parseInt(document.getElementById('low-stock-threshold').value) || 10,
+                    })
+                });
+                const data = await response.json();
+                if (!data.success) {
+                    console.error('Failed to save low stock threshold:', data);
+                }
+            } catch (e) {
+                console.error('Failed to save system settings:', e);
+            }
+            showSuccessModal();
+        }
+
+        async function togglePaymentMethod(method, enabled) {
+            if (method === 'card') {
+                localStorage.setItem('payment_card', enabled);
+                return;
+            }
+            try {
+                const response = await authenticatedFetch(`${PAYMENTS_API}/config/update/`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ gateway: method, config: { is_active: enabled } })
+                });
+                const data = await response.json();
+                if (!response.ok) {
+                    alert(`Failed to update ${method}: ` + (data.message || 'Unknown error'));
+                }
+            } catch (e) {
+                alert('Error updating payment method: ' + e.message);
+            }
+        }
+
+        function showSuccessModal() {
+            document.getElementById('success-modal').classList.remove('hidden');
+        }
+
+        function closeSuccessModal() {
+            document.getElementById('success-modal').classList.add('hidden');
+        }
+
+        function logout() {
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('refresh_token');
+            window.location.href = 'login.html';
+        }
+
+        async function uploadQR(gateway) {
+            const input = document.getElementById(`${gateway}-qr-upload`);
+            if (!input.files[0]) { alert('Please select an image first'); return; }
+            const formData = new FormData();
+            formData.append('qr_image', input.files[0]);
+            try {
+                const response = await authenticatedFetch(`${PAYMENTS_API}/config/${gateway}/qr/`, {
+                    method: 'POST',
+                    body: formData,
+                    headers: {}
+                });
+                const data = await response.json();
+                if (data.success) {
+                    document.getElementById(`${gateway}-qr-img`).src = data.qr_url;
+                    document.getElementById(`${gateway}-qr-preview`).classList.remove('hidden');
+                    alert(`${gateway.toUpperCase()} QR uploaded successfully`);
+                } else {
+                    alert('Upload failed: ' + (data.error || 'Unknown error'));
+                }
+            } catch (e) {
+                alert('Upload error: ' + e.message);
+            }
+        }
+
+        async function loadQRPreviews() {
+            for (const gateway of ['gcash', 'maya']) {
+                try {
+                    const response = await authenticatedFetch(`${PAYMENTS_API}/config/${gateway}/`);
+                    const data = await response.json();
+                    if (data.qr_url) {
+                        document.getElementById(`${gateway}-qr-img`).src = data.qr_url;
+                        document.getElementById(`${gateway}-qr-preview`).classList.remove('hidden');
+                    }
+                } catch (e) { console.error(`Failed to load ${gateway} QR:`, e); }
+            }
+        }
+
+        async function loadUsers() {
+            try {
+                const response = await authenticatedFetch(`${API_BASE}/users/`);
+                const data = await response.json();
+                const users = data.results || data; // handle both paginated and plain array
+                const list = document.getElementById('user-list');
+                if (!users.length) {
+                    list.innerHTML = '<p class="text-gray-400 text-sm">No cashier accounts yet.</p>';
+                    return;
+                }
+                list.innerHTML = users.map(u => `
+                    <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div>
+                            <span class="font-medium text-gray-800">${u.username}</span>
+                            <span class="ml-2 text-xs px-2 py-0.5 rounded-full ${u.role === 'manager' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}">${u.role}</span>
+                            ${!u.is_active ? '<span class="ml-2 text-xs text-red-500">(inactive)</span>' : ''}
+                        </div>
+                        <div class="flex gap-2">
+                            <button onclick="toggleUserActive(${u.id}, ${!u.is_active})"
+                                class="text-xs px-3 py-1 rounded-lg ${u.is_active ? 'bg-red-100 text-red-600 hover:bg-red-200' : 'bg-green-100 text-green-600 hover:bg-green-200'}">
+                                ${u.is_active ? 'Deactivate' : 'Activate'}
+                            </button>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (e) {
+                console.error('Failed to load users:', e);
+            }
+        }
+
+        async function createUser() {
+            const username = document.getElementById('new-username').value.trim();
+            const password = document.getElementById('new-password').value.trim();
+            const email = document.getElementById('new-email').value.trim();
+            const role = document.getElementById('new-role').value;
+            const errorEl = document.getElementById('create-user-error');
+
+            errorEl.classList.add('hidden');
+            if (!username || !password) {
+                errorEl.textContent = 'Username and password are required.';
+                errorEl.classList.remove('hidden');
+                return;
+            }
+            try {
+                const response = await authenticatedFetch(`${API_BASE}/users/`, {
+                    method: 'POST',
+                    body: JSON.stringify({ username, password, email, role })
+                });
+                const data = await response.json();
+                if (!response.ok) {
+                    errorEl.textContent = data.error || data.username?.[0] || 'Error creating user.';
+                    errorEl.classList.remove('hidden');
+                    return;
+                }
+                document.getElementById('new-username').value = '';
+                document.getElementById('new-password').value = '';
+                document.getElementById('new-email').value = '';
+                loadUsers();
+            } catch (e) {
+                errorEl.textContent = 'Error creating user: ' + e.message;
+                errorEl.classList.remove('hidden');
+            }
+        }
+
+        async function toggleUserActive(userId, newState) {
+            try {
+                const response = await authenticatedFetch(`${API_BASE}/users/${userId}/`, {
+                    method: 'PATCH',
+                    body: JSON.stringify({ is_active: newState })
+                });
+                const data = await response.json();
+                if (response.ok) loadUsers();
+            } catch (e) {
+                alert('Error updating user: ' + e.message);
+            }
+        }
+
+        async function uploadLogo() {
+            const file = document.getElementById('logo-file').files[0];
+            if (!file) return;
+            const formData = new FormData();
+            formData.append('logo', file);
+            try {
+                const res = await authenticatedFetch(`${API_BASE}/business/logo/`, {
+                    method: 'POST',
+                    headers: {},
+                    body: formData
+                });
+                const data = await res.json();
+                if (data.success) {
+                    document.getElementById('logo-preview').src = data.logo;
+                    document.getElementById('logo-preview').classList.remove('hidden');
+                    // Cache logo URL
+                    const existing = JSON.parse(localStorage.getItem('biz_profile') || '{}');
+                    existing.logo = data.logo;
+                    localStorage.setItem('biz_profile', JSON.stringify(existing));
+                    // Apply to header
+                    applyLogoToHeader(data.logo);
+                }
+            } catch(e) { alert('Logo upload failed'); }
+        }
+
+        async function applyColor(hex) {
+            applyColorSchemeSync(hex);
+            try {
+                await authenticatedFetch(`${API_BASE}/business/update/`, {
+                    method: 'PATCH',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({color_scheme: hex})
+                });
+                // Update cache
+                const cached = localStorage.getItem('biz_profile');
+                if (cached) {
+                    const d = JSON.parse(cached);
+                    d.color_scheme = hex;
+                    localStorage.setItem('biz_profile', JSON.stringify(d));
+                }
+            } catch(e) {}
+        }
+
+        async function loadPaymentMethodStates() {
+            for (const gateway of ['gcash', 'maya']) {
+                try {
+                    const response = await authenticatedFetch(`${PAYMENTS_API}/config/${gateway}/`);
+                    const data = await response.json();
+                    const checkbox = document.getElementById(`enable-${gateway}`);
+                    if (checkbox && data.is_active !== undefined) {
+                        checkbox.checked = data.is_active;
+                    }
+                } catch (e) {
+                    console.error(`Failed to load ${gateway} state:`, e);
+                }
+            }
+            // Card toggle — read from localStorage (no backend row for card)
+            const cardCheckbox = document.getElementById('enable-card');
+            if (cardCheckbox) {
+                const stored = localStorage.getItem('payment_card');
+                cardCheckbox.checked = stored === null ? true : stored === 'true';
+            }
+        }
+
+        async function loadPrinterSettings() {
+            try {
+                const res = await authenticatedFetch(`${API_BASE}/business/`);
+                const data = await res.json();
+                document.getElementById('printer-enabled').checked = !!data.printer_enabled;
+                document.getElementById('printer-ip').value = data.printer_ip || '';
+                document.getElementById('printer-port').value = data.printer_port || 9100;
+            } catch(e) { console.error('Failed to load printer settings', e); }
+        }
+
+        async function savePrinterSettings() {
+            const payload = {
+                printer_enabled: document.getElementById('printer-enabled').checked,
+                printer_ip: document.getElementById('printer-ip').value.trim() || null,
+                printer_port: parseInt(document.getElementById('printer-port').value) || 9100,
+            };
+            try {
+                const res = await authenticatedFetch(`${API_BASE}/business/update/`, {
+                    method: 'PATCH',
+                    body: JSON.stringify(payload)
+                });
+                if (res.ok) showAlert('Printer settings saved.');
+                else showAlert('Failed to save printer settings.');
+            } catch(e) { showAlert('Error: ' + e.message); }
+        }
+
+        async function testPrinter() {
+            try {
+                const res = await authenticatedFetch(
+                    `${API_BASE}/transactions/test_print/`, { method: 'POST' });
+                const data = await res.json();
+                showAlert(data.status === 'ok' ? '✅ Test print sent.' : '❌ ' + (data.error || 'Print failed.'));
+            } catch(e) { showAlert('❌ Could not reach printer.'); }
+        }
+
+        async function testCashDrawer() {
+            try {
+                await authenticatedFetch(
+                    `${API_BASE}/transactions/kick_drawer/`, { method: 'POST' });
+                showAlert('✅ Cash drawer kick sent.');
+            } catch(e) { showAlert('❌ ' + e.message); }
+        }
+    </script>
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js')
+        .catch(err => console.log('SW registration failed:', err));
+    });
+  }
+</script>
+<script>
+function saveClockSettings(){
+  const format = document.getElementById('clock-format').value;
+  const timezone = document.getElementById('clock-timezone').value;
+  localStorage.setItem('clock_prefs', JSON.stringify({format, timezone}));
+  const btn = document.querySelector('[onclick="saveClockSettings()"]');
+  if(!btn) return;
+  const orig = btn.textContent;
+  btn.textContent = '✅ Clock settings saved';
+  btn.disabled = true;
+  btn.classList.add('opacity-75');
+  setTimeout(() => {
+    btn.textContent = orig;
+    btn.disabled = false;
+    btn.classList.remove('opacity-75');
+  }, 2500);
+}
+function loadClockSettings() {
+    try {
+        const prefs = JSON.parse(localStorage.getItem('clock_prefs') || '{}');
+        if (prefs.format) document.getElementById('clock-format').value = prefs.format;
+        if (prefs.timezone !== undefined) document.getElementById('clock-timezone').value = prefs.timezone;
+    } catch(e) {}
+}
+document.addEventListener('DOMContentLoaded', loadClockSettings);
+</script>
+<script>
+(function(){
+    try {
+        const tok = localStorage.getItem('access_token');
+        if (tok) {
+            const p = JSON.parse(atob(tok.split('.')[1]));
+            const uEl = document.getElementById('userName');
+            const rEl = document.getElementById('userRole');
+            if (uEl) uEl.textContent = p.username || 'User';
+            if (rEl) rEl.textContent = p.role || '';
+        }
+    } catch(e) {}
+    function tick() {
+        const prefs = (() => { try { return JSON.parse(localStorage.getItem('clock_prefs') || '{}'); } catch(e) { return {}; } })();
+        const use12 = prefs.format !== '24h';
+        const tz = prefs.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+        const el = document.getElementById('live-clock');
+        if (el) el.textContent = new Date().toLocaleTimeString('en-PH', {hour:'2-digit', minute:'2-digit', second:'2-digit', hour12: use12, timeZone: tz});
+    }
+    tick(); setInterval(tick, 1000);
+})();
+</script>
+</body>
+</html>

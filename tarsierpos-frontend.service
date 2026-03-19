@@ -1,0 +1,15 @@
+[Unit]
+Description=TarsierPos Frontend (Static :8081)
+After=network.target
+
+[Service]
+User=__DEPLOY_USER__
+WorkingDirectory=/home/__DEPLOY_USER__/TarsierPOS/frontend/public
+ExecStart=/usr/bin/python3 -c "import os, sys; sys.path.insert(0, os.getcwd()); from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer; server = ThreadingHTTPServer(('0.0.0.0', 8081), SimpleHTTPRequestHandler); server.serve_forever()"
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

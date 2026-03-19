@@ -1,0 +1,17 @@
+{
+  "name": "TarsierPOS",
+  "short_name": "TarsierPOS",
+  "start_url": "/",
+  "display": "standalone",
+  "description": "TarsierPOS — Point of Sale for Philippine Cafes & Restaurants",
+  "background_color": "#FF6B00",
+  "theme_color": "#FF6B00",
+  "icons": [
+    {
+      "src": "assets/tarsier-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

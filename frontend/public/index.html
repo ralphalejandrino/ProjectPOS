@@ -1,0 +1,1163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TarsierPOS</title>
+    <script>if(localStorage.getItem('darkMode')==='true')document.documentElement.classList.add('dark');</script>
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/svg+xml" href="assets/tarsier-icon.svg">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="shared-styles.css">
+    <style>
+        .product-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        .product-card {
+            transition: all 0.2s ease;
+        }
+        .cart-item {
+            animation: slideIn 0.3s ease;
+        }
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateX(20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <!-- Auth Check -->
+    <script>
+        // Check if user is logged in via JWT directly from localStorage
+        if (!localStorage.getItem('access_token')) {
+            window.location.href = 'login.html';
+        }
+    </script>
+
+    <!-- NAVIGATION -->
+    <nav class="bg-gradient-to-r from-blue-600 to-blue-800 text-white shadow-lg sticky top-0 z-50">
+        <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+            <div class="flex items-center space-x-3">
+                <span class="text-3xl">🍽️</span>
+                <div>
+                    <h1 class="text-xl font-bold text-white" id="site-name">TarsierPOS</h1>
+                    <p class="text-blue-200 text-sm" id="site-tagline">AI Powered Point of Sale System</p>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-4">
+                <span id="live-clock" class="text-sm font-mono tabular-nums text-blue-100 hidden sm:block"></span>
+                <div class="text-right hidden sm:block border-r border-blue-400 pr-4 mr-2">
+                    <p class="text-sm font-bold text-white leading-tight" id="userName"></p>
+                    <p class="text-[10px] text-blue-200 uppercase tracking-widest font-black leading-tight" id="userRole"></p>
+                </div>
+                <div class="relative">
+                    <button id="menu-button" class="bg-blue-700 hover:bg-blue-800 px-4 py-2 rounded-lg font-medium transition flex items-center space-x-2">
+                        <span>☰ Menu</span>
+                        <span id="menu-arrow">▼</span>
+                    </button>
+                    <div id="dropdown-menu" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl z-50">
+                        <a href="index.html" class="block px-4 py-3 text-blue-600 bg-blue-50 font-bold rounded-t-lg">🏪 POS</a>
+                        <a href="inventory.html" class="block px-4 py-3 text-gray-700 hover:bg-gray-100">📦 Inventory</a>
+                        <a href="dashboard.html" class="block px-4 py-3 text-gray-700 hover:bg-gray-100">📊 Dashboard</a>
+                        <a href="settings.html" class="block px-4 py-3 text-gray-700 hover:bg-gray-100">⚙️ Settings</a>
+                        <a href="#" onclick="logout(); return false;" class="block px-4 py-3 text-red-600 hover:bg-red-50 rounded-b-lg">🚪 Logout</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- MAIN LAYOUT -->
+    <div class="flex h-[calc(100vh-73px)]">
+        
+        <!-- LEFT SIDEBAR: SEARCH & CATEGORIES -->
+        <div id="left-sidebar" class="bg-white border-r border-gray-200 overflow-y-auto flex-shrink-0 transition-all duration-200" style="width:256px;">
+            <!-- Sidebar Toggle Button -->
+            <div class="flex justify-end p-2 border-b border-gray-100">
+                <button id="sidebar-toggle" onclick="toggleSidebar()" class="text-gray-400 hover:text-gray-600 p-1 rounded leading-none" title="Toggle sidebar">
+                    <span id="sidebar-toggle-icon">▲</span>
+                </button>
+            </div>
+            <!-- Sidebar Content -->
+            <div id="sidebar-content" class="p-4">
+                <!-- Search -->
+                <input type="text" id="search-input" placeholder="🔍 Search products..."
+                       class="w-full px-3 py-2 border border-gray-300 rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                       oninput="searchProducts()">
+                <input type="text" id="barcode-input" autocomplete="off"
+                       style="position:absolute;opacity:0;pointer-events:none;width:1px;height:1px;"
+                       aria-hidden="true">
+
+                <!-- Categories -->
+                <div>
+                    <h3 class="text-xs font-bold text-gray-500 uppercase mb-2">Categories</h3>
+                    <div id="category-buttons" class="space-y-1">
+                        <!-- Loaded dynamically -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- MIDDLE: PRODUCTS GRID -->
+        <div class="flex-1 p-6 overflow-y-auto">
+            <div id="products-grid" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                <!-- Products loaded here -->
+            </div>
+        </div>
+
+        <!-- RIGHT SIDEBAR: CART -->
+        <div class="w-96 bg-white border-l border-gray-200 flex flex-col">
+            <!-- Cart Header -->
+            <div class="p-4 border-b border-gray-200">
+                <div class="flex justify-between items-center">
+                    <h2 class="text-xl font-bold text-gray-800">🛒 Cart</h2>
+                    <div class="bg-blue-100 px-3 py-1 rounded-full">
+                        <span class="text-sm text-gray-600">Items:</span>
+                        <span id="cart-count" class="font-bold text-blue-600">0</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Cart Items (Scrollable) -->
+            <div id="cart-items" class="flex-1 p-4 overflow-y-auto">
+                <p class="text-gray-400 text-center py-8">Cart is empty</p>
+            </div>
+
+            <!-- Cart Footer (Fixed) -->
+            <div class="border-t border-gray-200">
+                <!-- Total & Clear -->
+                <div class="p-4 space-y-3">
+                    <button id="clear-cart-btn" class="w-full bg-red-100 hover:bg-red-200 text-red-600 font-medium py-2 rounded-lg transition">
+                        Clear Cart
+                    </button>
+                    <div class="flex justify-between items-center text-2xl font-bold py-2">
+                        <span>TOTAL:</span>
+                        <span id="cart-total" class="text-blue-600">₱0.00</span>
+                    </div>
+                </div>
+
+                <!-- Payment Toggle Header -->
+                <div class="flex items-center justify-between px-4 py-2 border-t border-gray-100 bg-gray-50 cursor-pointer hover:bg-gray-100 select-none" onclick="togglePayments()">
+                    <span class="text-xs font-bold text-gray-500 uppercase tracking-wide">Payment</span>
+                    <span id="payments-toggle-icon" class="text-gray-400 text-sm">▼</span>
+                </div>
+
+                <!-- Payment Buttons (collapsed by default) -->
+                <div id="payments-section" class="px-4 pb-4 space-y-2 hidden">
+                    <button onclick="showCashModal()" class="w-full font-bold py-3 rounded-lg transition" style="background-color:#16a34a; color:#ffffff; border: 2px solid #15803d; font-size:20px; min-height:58px; height:58px;">Cash</button>
+                    <button id="btn-gcash" onclick="showGCashModal()" class="w-full font-bold py-3 rounded-lg transition flex items-center justify-center" style="background-color:#ffffff; border: 2px solid #0070E0; height:58px;">
+                        <img src="assets/gcash-logo.png" alt="GCash" style="height:36px; width:auto; max-width:85%; object-fit:contain;">
+                    </button>
+                    <button id="btn-maya" onclick="showMayaModal()" class="w-full font-bold py-3 rounded-lg transition flex items-center justify-center" style="background-color:#000000; border: 2px solid #000000; height:58px;">
+                        <img src="assets/maya-logo.png" alt="Maya" style="height:36px; width:auto; max-width:85%; object-fit:contain;">
+                    </button>
+                    <button disabled class="w-full bg-white text-gray-400 font-bold py-3 rounded-lg border border-gray-200 cursor-not-allowed flex items-center justify-center" style="height:58px;">VISA &nbsp; MC &nbsp; <span class="text-xs font-normal">(Coming Soon)</span></button>
+                    <button id="btn-no-sale" onclick="noSale()" class="hidden w-full bg-amber-100 hover:bg-amber-200 text-amber-800 font-bold rounded-lg border border-amber-300 transition" style="font-size:20px; height:58px;">
+                        No Sale
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: CASH PAYMENT -->
+    <div id="cash-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-2xl p-8 max-w-md w-full mx-4">
+            <h3 class="text-2xl font-bold mb-6 text-gray-800">Cash Payment</h3>
+
+            <div class="mb-6">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Total Amount:</label>
+                <div class="text-3xl font-bold text-blue-600" id="cash-total">₱0.00</div>
+            </div>
+
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Cash Received:</label>
+                <input type="number" id="cash-received"
+                       class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg text-2xl font-bold text-center focus:outline-none focus:border-blue-500"
+                       placeholder="0.00" step="0.01" oninput="calculateChange()">
+            </div>
+
+            <div class="grid grid-cols-5 gap-2 mb-4">
+                <button onclick="addCashAmount(20)" class="bg-gray-100 hover:bg-gray-200 py-2 rounded font-medium text-sm">₱20</button>
+                <button onclick="addCashAmount(50)" class="bg-gray-100 hover:bg-gray-200 py-2 rounded font-medium text-sm">₱50</button>
+                <button onclick="addCashAmount(100)" class="bg-gray-100 hover:bg-gray-200 py-2 rounded font-medium text-sm">₱100</button>
+                <button onclick="addCashAmount(500)" class="bg-gray-100 hover:bg-gray-200 py-2 rounded font-medium text-sm">₱500</button>
+                <button onclick="addCashAmount(1000)" class="bg-gray-100 hover:bg-gray-200 py-2 rounded font-medium text-sm">₱1000</button>
+            </div>
+
+            <div id="cash-insufficient" class="hidden bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+                ⚠️ Insufficient cash received!
+            </div>
+
+            <div id="cash-change-display" class="hidden bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
+                <div class="text-sm font-medium">Change:</div>
+                <div class="text-2xl font-bold" id="cash-change">₱0.00</div>
+            </div>
+
+            <!-- DISCOUNT SECTION -->
+            <div id="cash-discount-section" class="hidden mt-3 pt-3 border-t border-gray-100">
+                <div class="flex gap-2 mb-3" id="cash-discount-type-buttons">
+                    <button id="cash-btn-sc" onclick="selectDiscountType('cash','sc')"
+                            class="hidden flex-1 py-1.5 text-xs font-semibold border-2 border-gray-300
+                                   rounded-lg text-gray-600 hover:border-blue-400 hover:text-blue-600 transition">
+                        👴 Senior Citizen
+                    </button>
+                    <button id="cash-btn-pwd" onclick="selectDiscountType('cash','pwd')"
+                            class="hidden flex-1 py-1.5 text-xs font-semibold border-2 border-gray-300
+                                   rounded-lg text-gray-600 hover:border-blue-400 hover:text-blue-600 transition">
+                        ♿ PWD
+                    </button>
+                    <button id="cash-btn-promo" onclick="selectDiscountType('cash','promo')"
+                            class="hidden flex-1 py-1.5 text-xs font-semibold border-2 border-gray-300
+                                   rounded-lg text-gray-600 hover:border-green-400 hover:text-green-600 transition">
+                        🏷️ Promo
+                    </button>
+                </div>
+                <input type="text" id="cash-discount-id"
+                       class="hidden w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-2"
+                       placeholder="OSCA / PWD ID Number">
+                <div id="cash-promo-input" class="hidden flex items-center gap-2 mb-2">
+                    <input type="number" id="cash-promo-pct" min="0" max="100" step="0.01"
+                           class="w-24 border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                           placeholder="0">
+                    <span class="text-sm text-gray-600">% discount</span>
+                    <button onclick="applyModalDiscount('cash')"
+                            class="px-3 py-2 bg-gray-700 text-white rounded-lg text-sm font-medium">
+                        Apply
+                    </button>
+                </div>
+                <div id="cash-discount-display" class="hidden text-sm text-red-600 font-medium text-right mb-2"></div>
+                <button onclick="clearModalDiscount('cash')"
+                        class="hidden text-xs text-gray-400 hover:text-gray-600 underline"
+                        id="cash-clear-discount">
+                    Remove discount
+                </button>
+            </div>
+
+            <button onclick="toggleDiscountSection('cash')"
+                    id="cash-discount-btn"
+                    class="hidden w-full mt-2 py-1.5 border border-dashed border-gray-300
+                           rounded-lg text-sm text-gray-500 hover:border-gray-400 hover:text-gray-700 transition">
+                🏷️ Apply Discount
+            </button>
+
+            <div class="flex space-x-3 mt-4">
+                <button onclick="closeCashModal()" class="flex-1 bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 rounded-lg transition">
+                    Cancel
+                </button>
+                <button id="btn-complete-cash" onclick="completeCashSale()" class="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg transition">
+                    Complete Sale
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- BANNER: SHIFT OPENED SUCCESS -->
+    <div id="shift-success-banner" class="hidden fixed top-20 left-1/2 -translate-x-1/2 bg-green-600 text-white px-6 py-3 rounded-lg shadow-lg z-[10000] font-semibold">
+        Shift opened successfully
+    </div>
+
+    <!-- MODAL: OPEN SHIFT PROMPT -->
+    <div id="shift-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9998]">
+        <div class="bg-white rounded-lg shadow-2xl p-8 max-w-md w-full mx-4">
+            <h3 class="text-2xl font-bold mb-4 text-gray-800">Open Shift</h3>
+            <p class="text-gray-600 mb-6">No active shift found. Open a shift to start taking orders, or continue without one.</p>
+            <div class="flex space-x-3">
+                <button onclick="window.closeShiftModal()" class="flex-1 bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 rounded-lg transition">
+                    Continue Anyway
+                </button>
+                <button onclick="openShift()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition">
+                    Open Shift
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: PAYMENT PROCESSING -->
+    <div id="payment-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]">
+        <div class="bg-white rounded-lg shadow-2xl p-8 max-w-md w-full mx-4">
+            <h3 class="text-2xl font-bold mb-6 text-gray-800 payment-method">Processing...</h3>
+            <div class="payment-message text-center py-8">
+                <div class="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600 mx-auto mb-4"></div>
+                <p class="text-gray-600">Please wait...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- SCRIPTS -->
+    <script src="config.js"></script>
+    <script src="app.js"></script>
+    <script src="payments.js"></script>
+    <script>
+        // Cash Payment Functions
+        function showCashModal() {
+            if (window.cart.items.length === 0) {
+                showCustomError('Cart Empty', 'Please add items to cart before checkout');
+                return;
+            }
+            initModalDiscount('cash');
+            document.getElementById('cash-modal').classList.remove('hidden');
+            document.getElementById('cash-total').textContent = `₱${window.cart.total.toFixed(2)}`;
+            document.getElementById('cash-received').value = '';
+            document.getElementById('cash-change-display').classList.add('hidden');
+            document.getElementById('cash-insufficient').classList.add('hidden');
+            document.getElementById('cash-received').focus();
+        }
+
+        function closeCashModal() {
+            document.getElementById('cash-modal').classList.add('hidden');
+        }
+
+        function addCashAmount(amount) {
+            const input = document.getElementById('cash-received');
+            const current = parseFloat(input.value) || 0;
+            input.value = (current + amount).toFixed(2);
+            calculateChange();
+        }
+
+        function calculateChange() {
+            const total = window.cart.total;
+            const received = parseFloat(document.getElementById('cash-received').value) || 0;
+            const change = received - total;
+
+            const changeDisplay = document.getElementById('cash-change-display');
+            const insufficientWarning = document.getElementById('cash-insufficient');
+
+            if (received === 0) {
+                changeDisplay.classList.add('hidden');
+                insufficientWarning.classList.add('hidden');
+            } else if (change < 0) {
+                changeDisplay.classList.add('hidden');
+                insufficientWarning.classList.remove('hidden');
+            } else {
+                changeDisplay.classList.remove('hidden');
+                insufficientWarning.classList.add('hidden');
+                document.getElementById('cash-change').textContent = `₱${change.toFixed(2)}`;
+            }
+        }
+
+        function showCustomSuccess(title, transactionData) {
+            const modal = document.getElementById('payment-modal');
+            if (modal) {
+                modal.querySelector('.payment-method').textContent = "Payment Complete";
+
+                const itemsList = transactionData.items || window.cart.items || [];
+                const itemsHtml = itemsList.map(item => `
+                    <div class="flex justify-between text-sm text-gray-700">
+                        <span>${item.quantity} x ${item.name}</span>
+                        <span>₱${parseFloat(item.price).toFixed(2)}</span>
+                    </div>
+                `).join('');
+
+                const subtotal = itemsList.reduce((sum, item) => sum + (parseFloat(item.price) * item.quantity), 0);
+                const totalAmount = parseFloat(transactionData.total || transactionData.total_amount || 0);
+                const cashReceived = parseFloat(transactionData.cash_received || 0);
+                const changeGiven = parseFloat(transactionData.change || transactionData.change_given || 0);
+
+                const reference = transactionData.gcash_reference || transactionData.maya_reference || '';
+                const referenceRow = reference ? `
+                    <div class="flex justify-between text-sm text-gray-600 mt-1">
+                        <span>Reference No:</span>
+                        <span class="font-medium">${reference}</span>
+                    </div>` : '';
+
+                const customerPhone = transactionData.customer_phone || '';
+                const phoneRow = `
+                    <div class="flex justify-between text-sm text-gray-600 mt-1">
+                        <span>Customer Phone:</span>
+                        <span class="font-medium">${customerPhone || 'N/A'}</span>
+                    </div>`;
+
+                modal.querySelector('.payment-message').innerHTML = `
+                    <div class="text-center">
+                        <div class="text-6xl mb-4">✅</div>
+                        <p class="text-xl font-bold text-green-600 mb-4">Sale Recorded!</p>
+                        
+                        <div class="text-left bg-gray-50 p-4 rounded-lg mb-4">
+                            <p class="text-sm text-gray-600 mb-2"><strong>Transaction ID:</strong> ${transactionData.transaction_no}</p>
+                            <p class="text-sm text-gray-600 mb-1"><strong>Date:</strong> ${new Date().toLocaleString()}</p>
+                            ${referenceRow}${phoneRow}
+
+                            <div class="border-b border-gray-200 pb-2 mb-2 mt-3">
+                                ${itemsHtml}
+                            </div>
+                            
+                            <div class="flex justify-between font-bold text-gray-800 text-lg mt-2">
+                                <span>Subtotal:</span>
+                                <span>₱${subtotal.toFixed(2)}</span>
+                            </div>
+                            ${(window.cart.discountAmount > 0) ? `
+                            <div class="flex justify-between text-sm text-red-600 mb-1">
+                                <span>${window.cart.discountLabel || 'Discount'}</span>
+                                <span>-₱${parseFloat(window.cart.discountAmount).toFixed(2)}</span>
+                            </div>
+                            ${(window.cart.discountIdNumber && ['sc','pwd'].includes(window.cart.discountType))
+                                ? `<div class="text-xs text-gray-500 mb-1">${window.cart.discountType === 'sc' ? 'OSCA' : 'PWD'} ID: ${window.cart.discountIdNumber}</div>`
+                                : ''}
+                            ` : ''}
+                            <div class="flex justify-between font-bold text-gray-800 text-xl mb-2">
+                                <span>TOTAL:</span>
+                                <span>₱${totalAmount.toFixed(2)}</span>
+                            </div>
+
+                            ${transactionData.payment_method === 'cash' ? `
+                                <div class="flex justify-between text-sm text-gray-700">
+                                    <span>Cash Received:</span>
+                                    <span>₱${cashReceived.toFixed(2)}</span>
+                                </div>
+                                <div class="flex justify-between text-sm text-gray-700 mb-2">
+                                    <span>Change:</span>
+                                    <span>₱${changeGiven.toFixed(2)}</span>
+                                </div>
+                            ` : ''}
+                            
+                            <p class="text-xs text-gray-500 text-center mt-4">Thank you for your purchase!</p>
+                        </div>
+                        <div class="flex gap-2 mt-4 justify-center">
+                            <button id="thermal-print-btn" onclick="thermalPrint()"
+                                    class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-bold transition">
+                                🖨️ Print Receipt
+                            </button>
+                        </div>
+                        <button onclick="closePaymentSuccessModal()" class="mt-2 bg-gray-300 hover:bg-gray-400 text-gray-800 px-8 py-3 rounded-lg font-bold transition">
+                            Close
+                        </button>
+                    </div>
+                `;
+                modal.classList.remove('hidden');
+                const thermalBtn = document.getElementById('thermal-print-btn');
+                if (thermalBtn) thermalBtn.dataset.transactionId = transactionData.id || '';
+            }
+        }
+
+	function showCustomConfirm(title, message, onConfirm) {
+    const modal = document.getElementById('payment-modal');
+    if (modal) {
+        modal.querySelector('.payment-method').textContent = title;
+        modal.querySelector('.payment-message').innerHTML = `
+            <div class="text-center">
+                <div class="text-6xl mb-4">❓</div>
+                <p class="text-lg font-bold text-gray-800 mb-2">${title}</p>
+                <p class="text-gray-700 mb-6">${message}</p>
+                <div class="flex space-x-3">
+                    <button onclick="closePaymentSuccessModal()" class="flex-1 bg-gray-500 hover:bg-gray-600 text-white px-6 py-3 rounded-lg font-bold transition">
+                        Cancel
+                    </button>
+                    <button onclick="confirmAction()" class="flex-1 bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg font-bold transition">
+                        Clear Cart
+                    </button>
+                </div>
+            </div>
+        `;
+        modal.classList.remove('hidden');
+        window.pendingConfirmAction = onConfirm;
+    }
+}
+
+function confirmAction() {
+    if (window.pendingConfirmAction) {
+        window.pendingConfirmAction();
+        window.pendingConfirmAction = null;
+    }
+    closePaymentSuccessModal();
+}
+
+window.showCustomConfirm = showCustomConfirm;
+window.confirmAction = confirmAction;
+
+        function showCustomError(title, message) {
+            const modal = document.getElementById('payment-modal');
+            if (modal) {
+                modal.querySelector('.payment-method').textContent = title;
+                modal.querySelector('.payment-message').innerHTML = `
+                    <div class="text-center">
+                        <div class="text-6xl mb-4">⚠️</div>
+                        <p class="text-lg font-bold text-red-600 mb-2">${title}</p>
+                        <p class="text-gray-700 mb-6">${message}</p>
+                        <button onclick="closePaymentSuccessModal()" class="bg-gray-600 hover:bg-gray-700 text-white px-8 py-3 rounded-lg font-bold transition">
+                            OK
+                        </button>
+                    </div>
+                `;
+                modal.classList.remove('hidden');
+            }
+        }
+
+        function closePaymentSuccessModal() {
+            const modal = document.getElementById('payment-modal');
+            if (modal) modal.classList.add('hidden');
+        }
+
+        let _paymentInProgress = false;
+
+        async function completeCashSale() {
+            if (_paymentInProgress) return;
+            if (!window.cart || !window.cart.items) {
+                showCustomError('Cart Error', 'Cart not initialized. Please refresh the page.');
+                return;
+            }
+            const total = window.cart.total;
+            const received = parseFloat(document.getElementById('cash-received').value) || 0;
+            const change = received - total;
+
+            if (received < total) {
+                document.getElementById('cash-insufficient').classList.remove('hidden');
+                return;
+            }
+
+            // Sync discount ID from DOM so success modal can display it
+            const _cashDiscId = document.getElementById('cash-discount-id');
+            if (_cashDiscId) window.cart.discountIdNumber = _cashDiscId.value.trim();
+
+            _paymentInProgress = true;
+            const btn = document.getElementById('btn-complete-cash');
+            if (btn) { btn.disabled = true; btn.textContent = 'Processing...'; }
+
+            try {
+                const response = await authenticatedFetch(`${API_BASE}/transactions/`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        items: window.cart.items.map(item => ({
+                            item_id: item.id,
+                            quantity: item.quantity,
+                            price: item.price
+                        })),
+                        payment_method: 'cash',
+                        cash_received: received,
+                        change_given: change,
+                        total_amount: total,
+                        discount_amount: window.cart.discountAmount || 0,
+                        discount_type: window.cart.discountType || '',
+                        discount_id_number: document.getElementById('cash-discount-id')?.value?.trim() || window.cart.discountIdNumber || ''
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    closeCashModal();
+                    showCustomSuccess('Cash Payment Complete!', data);
+                    autoPrintReceipt(data.id);
+                    window.cart.items = [];
+                    window.cart.total = 0;
+                    updateCart();
+                } else {
+                    showCustomError('Transaction Failed', data.error || 'Please try again');
+                }
+            } catch (error) {
+                console.error('Cash payment error:', error);
+                showCustomError('Payment Error', error.message);
+            } finally {
+                _paymentInProgress = false;
+                if (btn) { btn.disabled = false; btn.textContent = 'Complete Sale'; }
+            }
+        }
+
+        window.showCashModal = showCashModal;
+        window.showCustomSuccess = showCustomSuccess;
+        window.showCustomError = showCustomError;
+        window.closePaymentSuccessModal = closePaymentSuccessModal;
+
+        // Dropdown Menu
+        document.addEventListener('DOMContentLoaded', () => {
+            loadSiteName();
+            const menuButton = document.getElementById('menu-button');
+            const dropdown = document.getElementById('dropdown-menu');
+            const arrow = document.getElementById('menu-arrow');
+
+            if (menuButton && dropdown && arrow) {
+                menuButton.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    dropdown.classList.toggle('hidden');
+                    arrow.textContent = dropdown.classList.contains('hidden') ? '▼' : '▲';
+                });
+
+                document.addEventListener('click', function(e) {
+                    if (!dropdown.contains(e.target) && !menuButton.contains(e.target)) {
+                        dropdown.classList.add('hidden');
+                        arrow.textContent = '▼';
+                    }
+                });
+            }
+            loadPaymentVisibility();
+            loadSiteName();
+            loadColorScheme();
+            initSidebar();
+            initPayments();
+        });
+    try {
+        const payload = JSON.parse(atob(getToken().split('.')[1]));
+        document.getElementById('userName').textContent = payload.username || 'User';
+        document.getElementById('userRole').textContent = (payload.role || 'user').toUpperCase();
+    } catch (e) {
+        document.getElementById('userName').textContent = 'User';
+        document.getElementById('userRole').textContent = 'AUTHORIZED';
+    }
+
+// Logout function
+async function logout() {
+    clearTokens();
+    window.location.href = 'login.html';
+}
+
+        // GCash Modal Functions
+        async function showGCashModal() {
+            if (!window.cart || !window.cart.items || window.cart.items.length === 0) {
+                showCustomError('Cart Empty', 'Please add items before payment'); return;
+            }
+            initModalDiscount('gcash');
+            document.getElementById('gcash-total').textContent = window.cart.total.toFixed(2);
+            document.getElementById('gcash-reference').value = '';
+            try {
+                const response = await authenticatedFetch(`${PAYMENTS_API}/config/gcash/`);
+                const data = await response.json();
+                if (data.qr_url) {
+                    document.getElementById('gcash-qr-display').src = data.qr_url;
+                    document.getElementById('gcash-qr-display').classList.remove('hidden');
+                    document.getElementById('gcash-qr-missing').classList.add('hidden');
+                }
+            } catch (e) { console.error('Failed to load GCash QR:', e); }
+            document.getElementById('gcash-modal').classList.remove('hidden');
+        }
+
+        function closeGCashModal() {
+            document.getElementById('gcash-modal').classList.add('hidden');
+            document.getElementById('gcash-customer-phone').value = '';
+        }
+
+        async function completeGCashSale() {
+            if (_paymentInProgress) return;
+            const reference = document.getElementById('gcash-reference').value.trim();
+            if (!reference) { showCustomError('Reference Required', 'Please enter the GCash reference number'); return; }
+            const _gcashDiscId = document.getElementById('gcash-discount-id');
+            if (_gcashDiscId) window.cart.discountIdNumber = _gcashDiscId.value.trim();
+            _paymentInProgress = true;
+            const btn = document.getElementById('btn-confirm-gcash');
+            if (btn) { btn.disabled = true; btn.textContent = 'Processing...'; }
+            try {
+                const response = await authenticatedFetch(`${API_BASE}/transactions/`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        items: window.cart.items.map(item => ({ item_id: item.id, quantity: item.quantity, price: item.price })),
+                        payment_method: 'gcash',
+                        gcash_reference: reference,
+                        customer_phone: document.getElementById('gcash-customer-phone').value.trim(),
+                        total_amount: window.cart.total,
+                        discount_amount: window.cart.discountAmount || 0,
+                        discount_type: window.cart.discountType || '',
+                        discount_id_number: document.getElementById('gcash-discount-id')?.value?.trim() || window.cart.discountIdNumber || ''
+                    })
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    closeGCashModal();
+                    showCustomSuccess('GCash Payment Complete!', data);
+                    autoPrintReceipt(data.id);
+                    window.cart.items = [];
+                    window.cart.total = 0;
+                    updateCart();
+                } else {
+                    showCustomError('Transaction Failed', data.error || 'Please try again');
+                }
+            } catch (e) {
+                showCustomError('Payment Error', e.message);
+            } finally {
+                _paymentInProgress = false;
+                if (btn) { btn.disabled = false; btn.textContent = 'Confirm'; }
+            }
+        }
+
+        // Maya Modal Functions
+        async function showMayaModal() {
+            if (!window.cart || !window.cart.items || window.cart.items.length === 0) {
+                showCustomError('Cart Empty', 'Please add items before payment'); return;
+            }
+            initModalDiscount('maya');
+            document.getElementById('maya-total').textContent = window.cart.total.toFixed(2);
+            document.getElementById('maya-reference').value = '';
+            try {
+                const response = await authenticatedFetch(`${PAYMENTS_API}/config/maya/`);
+                const data = await response.json();
+                if (data.qr_url) {
+                    document.getElementById('maya-qr-display').src = data.qr_url;
+                    document.getElementById('maya-qr-display').classList.remove('hidden');
+                    document.getElementById('maya-qr-missing').classList.add('hidden');
+                }
+            } catch (e) { console.error('Failed to load Maya QR:', e); }
+            document.getElementById('maya-modal').classList.remove('hidden');
+        }
+
+        function closeMayaModal() {
+            document.getElementById('maya-modal').classList.add('hidden');
+            document.getElementById('maya-customer-phone').value = '';
+        }
+
+        async function completeMayaSale() {
+            if (_paymentInProgress) return;
+            const reference = document.getElementById('maya-reference').value.trim();
+            if (!reference) { showCustomError('Reference Required', 'Please enter the Maya reference number'); return; }
+            const _mayaDiscId = document.getElementById('maya-discount-id');
+            if (_mayaDiscId) window.cart.discountIdNumber = _mayaDiscId.value.trim();
+            _paymentInProgress = true;
+            const btn = document.getElementById('btn-confirm-maya');
+            if (btn) { btn.disabled = true; btn.textContent = 'Processing...'; }
+            try {
+                const response = await authenticatedFetch(`${API_BASE}/transactions/`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        items: window.cart.items.map(item => ({ item_id: item.id, quantity: item.quantity, price: item.price })),
+                        payment_method: 'maya',
+                        maya_reference: reference,
+                        customer_phone: document.getElementById('maya-customer-phone').value.trim(),
+                        total_amount: window.cart.total,
+                        discount_amount: window.cart.discountAmount || 0,
+                        discount_type: window.cart.discountType || '',
+                        discount_id_number: document.getElementById('maya-discount-id')?.value?.trim() || window.cart.discountIdNumber || ''
+                    })
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    closeMayaModal();
+                    showCustomSuccess('Maya Payment Complete!', data);
+                    autoPrintReceipt(data.id);
+                    window.cart.items = [];
+                    window.cart.total = 0;
+                    updateCart();
+                } else {
+                    showCustomError('Transaction Failed', data.error || 'Please try again');
+                }
+            } catch (e) {
+                showCustomError('Payment Error', e.message);
+            } finally {
+                _paymentInProgress = false;
+                if (btn) { btn.disabled = false; btn.textContent = 'Confirm'; }
+            }
+        }
+
+        // ── Collapsible sidebar ─────────────────────────────────────────────
+        function toggleSidebar() {
+            const sidebar = document.getElementById('left-sidebar');
+            const content = document.getElementById('sidebar-content');
+            const icon = document.getElementById('sidebar-toggle-icon');
+            const collapsed = localStorage.getItem('sidebar_collapsed') === 'true';
+            if (collapsed) {
+                sidebar.style.width = '256px';
+                content.classList.remove('hidden');
+                icon.textContent = '▲';
+                localStorage.setItem('sidebar_collapsed', 'false');
+            } else {
+                sidebar.style.width = '40px';
+                content.classList.add('hidden');
+                icon.textContent = '▼';
+                localStorage.setItem('sidebar_collapsed', 'true');
+            }
+        }
+
+        function initSidebar() {
+            if (localStorage.getItem('sidebar_collapsed') === 'true') {
+                const sidebar = document.getElementById('left-sidebar');
+                const content = document.getElementById('sidebar-content');
+                const icon = document.getElementById('sidebar-toggle-icon');
+                sidebar.style.width = '40px';
+                content.classList.add('hidden');
+                icon.textContent = '▼';
+            }
+        }
+
+        // ── Collapsible payment buttons ─────────────────────────────────────
+        function togglePayments() {
+            const section = document.getElementById('payments-section');
+            const icon = document.getElementById('payments-toggle-icon');
+            const collapsed = section.classList.contains('hidden');
+            if (collapsed) {
+                section.classList.remove('hidden');
+                icon.textContent = '▲';
+                localStorage.setItem('payments_collapsed', 'false');
+            } else {
+                section.classList.add('hidden');
+                icon.textContent = '▼';
+                localStorage.setItem('payments_collapsed', 'true');
+            }
+        }
+
+        function initPayments() {
+            // Default: collapsed. Only expand if explicitly set to 'false'.
+            if (localStorage.getItem('payments_collapsed') === 'false') {
+                const section = document.getElementById('payments-section');
+                const icon = document.getElementById('payments-toggle-icon');
+                section.classList.remove('hidden');
+                icon.textContent = '▲';
+            }
+        }
+
+        async function loadPaymentVisibility() {
+            for (const gateway of ['gcash', 'maya']) {
+                try {
+                    const response = await authenticatedFetch(`${PAYMENTS_API}/config/${gateway}/`);
+                    const data = await response.json();
+                    const btn = document.getElementById(`btn-${gateway}`);
+                    if (btn) {
+                        btn.style.display = data.is_active === false ? 'none' : '';
+                    }
+                } catch (e) {
+                    console.error(`Failed to load ${gateway} visibility:`, e);
+                }
+            }
+            // Card — Coming Soon button visibility from localStorage
+            const cardBtn = document.querySelector('button[disabled].cursor-not-allowed');
+            if (cardBtn) {
+                const cardEnabled = localStorage.getItem('payment_card');
+                cardBtn.style.display = (cardEnabled === 'false') ? 'none' : '';
+            }
+        }
+
+    // --- Barcode Scanner ---
+    (function() {
+        const barcodeInput = document.getElementById('barcode-input');
+        let buffer = '';
+        let lastKeyTime = 0;
+        const SCAN_SPEED_MS = 50;   // scanners type faster than humans
+        const MIN_LENGTH = 3;
+
+        // Keep barcode input focused unless user is typing in another input
+        document.addEventListener('click', function(e) {
+            if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
+                barcodeInput.focus();
+            }
+        });
+        document.addEventListener('keydown', function(e) {
+            if (document.activeElement.tagName === 'INPUT' &&
+                document.activeElement.id !== 'barcode-input') return;
+            const now = Date.now();
+            if (e.key === 'Enter') {
+                if (document.activeElement.id === 'barcode-input') {
+                    if (buffer.length >= MIN_LENGTH) {
+                        handleScan(buffer.trim());
+                    }
+                    buffer = '';
+                    e.preventDefault();
+                }
+                return;
+            }
+            if (e.key.length === 1) {
+                if (now - lastKeyTime < SCAN_SPEED_MS || buffer.length === 0) {
+                    buffer += e.key;
+                } else {
+                    buffer = e.key;
+                }
+                lastKeyTime = now;
+            }
+        });
+
+        async function handleScan(sku) {
+            try {
+                const res = await authenticatedFetch(`${API_BASE}/items/?sku=${encodeURIComponent(sku)}`);
+                const data = await res.json();
+                const items = data.results || data;
+                if (!items.length) {
+                    showScanFeedback(`No product found for barcode: ${sku}`, 'error');
+                    return;
+                }
+                const item = items[0];
+                if (!item.is_active || item.stock <= 0) {
+                    showScanFeedback(`${item.name} is out of stock`, 'error');
+                    return;
+                }
+                // Add to cart — find existing cart item or add new
+                if (!window.cart) window.cart = { items: [], total: 0 };
+                const existing = window.cart.items.find(i => i.id === item.id);
+                if (existing) {
+                    if (existing.quantity >= item.stock) {
+                        showScanFeedback(`Max stock reached for ${item.name}`, 'error');
+                        return;
+                    }
+                    existing.quantity += 1;
+                } else {
+                    window.cart.items.push({
+                        id: item.id,
+                        name: item.name,
+                        price: parseFloat(item.price),
+                        quantity: 1,
+                        stock: item.stock
+                    });
+                }
+                window.cart.total = window.cart.items.reduce(
+                    (sum, i) => sum + i.price * i.quantity, 0);
+                if (typeof renderCart === 'function') renderCart();
+                if (typeof updateCartDisplay === 'function') updateCartDisplay();
+                showScanFeedback(`✅ ${item.name} added`, 'success');
+            } catch(err) {
+                showScanFeedback('Scan error: ' + err.message, 'error');
+            }
+        }
+
+        function showScanFeedback(msg, type) {
+            let el = document.getElementById('scan-feedback');
+            if (!el) {
+                el = document.createElement('div');
+                el.id = 'scan-feedback';
+                el.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);' +
+                    'padding:8px 20px;border-radius:8px;font-size:14px;font-weight:600;' +
+                    'z-index:9999;transition:opacity 0.3s;pointer-events:none;';
+                document.body.appendChild(el);
+            }
+            el.textContent = msg;
+            el.style.background = type === 'success' ? '#16a34a' : '#dc2626';
+            el.style.color = '#fff';
+            el.style.opacity = '1';
+            clearTimeout(el._timeout);
+            el._timeout = setTimeout(() => { el.style.opacity = '0'; }, 2000);
+        }
+
+        // Initial focus
+        barcodeInput.focus();
+    })();
+
+    async function thermalPrint() {
+        const btn = document.getElementById('thermal-print-btn');
+        if (!btn) return;
+        const txId = btn.dataset.transactionId;
+        if (!txId) { alert('No transaction ID — cannot print.'); return; }
+        btn.disabled = true;
+        btn.textContent = 'Printing...';
+        try {
+            await authenticatedFetch(`${API_BASE}/transactions/${txId}/print_receipt/`,
+                { method: 'POST' });
+            btn.textContent = '✅ Sent to Printer';
+        } catch(e) {
+            btn.textContent = '❌ Print Failed';
+        }
+        setTimeout(() => {
+            btn.disabled = false;
+            btn.textContent = '🖨️ Print Receipt';
+        }, 3000);
+    }
+
+    // Auto-print to thermal printer — shows warning toast on failure
+    async function autoPrintReceipt(txId) {
+        if (!txId) return;
+        try {
+            const resp = await authenticatedFetch(`${API_BASE}/transactions/${txId}/print_receipt/`,
+                { method: 'POST' });
+            const data = await resp.json();
+            if (data.print_status && !data.print_status.success) {
+                showPrintWarning(data.print_status.message);
+            }
+        } catch(e) { /* network error — printer may not be reachable */ }
+    }
+
+    function showPrintWarning(msg) {
+        const toast = document.createElement('div');
+        toast.className = 'fixed bottom-4 right-4 bg-yellow-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 flex items-center gap-2';
+        toast.innerHTML = '<span class="text-xl">&#9888;</span><span>' + (msg || 'Printer error') + '</span>';
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 5000);
+    }
+    window.autoPrintReceipt = autoPrintReceipt;
+    window.thermalPrint = thermalPrint;
+
+    async function confirmNoSale() {
+        document.getElementById('no-sale-modal').classList.add('hidden');
+        try {
+            await authenticatedFetch(`${API_BASE}/transactions/kick_drawer/`, { method: 'POST' });
+        } catch(e) { /* non-fatal */ }
+    }
+    window.confirmNoSale = confirmNoSale;
+
+    </script>
+
+    <!-- MODAL: NO SALE CONFIRMATION -->
+    <div id="no-sale-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-2xl p-6 max-w-sm w-full mx-4">
+            <h3 class="text-lg font-bold mb-2 text-gray-800">Open Cash Drawer</h3>
+            <p class="text-gray-600 mb-6 text-sm">This will open the cash drawer without processing a transaction. Continue?</p>
+            <div class="flex gap-3">
+                <button onclick="document.getElementById('no-sale-modal').classList.add('hidden')"
+                        class="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 text-sm font-medium transition">
+                    Cancel
+                </button>
+                <button onclick="confirmNoSale()"
+                        class="flex-1 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 text-sm font-medium transition">
+                    Open Drawer
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: GCASH PAYMENT -->
+    <div id="gcash-modal" class="hidden fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center">
+        <div class="bg-white rounded-xl shadow-2xl p-6 w-80 text-center">
+            <h3 class="text-xl font-bold mb-4">GCash Payment</h3>
+            <p class="text-gray-600 mb-3">Ask customer to scan:</p>
+            <div id="gcash-qr-container" class="mb-4">
+                <img id="gcash-qr-display" src="" alt="GCash QR" class="w-48 h-48 object-contain mx-auto border rounded hidden">
+                <p id="gcash-qr-missing" class="text-red-500 text-sm">No QR uploaded. Go to Settings to upload.</p>
+            </div>
+            <p class="text-2xl font-black text-blue-600 mb-4">₱<span id="gcash-total">0.00</span></p>
+            <input type="tel" id="gcash-customer-phone" placeholder="Customer phone number (optional)"
+                class="w-full border rounded-lg p-2 mb-3 text-center">
+            <input type="text" id="gcash-reference" placeholder="Enter GCash reference number"
+                class="w-full border rounded-lg p-2 mb-3 text-center">
+
+            <!-- DISCOUNT SECTION -->
+            <div id="gcash-discount-section" class="hidden mt-2 pt-3 border-t border-gray-100 text-left">
+                <div class="flex gap-2 mb-3">
+                    <button id="gcash-btn-sc" onclick="selectDiscountType('gcash','sc')"
+                            class="hidden flex-1 py-1.5 text-xs font-semibold border-2 border-gray-300
+                                   rounded-lg text-gray-600 hover:border-blue-400 hover:text-blue-600 transition">
+                        👴 Senior Citizen
+                    </button>
+                    <button id="gcash-btn-pwd" onclick="selectDiscountType('gcash','pwd')"
+                            class="hidden flex-1 py-1.5 text-xs font-semibold border-2 border-gray-300
+                                   rounded-lg text-gray-600 hover:border-blue-400 hover:text-blue-600 transition">
+                        ♿ PWD
+                    </button>
+                    <button id="gcash-btn-promo" onclick="selectDiscountType('gcash','promo')"
+                            class="hidden flex-1 py-1.5 text-xs font-semibold border-2 border-gray-300
+                                   rounded-lg text-gray-600 hover:border-green-400 hover:text-green-600 transition">
+                        🏷️ Promo
+                    </button>
+                </div>
+                <input type="text" id="gcash-discount-id"
+                       class="hidden w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-2"
+                       placeholder="OSCA / PWD ID Number">
+                <div id="gcash-promo-input" class="hidden flex items-center gap-2 mb-2">
+                    <input type="number" id="gcash-promo-pct" min="0" max="100" step="0.01"
+                           class="w-24 border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                           placeholder="0">
+                    <span class="text-sm text-gray-600">% discount</span>
+                    <button onclick="applyModalDiscount('gcash')"
+                            class="px-3 py-2 bg-gray-700 text-white rounded-lg text-sm font-medium">
+                        Apply
+                    </button>
+                </div>
+                <div id="gcash-discount-display" class="hidden text-sm text-red-600 font-medium text-right mb-2"></div>
+                <button onclick="clearModalDiscount('gcash')"
+                        class="hidden text-xs text-gray-400 hover:text-gray-600 underline"
+                        id="gcash-clear-discount">
+                    Remove discount
+                </button>
+            </div>
+
+            <button onclick="toggleDiscountSection('gcash')"
+                    id="gcash-discount-btn"
+                    class="hidden w-full mt-2 mb-3 py-1.5 border border-dashed border-gray-300
+                           rounded-lg text-sm text-gray-500 hover:border-gray-400 hover:text-gray-700 transition">
+                🏷️ Apply Discount
+            </button>
+
+            <div class="flex gap-2">
+                <button onclick="closeGCashModal()" class="flex-1 bg-gray-200 text-gray-700 py-2 rounded-lg">Cancel</button>
+                <button id="btn-confirm-gcash" onclick="completeGCashSale()" class="flex-1 bg-blue-600 text-white py-2 rounded-lg font-bold">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: MAYA PAYMENT -->
+    <div id="maya-modal" class="hidden fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center">
+        <div class="bg-white rounded-xl shadow-2xl p-6 w-80 text-center">
+            <h3 class="text-xl font-bold mb-4">Maya Payment</h3>
+            <p class="text-gray-600 mb-3">Ask customer to scan:</p>
+            <div id="maya-qr-container" class="mb-4">
+                <img id="maya-qr-display" src="" alt="Maya QR" class="w-48 h-48 object-contain mx-auto border rounded hidden">
+                <p id="maya-qr-missing" class="text-red-500 text-sm">No QR uploaded. Go to Settings to upload.</p>
+            </div>
+            <p class="text-2xl font-black text-purple-600 mb-4">₱<span id="maya-total">0.00</span></p>
+            <input type="tel" id="maya-customer-phone" placeholder="Customer phone number (optional)"
+                class="w-full border rounded-lg p-2 mb-3 text-center">
+            <input type="text" id="maya-reference" placeholder="Enter Maya reference number"
+                class="w-full border rounded-lg p-2 mb-3 text-center">
+
+            <!-- DISCOUNT SECTION -->
+            <div id="maya-discount-section" class="hidden mt-2 pt-3 border-t border-gray-100 text-left">
+                <div class="flex gap-2 mb-3">
+                    <button id="maya-btn-sc" onclick="selectDiscountType('maya','sc')"
+                            class="hidden flex-1 py-1.5 text-xs font-semibold border-2 border-gray-300
+                                   rounded-lg text-gray-600 hover:border-blue-400 hover:text-blue-600 transition">
+                        👴 Senior Citizen
+                    </button>
+                    <button id="maya-btn-pwd" onclick="selectDiscountType('maya','pwd')"
+                            class="hidden flex-1 py-1.5 text-xs font-semibold border-2 border-gray-300
+                                   rounded-lg text-gray-600 hover:border-blue-400 hover:text-blue-600 transition">
+                        ♿ PWD
+                    </button>
+                    <button id="maya-btn-promo" onclick="selectDiscountType('maya','promo')"
+                            class="hidden flex-1 py-1.5 text-xs font-semibold border-2 border-gray-300
+                                   rounded-lg text-gray-600 hover:border-green-400 hover:text-green-600 transition">
+                        🏷️ Promo
+                    </button>
+                </div>
+                <input type="text" id="maya-discount-id"
+                       class="hidden w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-2"
+                       placeholder="OSCA / PWD ID Number">
+                <div id="maya-promo-input" class="hidden flex items-center gap-2 mb-2">
+                    <input type="number" id="maya-promo-pct" min="0" max="100" step="0.01"
+                           class="w-24 border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                           placeholder="0">
+                    <span class="text-sm text-gray-600">% discount</span>
+                    <button onclick="applyModalDiscount('maya')"
+                            class="px-3 py-2 bg-gray-700 text-white rounded-lg text-sm font-medium">
+                        Apply
+                    </button>
+                </div>
+                <div id="maya-discount-display" class="hidden text-sm text-red-600 font-medium text-right mb-2"></div>
+                <button onclick="clearModalDiscount('maya')"
+                        class="hidden text-xs text-gray-400 hover:text-gray-600 underline"
+                        id="maya-clear-discount">
+                    Remove discount
+                </button>
+            </div>
+
+            <button onclick="toggleDiscountSection('maya')"
+                    id="maya-discount-btn"
+                    class="hidden w-full mt-2 mb-3 py-1.5 border border-dashed border-gray-300
+                           rounded-lg text-sm text-gray-500 hover:border-gray-400 hover:text-gray-700 transition">
+                🏷️ Apply Discount
+            </button>
+
+            <div class="flex gap-2">
+                <button onclick="closeMayaModal()" class="flex-1 bg-gray-200 text-gray-700 py-2 rounded-lg">Cancel</button>
+                <button id="btn-confirm-maya" onclick="completeMayaSale()" class="flex-1 bg-purple-600 text-white py-2 rounded-lg font-bold">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js')
+        .catch(err => console.log('SW registration failed:', err));
+    });
+  }
+</script>
+<script>
+(function(){
+    try {
+        const tok = localStorage.getItem('access_token');
+        if (tok) {
+            const p = JSON.parse(atob(tok.split('.')[1]));
+            const uEl = document.getElementById('userName');
+            const rEl = document.getElementById('userRole');
+            if (uEl) uEl.textContent = p.username || 'User';
+            if (rEl) rEl.textContent = p.role || '';
+        }
+    } catch(e) {}
+    function tick() {
+        const prefs = (() => { try { return JSON.parse(localStorage.getItem('clock_prefs') || '{}'); } catch(e) { return {}; } })();
+        const use12 = prefs.format !== '24h';
+        const tz = prefs.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+        const el = document.getElementById('live-clock');
+        if (el) el.textContent = new Date().toLocaleTimeString('en-PH', {hour:'2-digit', minute:'2-digit', second:'2-digit', hour12: use12, timeZone: tz});
+    }
+    tick(); setInterval(tick, 1000);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard — TarsierPOS</title>
+    <script>if(localStorage.getItem('darkMode')==='true')document.documentElement.classList.add('dark');</script>
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/svg+xml" href="assets/tarsier-icon.svg">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="shared-styles.css">
+</head>
+<body class="bg-gray-50">
+
+    <!-- NAVIGATION -->
+    <nav class="bg-gradient-to-r from-blue-600 to-blue-800 text-white shadow-lg sticky top-0 z-50">
+        <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+            <div class="flex items-center space-x-3">
+                <span class="text-3xl">🍽️</span>
+                <div>
+                    <h1 class="text-xl font-bold text-white" id="site-name">TarsierPOS</h1>
+                    <p class="text-blue-200 text-sm" id="site-tagline">AI Powered Point of Sale System</p>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-4">
+                <span id="live-clock" class="text-sm font-mono tabular-nums text-blue-100 hidden sm:block"></span>
+                <div class="text-right hidden sm:block border-r border-blue-400 pr-4 mr-2">
+                    <p class="text-sm font-bold text-white leading-tight" id="userName"></p>
+                    <p class="text-[10px] text-blue-200 uppercase tracking-widest font-black leading-tight" id="userRole"></p>
+                </div>
+                <div class="relative">
+                    <button id="menu-button" class="bg-blue-700 hover:bg-blue-800 px-4 py-2 rounded-lg font-medium transition flex items-center space-x-2">
+                        <span>☰ Menu</span>
+                        <span id="menu-arrow">▼</span>
+                    </button>
+                    <div id="dropdown-menu" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl z-50">
+                        <a href="index.html" class="block px-4 py-3 text-gray-700 hover:bg-gray-100 rounded-t-lg">🏪 POS</a>
+                        <a href="inventory.html" class="block px-4 py-3 text-gray-700 hover:bg-gray-100">📦 Inventory</a>
+                        <a href="dashboard.html" class="block px-4 py-3 text-blue-600 bg-blue-50 font-bold">📊 Dashboard</a>
+                        <a href="settings.html" class="block px-4 py-3 text-gray-700 hover:bg-gray-100">⚙️ Settings</a>
+                        <a href="#" onclick="logout(); return false;" class="block px-4 py-3 text-red-600 hover:bg-red-50 rounded-b-lg">🚪 Logout</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="h-[calc(100vh-73px)] overflow-y-auto bg-gray-50">
+    <!-- MAIN CONTENT -->
+    <div class="container mx-auto px-4 py-6">
+
+        <!-- PAGE HEADER -->
+        <div class="mb-6 flex items-start justify-between">
+            <div>
+                <h2 class="text-3xl font-bold text-gray-800">📊 Dashboard</h2>
+                <p class="text-gray-600">Overview of your business performance</p>
+            </div>
+            <div id="report-shortcuts" class="hidden items-center gap-2">
+                <a href="xreport.html" class="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg transition">
+                    📊 X-Report
+                </a>
+                <a href="zreport.html" class="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-orange-700 bg-orange-50 hover:bg-orange-100 rounded-lg transition">
+                    📋 Z-Report
+                </a>
+            </div>
+        </div>
+
+        <!-- QUICK STATS -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-6">
+            <div class="bg-white rounded-lg shadow-lg p-6 border-l-4 border-blue-500">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm text-gray-600 mb-1">Today's Sales</p>
+                        <p id="today-sales" class="text-3xl font-bold text-blue-600">₱0</p>
+                    </div>
+                    <div class="text-5xl">💰</div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-lg shadow-lg p-6 border-l-4 border-emerald-500">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm text-gray-600 mb-1">Total Revenue</p>
+                        <p id="total-revenue" class="text-3xl font-bold text-emerald-600">₱0</p>
+                    </div>
+                    <div class="text-5xl">🏛️</div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-lg shadow-lg p-6 border-l-4 border-green-500">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm text-gray-600 mb-1">Transactions</p>
+                        <p id="today-transactions" class="text-3xl font-bold text-green-600">0</p>
+                    </div>
+                    <div class="text-5xl">🛒</div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-lg shadow-lg p-6 border-l-4 border-purple-500">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm text-gray-600 mb-1">Avg Transaction</p>
+                        <p id="avg-transaction" class="text-3xl font-bold text-purple-600">₱0</p>
+                    </div>
+                    <div class="text-5xl">📈</div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-lg shadow-lg p-6 border-l-4 border-orange-500">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm text-gray-600 mb-1">Low Stock Items</p>
+                        <p id="low-stock-count" class="text-3xl font-bold text-orange-600">0</p>
+                    </div>
+                    <div class="text-5xl">⚠️</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- MAIN LAYOUT: 2/3 + 1/3 -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+            <!-- LEFT: Recent Transactions — spans 2/3 width -->
+            <div class="lg:col-span-2 h-full">
+                <!-- RECENT TRANSACTIONS -->
+                <div class="bg-white rounded-lg shadow-lg p-6 h-full">
+                    <h3 class="text-xl font-bold text-gray-800 mb-4">🧾 Recent Transactions</h3>
+
+                    <!-- Date Filters -->
+                    <div class="flex space-x-4 mb-4">
+                        <div>
+                            <label for="date-from" class="block text-xs font-medium text-gray-500 uppercase mb-1">From</label>
+                            <input type="date" id="date-from" class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition">
+                        </div>
+                        <div>
+                            <label for="date-to" class="block text-xs font-medium text-gray-500 uppercase mb-1">To</label>
+                            <input type="date" id="date-to" class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition">
+                        </div>
+                    </div>
+
+                    <div class="overflow-x-auto">
+                        <table class="w-full">
+                            <thead class="bg-gray-50 border-b">
+                                <tr>
+                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Time</th>
+                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Items</th>
+                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Payment</th>
+                                    <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Amount</th>
+                                    <th class="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="recent-transactions" class="divide-y divide-gray-200">
+                                <tr>
+                                    <td colspan="4" class="px-4 py-8 text-center text-gray-500">Loading transactions...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RIGHT SIDEBAR: stacked vertically -->
+            <div class="space-y-6">
+
+                <!-- SALES BY PAYMENT METHOD -->
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <h3 class="text-xl font-bold text-gray-800 mb-4">💳 Payment Methods</h3>
+                    <div id="payment-methods" class="space-y-3">
+                        <p class="text-gray-500 text-center py-4">Loading data...</p>
+                    </div>
+                </div>
+
+                <!-- LOW STOCK ALERTS -->
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <h3 class="text-xl font-bold text-gray-800 mb-4">⚠️ Low Stock Alerts</h3>
+                    <div id="low-stock-alerts" class="space-y-2">
+                        <p class="text-gray-500 text-center py-4">Loading alerts...</p>
+                    </div>
+                </div>
+
+                <!-- TOP PRODUCTS -->
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <h3 class="text-xl font-bold text-gray-800 mb-4">🏆 Top Selling Products</h3>
+                    <div id="top-products" class="space-y-3">
+                        <p class="text-gray-500 text-center py-4">Loading top products...</p>
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- SCRIPTS -->
+    <script src="config.js"></script>
+    <script>
+        // API_BASE is defined in config.js (loaded before this script)
+
+        let lowStockThreshold = 10;
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            loadSiteName();
+            // Role-gate: Z-Report nav link (manager/admin only)
+            const role = getUserRole();
+            if (role === 'manager' || role === 'admin') {
+                const shortcuts = document.getElementById('report-shortcuts');
+                if (shortcuts) { shortcuts.classList.remove('hidden'); shortcuts.classList.add('flex'); }
+            }
+            attachEventListeners();
+            try {
+                const bp = await authenticatedFetch(`${API_BASE}/business/`);
+                const bpData = await bp.json();
+                if (bpData.low_stock_threshold) lowStockThreshold = bpData.low_stock_threshold;
+            } catch (e) {}
+            // Initial load with potential date filters
+            const dateFrom = document.getElementById('date-from').value;
+            const dateTo = document.getElementById('date-to').value;
+            await loadDashboardData(dateFrom, dateTo);
+            loadSiteName();
+            loadColorScheme();
+        });
+
+        function attachEventListeners() {
+            const menuButton = document.getElementById('menu-button');
+            const dropdown = document.getElementById('dropdown-menu');
+            const arrow = document.getElementById('menu-arrow');
+
+            menuButton.addEventListener('click', function(e) {
+                e.stopPropagation();
+                dropdown.classList.toggle('hidden');
+                arrow.textContent = dropdown.classList.contains('hidden') ? '▼' : '▲';
+            });
+
+            document.addEventListener('click', function(e) {
+                if (!dropdown.contains(e.target) && !menuButton.contains(e.target)) {
+                    dropdown.classList.add('hidden');
+                    arrow.textContent = '▼';
+                }
+            });
+
+            // Date filter event listeners
+            const dateFromInput = document.getElementById('date-from');
+            const dateToInput = document.getElementById('date-to');
+
+            const handleDateChange = async () => {
+                const newDateFrom = dateFromInput.value;
+                const newDateTo = dateToInput.value;
+                await loadRecentTransactions(newDateFrom, newDateTo);
+            };
+
+            dateFromInput.addEventListener('change', handleDateChange);
+            dateToInput.addEventListener('change', handleDateChange);
+
+            document.getElementById('confirm-void-btn').onclick = async function() {
+                const reason = document.getElementById('void-reason').value;
+                if (!reason) { alert('Please select a reason for voiding.'); return; }
+                const errorDiv = document.getElementById('void-error');
+
+                try {
+                    this.disabled = true;
+                    this.textContent = 'Processing...';
+
+                    const response = await authenticatedFetch(`${API_BASE}/transactions/${currentVoidId}/void/`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ reason: reason })
+                    });
+
+                    const data = await response.json();
+
+                    if (response.ok) {
+                        closeVoidModal();
+                        const dateFrom = document.getElementById('date-from').value;
+                        const dateTo = document.getElementById('date-to').value;
+                        await loadRecentTransactions(dateFrom, dateTo);
+                        await loadQuickStats();
+                    } else {
+                        errorDiv.textContent = "Error: " + (data.error || data.detail || "Failed to void transaction");
+                        errorDiv.classList.remove('hidden');
+                    }
+                } catch (error) {
+                    console.error('Void error:', error);
+                    errorDiv.textContent = "Failed to connect to server.";
+                    errorDiv.classList.remove('hidden');
+                } finally {
+                    this.disabled = false;
+                    this.textContent = 'Confirm Void';
+                }
+            };
+        }
+
+        async function loadDashboardData(dateFrom = null, dateTo = null) {
+            try {
+                // Load all data in parallel
+                await Promise.all([
+                    loadQuickStats(),
+                    loadRecentTransactions(dateFrom, dateTo),
+                    loadTopProducts(),
+                    loadPaymentMethods(),
+                    loadLowStockAlerts()
+                ]);
+            } catch (error) {
+                console.error('Error loading dashboard:', error);
+            }
+        }
+
+        async function loadQuickStats() {
+            try {
+                // Fetch stats from the dedicated dashboard endpoint instead of filtering all transactions
+                const response = await authenticatedFetch(`${API_BASE}/dashboard/`);
+                const data = await response.json();
+                
+                const todaySales = data.today.revenue;
+                const totalRevenue = data.all_time.revenue;
+                const todayCount = data.today.transactions;
+                const avgTransaction = todayCount > 0 ? todaySales / todayCount : 0;
+
+                document.getElementById('today-sales').textContent = `₱${todaySales.toFixed(2)}`;
+                document.getElementById('total-revenue').textContent = `₱${totalRevenue.toFixed(2)}`;
+                document.getElementById('today-transactions').textContent = todayCount;
+                document.getElementById('avg-transaction').textContent = `₱${avgTransaction.toFixed(2)}`;
+
+                // Low stock count (remains separate or could be added to dashboard endpoint)
+                const itemsResponse = await authenticatedFetch(`${API_BASE}/items/`);
+                const itemsRaw = await itemsResponse.json();
+                const items = itemsRaw.results !== undefined ? itemsRaw.results : itemsRaw;
+                const lowStock = items.filter(i => i.stock < 10).length;
+                document.getElementById('low-stock-count').textContent = lowStock;
+
+            } catch (error) {
+                console.error('Error loading stats:', error);
+            }
+        }
+
+        async function loadRecentTransactions(dateFrom = null, dateTo = null) {
+            try {
+                let url = `${API_BASE}/transactions/`;
+                const params = new URLSearchParams();
+                if (dateFrom) params.append('date_from', dateFrom);
+                if (dateTo) params.append('date_to', dateTo);
+                if (params.toString()) url += `?${params.toString()}`;
+
+                const response = await authenticatedFetch(url);
+                const raw = await response.json();
+                const transactions = raw.results !== undefined ? raw.results : raw;
+                
+                const tbody = document.getElementById('recent-transactions');
+                
+                if (transactions.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4" class="px-4 py-8 text-center text-gray-500">No transactions yet</td></tr>';
+                    return;
+                }
+
+                const recent = transactions;
+                
+                tbody.innerHTML = recent.map(t => {
+                    const time = new Date(t.created_at).toLocaleTimeString('en-US', { 
+                        hour: '2-digit', 
+                        minute: '2-digit' 
+                    });
+                    const itemCount = t.items_count !== undefined ? t.items_count : (t.items ? t.items.length : 0);
+                    const paymentBadge = getPaymentBadge(t.payment_method);
+                    const discountBadge = (t.discount_amount && parseFloat(t.discount_amount) > 0)
+                        ? `<span class="ml-1 px-1.5 py-0.5 text-xs font-medium bg-red-100 text-red-700 rounded">${(t.discount_type || 'disc').toUpperCase()}</span>`
+                        : '';
+
+                    return `
+                        <tr class="hover:bg-gray-50 cursor-pointer" onclick="showTransactionDetail('${t.id}')">
+                            <td class="px-4 py-3 text-sm text-gray-600">${time}</td>
+                            <td class="px-4 py-3 text-sm">${itemCount} items</td>
+                            <td class="px-4 py-3">${paymentBadge}${discountBadge}</td>
+                            <td class="px-4 py-3 text-right font-medium">₱${parseFloat(t.total_amount).toFixed(2)}</td>
+                            <td class="px-4 py-3 text-center" onclick="event.stopPropagation()">
+                                ${t.void 
+                                    ? '<span class="text-xs font-bold text-red-500 uppercase">Voided</span>'
+                                    : `<button onclick="voidTransaction('${t.id}')" class="text-xs bg-red-100 hover:bg-red-200 text-red-600 px-2 py-1 rounded font-bold transition">Void</button>`
+                                }
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+
+            } catch (error) {
+                console.error('Error loading transactions:', error);
+            }
+        }
+
+        async function loadTopProducts() {
+            try {
+                const response = await authenticatedFetch(`${API_BASE}/dashboard/`);
+                const data = await response.json();
+                const items = data.top_items || [];
+
+                const container = document.getElementById('top-products');
+
+                if (items.length === 0) {
+                    container.innerHTML = '<p class="text-gray-500 text-center py-4">No sales today</p>';
+                    return;
+                }
+
+                container.innerHTML = items.map((item, index) => {
+                    const rank = index + 1;
+                    return `
+                        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                            <div class="flex items-center space-x-3">
+                                <span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-gray-100 text-gray-700 text-xs font-bold">${rank}</span>
+                                <div>
+                                    <p class="font-medium text-gray-900">${item.name}</p>
+                                    <p class="text-sm text-gray-600">${item.quantity} sold today • ₱${parseFloat(item.revenue).toFixed(2)}</p>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+            } catch (error) {
+                console.error('Error loading top products:', error);
+            }
+        }
+
+        let currentVoidId = null;
+        let currentDetailId = null;
+
+        function openVoidModal(id) {
+            currentVoidId = id;
+            document.getElementById('void-modal-title').textContent = `Void Transaction #${id}`;
+            document.getElementById('void-reason').value = '';
+            document.getElementById('void-error').classList.add('hidden');
+            document.getElementById('void-modal').classList.remove('hidden');
+            document.getElementById('void-reason').focus();
+        }
+
+        function closeVoidModal() {
+            document.getElementById('void-modal').classList.add('hidden');
+            currentVoidId = null;
+        }
+
+        async function detailPrintReceipt(transactionId) {
+            if (!transactionId) return;
+            const btn = document.getElementById('detail-print-btn');
+            const original = btn ? btn.textContent : null;
+            if (btn) { btn.disabled = true; btn.textContent = '⏳ Printing...'; }
+            try {
+                const res = await authenticatedFetch(`${API_BASE}/transactions/${transactionId}/print_receipt/`, { method: 'POST' });
+                if (res && res.ok) {
+                    if (btn) { btn.textContent = '✅ Sent'; }
+                    setTimeout(() => { if (btn) { btn.disabled = false; btn.textContent = original; } }, 2000);
+                } else {
+                    if (btn) { btn.textContent = '❌ Failed'; }
+                    setTimeout(() => { if (btn) { btn.disabled = false; btn.textContent = original; } }, 2500);
+                }
+            } catch(e) {
+                if (btn) { btn.textContent = '❌ Error'; }
+                setTimeout(() => { if (btn) { btn.disabled = false; btn.textContent = original; } }, 2500);
+            }
+        }
+
+        async function showTransactionDetail(id) {
+            currentDetailId = id;
+            try {
+                const response = await authenticatedFetch(`${API_BASE}/transactions/${id}/`);
+                if (!response.ok) throw new Error('Failed to fetch transaction details');
+                const t = await response.json();
+                
+                const date = new Date(t.created_at).toLocaleString();
+                const itemsHtml = t.items.map(item => `
+                    <div class="flex justify-between text-sm py-1 border-b border-gray-100 last:border-0">
+                        <div class="flex-1">
+                            <span class="font-medium">${item.name}</span>
+                            <span class="text-gray-500 ml-1">x${item.quantity}</span>
+                        </div>
+                        <div class="text-gray-700">₱${(item.quantity * item.price).toFixed(2)}</div>
+                    </div>
+                `).join('');
+
+                const paymentRows = (() => {
+                    const method = t.payment_method;
+                    if (method === 'cash') {
+                        return `
+                            <div class="flex justify-between text-sm">
+                                <span class="text-gray-500">Cash Received:</span>
+                                <span class="text-gray-800">₱${t.cash_received ? parseFloat(t.cash_received).toFixed(2) : 'N/A'}</span>
+                            </div>
+                            <div class="flex justify-between text-sm">
+                                <span class="text-gray-500">Change:</span>
+                                <span class="text-gray-800">₱${t.change_given ? parseFloat(t.change_given).toFixed(2) : 'N/A'}</span>
+                            </div>`;
+                    } else if (method === 'gcash') {
+                        return `
+                            <div class="flex justify-between text-sm">
+                                <span class="text-gray-500">GCash Reference:</span>
+                                <span class="font-mono text-gray-800">${t.gcash_reference || 'N/A'}</span>
+                            </div>
+                            <div class="flex justify-between text-sm">
+                                <span class="text-gray-500">Customer Phone:</span>
+                                <span class="text-gray-800">${t.customer_phone || 'N/A'}</span>
+                            </div>`;
+                    } else if (method === 'maya') {
+                        return `
+                            <div class="flex justify-between text-sm">
+                                <span class="text-gray-500">Maya Reference:</span>
+                                <span class="font-mono text-gray-800">${t.maya_reference || 'N/A'}</span>
+                            </div>
+                            <div class="flex justify-between text-sm">
+                                <span class="text-gray-500">Customer Phone:</span>
+                                <span class="text-gray-800">${t.customer_phone || 'N/A'}</span>
+                            </div>`;
+                    }
+                    return '';
+                })();
+
+                const voidRow = t.void ? `
+                    <div class="mt-3 pt-3 border-t border-red-200 space-y-1">
+                        <div class="flex justify-between text-sm">
+                            <span class="text-red-500">Voided By:</span>
+                            <span class="text-red-700 font-medium">${t.voided_by || 'N/A'}</span>
+                        </div>
+                        <div class="flex justify-between text-sm">
+                            <span class="text-red-500">Voided At:</span>
+                            <span class="text-red-700">${t.voided_at ? new Date(t.voided_at).toLocaleString() : 'N/A'}</span>
+                        </div>
+                        <div class="flex justify-between text-sm">
+                            <span class="text-red-500">Reason:</span>
+                            <span class="text-red-700">${t.void_reason || 'N/A'}</span>
+                        </div>
+                    </div>` : '';
+
+                const discountHtml = (() => {
+                    if (!t.discount_amount || parseFloat(t.discount_amount) <= 0) return '';
+                    const dtype = t.discount_type || 'discount';
+                    const labelMap = { sc: 'SC Discount', pwd: 'PWD Discount', promo: 'Promo Discount' };
+                    const label = labelMap[dtype] || 'Discount';
+                    const profile = JSON.parse(localStorage.getItem('biz_profile') || '{}');
+                    const rate = dtype === 'sc' ? (profile.sc_discount_rate || 20)
+                               : dtype === 'pwd' ? (profile.pwd_discount_rate || 20)
+                               : '';
+                    const rateStr = rate ? ` (${rate}%)` : '';
+                    let html = `<div class="flex justify-between text-sm text-red-600 mt-1">
+                            <span>${label}${rateStr}</span>
+                            <span>-₱${parseFloat(t.discount_amount).toFixed(2)}</span>
+                        </div>`;
+                    if (t.discount_id_number && (dtype === 'sc' || dtype === 'pwd')) {
+                        html += `<div class="text-xs text-gray-500 mt-0.5">
+                            ${dtype === 'sc' ? 'OSCA ID' : 'PWD ID'}: ${t.discount_id_number}
+                        </div>`;
+                    }
+                    return html;
+                })();
+
+                const detailHtml = `
+                    <div class="space-y-3">
+                        <div class="flex justify-between text-sm">
+                            <span class="text-gray-500">Transaction #:</span>
+                            <span class="font-mono text-gray-800">${t.transaction_no || t.id}</span>
+                        </div>
+                        <div class="flex justify-between text-sm">
+                            <span class="text-gray-500">Date/Time:</span>
+                            <span class="text-gray-800">${date}</span>
+                        </div>
+                        <div class="flex justify-between text-sm">
+                            <span class="text-gray-500">Cashier:</span>
+                            <span class="text-gray-800">${t.cashier || 'N/A'}</span>
+                        </div>
+                        <div class="flex justify-between text-sm">
+                            <span class="text-gray-500">Payment:</span>
+                            <span>${getPaymentBadge(t.payment_method)}</span>
+                        </div>
+                        ${paymentRows}
+                        <div class="mt-4 pt-4 border-t border-gray-200">
+                            <h4 class="text-sm font-bold text-gray-800 mb-2 uppercase">Order Items</h4>
+                            <div class="max-h-48 overflow-y-auto pr-1">
+                                ${itemsHtml}
+                            </div>
+                        </div>
+                        <div class="pt-4 border-t-2 border-dashed border-gray-200">
+                            ${(t.discount_amount && parseFloat(t.discount_amount) > 0) ? `
+                            <div class="flex justify-between text-sm text-gray-600 mb-1">
+                                <span>Subtotal</span>
+                                <span>₱${(parseFloat(t.total_amount || t.total) + parseFloat(t.discount_amount)).toFixed(2)}</span>
+                            </div>` : ''}
+                            ${discountHtml}
+                            <div class="flex justify-between items-center">
+                                <span class="text-lg font-bold text-gray-800">Total</span>
+                                <span class="text-2xl font-black text-blue-600">₱${parseFloat(t.total_amount || t.total).toFixed(2)}</span>
+                            </div>
+                            ${t.void ? '<div class="mt-2 text-center py-1 bg-red-100 text-red-600 font-bold rounded uppercase tracking-widest text-sm">VOIDED</div>' : ''}
+                            ${voidRow}
+                        </div>
+                    </div>
+                `;
+
+                document.getElementById('detail-content').innerHTML = detailHtml;
+                document.getElementById('detail-modal-title').textContent = `Transaction Detail`;
+                // Wire print button with explicit transaction id (fire-and-forget, no ambient state)
+                const printBtn = document.getElementById('detail-print-btn');
+                if (printBtn) printBtn.onclick = () => {
+                    detailPrintReceipt(t.id);
+                    const orig = printBtn.innerHTML;
+                    printBtn.innerHTML = '✓ Queued';
+                    printBtn.disabled = true;
+                    setTimeout(() => { printBtn.innerHTML = orig; printBtn.disabled = false; }, 2000);
+                };
+                // Show/hide void button based on whether transaction is already voided
+                const voidBtn = document.getElementById('detail-void-btn');
+                if (voidBtn) voidBtn.classList.toggle('hidden', !!t.void);
+                document.getElementById('detail-modal').classList.remove('hidden');
+            } catch (error) {
+                console.error('Error loading transaction details:', error);
+                alert('Could not load transaction details.');
+            }
+        }
+
+        function closeDetailModal() {
+            document.getElementById('detail-modal').classList.add('hidden');
+            currentDetailId = null;
+        }
+
+        async function voidTransaction(id) {
+            openVoidModal(id);
+        }
+
+                async function loadPaymentMethods() {
+            try {
+                const response = await authenticatedFetch(`${API_BASE}/transactions/`);
+                const raw = await response.json();
+                const transactions = raw.results !== undefined ? raw.results : raw;
+                
+                // Count by payment method
+                const methods = {};
+                transactions.forEach(t => {
+                    const method = t.payment_method || 'cash';
+                    methods[method] = (methods[method] || 0) + parseFloat(t.total_amount || 0);
+                });
+
+                const container = document.getElementById('payment-methods');
+                
+                if (Object.keys(methods).length === 0) {
+                    container.innerHTML = '<p class="text-gray-500 text-center py-4">No transactions yet</p>';
+                    return;
+                }
+
+                const total = Object.values(methods).reduce((sum, val) => sum + val, 0);
+                
+                container.innerHTML = Object.entries(methods).map(([method, amount]) => {
+                    const percentage = (amount / total * 100).toFixed(1);
+                    const icon = getPaymentIcon(method);
+                    
+                    return `
+                        <div class="space-y-1">
+                            <div class="flex items-center justify-between">
+                                <span class="text-sm font-medium text-gray-700">${icon} ${capitalizeFirst(method)}</span>
+                                <span class="text-sm font-bold text-gray-900">₱${amount.toFixed(2)}</span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-2">
+                                <div class="bg-blue-600 h-2 rounded-full" style="width: ${percentage}%"></div>
+                            </div>
+                            <p class="text-xs text-gray-500">${percentage}% of total sales</p>
+                        </div>
+                    `;
+                }).join('');
+
+            } catch (error) {
+                console.error('Error loading payment methods:', error);
+            }
+        }
+
+        async function loadLowStockAlerts() {
+            try {
+                const response = await authenticatedFetch(`${API_BASE}/items/`);
+                const raw = await response.json();
+                const items = raw.results !== undefined ? raw.results : raw;
+                
+                const lowStock = items.filter(i => i.stock < lowStockThreshold).slice(0, 5);
+                const container = document.getElementById('low-stock-alerts');
+                
+                if (lowStock.length === 0) {
+                    container.innerHTML = '<p class="text-green-600 text-center py-4">✅ All items well stocked!</p>';
+                    return;
+                }
+                
+                container.innerHTML = lowStock.map(item => `
+                    <div class="flex items-center justify-between p-2 bg-red-50 border border-red-200 rounded">
+                        <div class="flex-1">
+                            <p class="text-sm font-medium text-gray-900">${item.name}</p>
+                            <p class="text-xs text-gray-600">${item.category_name || 'General'}</p>
+                        </div>
+                        <span class="text-lg font-bold text-red-600">${item.stock}</span>
+                    </div>
+                `).join('');
+
+            } catch (error) {
+                console.error('Error loading low stock:', error);
+            }
+        }
+
+        function getPaymentBadge(method) {
+            const badges = {
+                cash: '<span class="px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded">💵 Cash</span>',
+                gcash: '<span class="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded">📱 GCash</span>',
+                maya: '<span class="px-2 py-1 text-xs font-medium bg-purple-100 text-purple-800 rounded">💳 Maya</span>',
+                card: '<span class="px-2 py-1 text-xs font-medium bg-orange-100 text-orange-800 rounded">💳 Card</span>'
+            };
+            return badges[method] || badges.cash;
+        }
+
+        function getPaymentIcon(method) {
+            const icons = {
+                cash: '💵',
+                gcash: '📱',
+                maya: '💳',
+                card: '💳'
+            };
+            return icons[method] || '💵';
+        }
+
+        function capitalizeFirst(str) {
+            return str.charAt(0).toUpperCase() + str.slice(1);
+        }
+
+        // Logout function
+        async function logout() {
+            clearTokens();
+            window.location.href = 'login.html';
+        }
+    </script>
+    <!-- VOID MODAL -->
+    <div id="void-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-black bg-opacity-60 backdrop-blur-sm" onclick="closeVoidModal()"></div>
+        <div class="relative bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden transform transition-all">
+            <div class="bg-red-600 px-6 py-4 flex items-center justify-between">
+                <h3 id="void-modal-title" class="text-xl font-bold text-white">Void Transaction</h3>
+                <button onclick="closeVoidModal()" class="text-white hover:text-red-100 transition">✕</button>
+            </div>
+            <div class="p-6">
+                <p class="text-gray-600 mb-4">Are you sure you want to void this transaction? This will reverse stock changes and mark the sale as voided.</p>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Reason for Voiding</label>
+                <select id="void-reason" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none transition bg-white">
+                    <option value="">— Select a reason —</option>
+                    <option value="Wrong order">Wrong order</option>
+                    <option value="Customer cancelled">Customer cancelled</option>
+                    <option value="Cashier error">Cashier error</option>
+                    <option value="Duplicate transaction">Duplicate transaction</option>
+                    <option value="Other">Other</option>
+                </select>
+                <div id="void-error" class="hidden mt-2 text-red-600 text-sm font-medium"></div>
+            </div>
+            <div class="bg-gray-50 px-6 py-4 flex flex-row-reverse space-x-2 space-x-reverse">
+                <button id="confirm-void-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-6 rounded-lg shadow-md transition transform active:scale-95">Confirm Void</button>
+                <button onclick="closeVoidModal()" class="bg-white hover:bg-gray-100 text-gray-700 font-medium py-2 px-6 border border-gray-300 rounded-lg transition">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- TRANSACTION DETAIL MODAL -->
+    <div id="detail-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-black bg-opacity-60 backdrop-blur-sm" onclick="closeDetailModal()"></div>
+        <div class="relative bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden transform transition-all">
+            <div class="bg-blue-600 px-6 py-4 flex items-center justify-between">
+                <h3 id="detail-modal-title" class="text-xl font-bold text-white">Transaction Detail</h3>
+                <button onclick="closeDetailModal()" class="text-white hover:text-blue-100 transition">✕</button>
+            </div>
+            <div id="detail-content" class="p-6">
+                <!-- Content injected by JS -->
+                <div class="flex justify-center py-8">
+                    <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                </div>
+            </div>
+            <div class="bg-gray-50 px-6 py-4 flex items-center justify-between">
+                <div class="flex gap-2">
+                    <button id="detail-print-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition flex items-center gap-1">🖨️ Print</button>
+                    <button id="detail-void-btn" onclick="openVoidModal(currentDetailId); closeDetailModal();" class="bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded-lg transition">Void</button>
+                </div>
+                <button onclick="closeDetailModal()" class="bg-white hover:bg-gray-100 text-gray-700 font-medium py-2 px-6 border border-gray-300 rounded-lg transition">Close</button>
+            </div>
+        </div>
+    </div>
+    </div>
+<script>
+(function(){
+    try {
+        const tok = localStorage.getItem('access_token');
+        if (tok) {
+            const p = JSON.parse(atob(tok.split('.')[1]));
+            const uEl = document.getElementById('userName');
+            const rEl = document.getElementById('userRole');
+            if (uEl) uEl.textContent = p.username || 'User';
+            if (rEl) rEl.textContent = p.role || '';
+        }
+    } catch(e) {}
+    function tick() {
+        const prefs = (() => { try { return JSON.parse(localStorage.getItem('clock_prefs') || '{}'); } catch(e) { return {}; } })();
+        const use12 = prefs.format !== '24h';
+        const tz = prefs.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+        const el = document.getElementById('live-clock');
+        if (el) el.textContent = new Date().toLocaleTimeString('en-PH', {hour:'2-digit', minute:'2-digit', second:'2-digit', hour12: use12, timeZone: tz});
+    }
+    tick(); setInterval(tick, 1000);
+})();
+</script>
+<script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js')
+      .catch(err => console.warn('SW registration failed:', err));
+  }
+</script>
+</body>
+</html>
