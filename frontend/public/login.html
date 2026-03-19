@@ -8,6 +8,7 @@
     <script>if(localStorage.getItem('darkMode')==='true')document.documentElement.classList.add('dark');</script>
     <title>TarsierPOS</title>
     <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="shared-styles.css">
     <style>
         body {
             background: linear-gradient(135deg, #FF6B00 0%, #FF8C00 50%, #FFa500 100%);
@@ -86,30 +87,6 @@
             </button>
         </form>
 
-        <!-- Add Account -->
-        <div class="mt-6 pt-6 border-t border-gray-200">
-            <button onclick="toggleCreateAccount()"
-                    class="w-full text-sm text-gray-500 hover:text-gray-700 transition">
-                + Add Account
-            </button>
-            <div id="create-account-panel" class="hidden mt-4 space-y-3">
-                <h3 class="text-sm font-semibold text-gray-700">Create New Account</h3>
-                <input type="text" id="new-username" placeholder="Username"
-                       class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
-                <input type="password" id="new-password" placeholder="Password"
-                       class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
-                <select id="new-role" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
-                    <option value="cashier">Cashier</option>
-                    <option value="manager">Manager</option>
-                </select>
-                <p class="text-xs text-gray-400">You must be logged in as admin or manager to create accounts.</p>
-                <button onclick="createAccount()"
-                        class="w-full py-2 bg-gray-800 text-white rounded-lg text-sm font-medium hover:bg-gray-700">
-                    Create Account
-                </button>
-                <div id="create-account-msg" class="hidden text-sm text-center"></div>
-            </div>
-        </div>
     </div>
 
     <script src="config.js"></script>
@@ -209,47 +186,6 @@
                     document.getElementById('quick-login-section').classList.remove('hidden');
                 }
             } catch (e) { /* silently fail — quick login is optional */ }
-        }
-
-        // ── Add Account ──────────────────────────────────────────────────────
-        function toggleCreateAccount() {
-            document.getElementById('create-account-panel').classList.toggle('hidden');
-        }
-
-        async function createAccount() {
-            const username = document.getElementById('new-username').value.trim();
-            const password = document.getElementById('new-password').value;
-            const role = document.getElementById('new-role').value;
-            const msg = document.getElementById('create-account-msg');
-
-            if (!username || !password) {
-                msg.textContent = 'Username and password are required.';
-                msg.className = 'text-sm text-center text-red-600';
-                msg.classList.remove('hidden');
-                return;
-            }
-            try {
-                const response = await authenticatedFetch(`${API_BASE}/users/`, {
-                    method: 'POST',
-                    body: JSON.stringify({ username, password, role })
-                });
-                if (response.ok) {
-                    msg.textContent = `Account "${username}" created successfully.`;
-                    msg.className = 'text-sm text-center text-green-600';
-                    msg.classList.remove('hidden');
-                    document.getElementById('new-username').value = '';
-                    document.getElementById('new-password').value = '';
-                } else {
-                    const err = await response.json().catch(() => ({}));
-                    msg.textContent = err.detail || err.username?.[0] || err.error || 'Failed to create account.';
-                    msg.className = 'text-sm text-center text-red-600';
-                    msg.classList.remove('hidden');
-                }
-            } catch (e) {
-                msg.textContent = 'Network error. Are you logged in?';
-                msg.className = 'text-sm text-center text-red-600';
-                msg.classList.remove('hidden');
-            }
         }
 
         document.addEventListener('DOMContentLoaded', loadQuickLoginButtons);
