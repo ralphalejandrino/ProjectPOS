@@ -159,6 +159,26 @@ body {
     border-color: #4b5563 !important;
 }
 
+/* Dark Mode — Phase 1F additions */
+/* Hover overrides require !important — styles.css compiled rules win on specificity otherwise */
+.dark .hover\:bg-gray-100:hover { background-color: #4b5563 !important; }
+.dark .hover\:bg-gray-200:hover { background-color: #374151 !important; }
+.dark .hover\:bg-gray-50:hover  { background-color: #374151 !important; }
+
+/* Status badge backgrounds */
+.dark .bg-red-100    { background-color: rgb(127 29 29 / var(--tw-bg-opacity, 1)) !important; }
+.dark .bg-green-100  { background-color: rgb(6 78 59 / var(--tw-bg-opacity, 1)) !important; }
+.dark .bg-amber-100  { background-color: rgb(120 53 15 / var(--tw-bg-opacity, 1)) !important; }
+.dark .bg-blue-50    { background-color: rgb(23 37 84 / var(--tw-bg-opacity, 1)) !important; }
+.dark .bg-orange-50  { background-color: rgb(67 20 7 / var(--tw-bg-opacity, 1)) !important; }
+
+/* Box shadows — reduce glow in dark mode */
+.dark .shadow    { box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.4), 0 1px 2px -1px rgb(0 0 0 / 0.4) !important; }
+.dark .shadow-sm { box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.3) !important; }
+.dark .shadow-md { box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.5), 0 2px 4px -2px rgb(0 0 0 / 0.5) !important; }
+.dark .shadow-lg { box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.6), 0 4px 6px -4px rgb(0 0 0 / 0.6) !important; }
+.dark .shadow-xl { box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.6), 0 8px 10px -6px rgb(0 0 0 / 0.6) !important; }
+
 /* =========================================================
    Missing Tailwind utility patch — classes absent from
    the pre-built styles.css purge output.
