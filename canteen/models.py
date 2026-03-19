@@ -361,8 +361,8 @@ class PosTransaction(Transaction):
     def save(self, *args, **kwargs):
         # Auto-generate transaction number if not provided
         if not self.transaction_no:
-            from datetime import datetime
-            timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
+            from django.utils import timezone as _tz
+            timestamp = _tz.localtime(_tz.now()).strftime('%Y%m%d%H%M%S')
             self.transaction_no = f"TXN-{timestamp}-{uuid.uuid4().hex[:6].upper()}"
         super().save(*args, **kwargs)
 
