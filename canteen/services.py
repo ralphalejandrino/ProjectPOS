@@ -45,13 +45,37 @@ def create_pos_transaction(items_data, payment_method, cashier=None, **kwargs):
                 'subtotal': subtotal
             })
 
-        # Apply discount
+        # Apply discount — server-side validation
         discount_amount = kwargs.get('discount_amount', 0)
         discount_decimal = Decimal(str(discount_amount)) if discount_amount else Decimal('0.00')
+        discount_type = kwargs.get('discount_type', '')
+
         if discount_decimal > total:
-            raise ValidationError(
+            raise DRFValidationError(
                 f"Discount (₱{discount_decimal}) cannot exceed order total (₱{total})"
             )
+
+        # Re-derive expected discount from BusinessProfile rates
+        if discount_decimal > Decimal('0.00') and discount_type:
+            _bp_check = BusinessProfile.objects.first()
+            if discount_type == 'sc':
+                rate = Decimal(str(_bp_check.sc_discount_rate if _bp_check else 20)) / Decimal('100')
+                expected = (total * rate).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+            elif discount_type == 'pwd':
+                rate = Decimal(str(_bp_check.pwd_discount_rate if _bp_check else 20)) / Decimal('100')
+                expected = (total * rate).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+            elif discount_type == 'promo':
+                if not (_bp_check and _bp_check.promo_discount_enabled):
+                    raise DRFValidationError("Promo discounts are not enabled.")
+                expected = (total * Decimal('0.50')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+            else:
+                expected = Decimal('0.00')
+            if discount_decimal - expected > Decimal('0.01'):
+                raise DRFValidationError(
+                    f"Discount amount (₱{discount_decimal}) exceeds the allowed maximum "
+                    f"(₱{expected}) for discount type '{discount_type}'."
+                )
+
         final_total = total - discount_decimal
 
         # Attach the currently open shift, if any
