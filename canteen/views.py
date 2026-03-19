@@ -150,7 +150,7 @@ class PosTransactionViewSet(viewsets.ViewSet):
                 'void': transaction.void,
                 'status': transaction.status,
                 'voided_by': transaction.voided_by.get_full_name() or transaction.voided_by.username if transaction.voided_by else None,
-                'voided_at': transaction.updated_at.isoformat() if transaction.void else None,
+                'voided_at': transaction.voided_at.isoformat() if transaction.voided_at else None,
                 'void_reason': transaction.purpose_of_void or '',
                 'discount_amount':    float(transaction.discount_amount) if transaction.discount_amount else 0.0,
                 'discount_type':      transaction.discount_type or '',
@@ -352,7 +352,7 @@ class PosTransactionViewSet(viewsets.ViewSet):
         void_count = voided.count()
         void_total = float(voided.aggregate(total=Sum('total_amount'))['total'] or 0)
 
-        # --- Void list with employee info (voided_at uses updated_at as proxy — no voided_at field) ---
+        # --- Void list with employee info ---
         void_list = []
         for txn in voided.select_related('voided_by').order_by('updated_at'):
             amount = float(txn.total_amount.amount if hasattr(txn.total_amount, 'amount') else txn.total_amount)
@@ -360,7 +360,7 @@ class PosTransactionViewSet(viewsets.ViewSet):
                 'transaction_no': txn.transaction_no,
                 'amount': amount,
                 'voided_by': txn.voided_by.get_full_name() or txn.voided_by.username if txn.voided_by else 'Unknown',
-                'voided_at': txn.updated_at.strftime('%I:%M %p') if txn.updated_at else '',
+                'voided_at': txn.voided_at.strftime('%I:%M %p') if txn.voided_at else '',
             })
 
         # --- Discount breakdown ---

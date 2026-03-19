@@ -324,15 +324,16 @@
 
         function fmtTime(isoStr) {
             if (!isoStr) return '—';
-            const d = new Date(isoStr);
-            return d.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', hour12: true });
+            return formatTS(isoStr);
         }
 
         function fmtBusiestHour(hour) {
             if (hour === null || hour === undefined) return '—';
+            const prefs = (() => { try { return JSON.parse(localStorage.getItem('clock_prefs') || '{}'); } catch(e) { return {}; } })();
+            const use12 = prefs.format !== '24h';
             const start = new Date(2000, 0, 1, hour, 0);
             const end = new Date(2000, 0, 1, hour + 1, 0);
-            const opts = { hour: 'numeric', minute: '2-digit', hour12: true };
+            const opts = { hour: 'numeric', minute: '2-digit', hour12: use12 };
             return start.toLocaleTimeString('en-PH', opts) + ' – ' + end.toLocaleTimeString('en-PH', opts);
         }
 
@@ -390,9 +391,7 @@
             document.getElementById('rpt-biz-name').textContent = bizName;
             document.getElementById('rpt-date').textContent = data.date;
             if (data.generated_at) {
-                const genAt = new Date(data.generated_at);
-                document.getElementById('rpt-generated-at').textContent =
-                    genAt.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', hour12: true });
+                document.getElementById('rpt-generated-at').textContent = formatTS(data.generated_at);
             }
             document.getElementById('rpt-generated-by').textContent = data.generated_by || '—';
             document.getElementById('rpt-opening-txn').textContent = data.opening_txn_no || '—';

@@ -192,8 +192,7 @@
 
         function fmtDatetime(iso) {
             if (!iso) return '—';
-            const d = new Date(iso);
-            return d.toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' });
+            return formatDT(iso);
         }
 
         async function fetchReport() {

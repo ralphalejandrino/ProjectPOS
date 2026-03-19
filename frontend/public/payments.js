@@ -197,7 +197,7 @@ const PaymentSystem = {
         const modal = document.getElementById('payment-modal');
         if (modal) {
             const cart = this.getCart();
-            const timestamp = new Date().toLocaleString();
+            const timestamp = formatDT(new Date().toISOString());
             
             // Format line items for receipt
             const itemsHtml = cart.items.map(item => `

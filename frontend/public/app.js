@@ -614,6 +614,17 @@ async function openShift() {
                 successBanner.classList.remove('hidden');
                 setTimeout(() => successBanner.classList.add('hidden'), 3500);
             }
+            // Refresh header identity after shift opens
+            try {
+                const tok = localStorage.getItem('access_token');
+                if (tok) {
+                    const p = JSON.parse(atob(tok.split('.')[1]));
+                    const uEl = document.getElementById('userName');
+                    const rEl = document.getElementById('userRole');
+                    if (uEl) uEl.textContent = p.username || 'User';
+                    if (rEl) rEl.textContent = (p.role || 'user').toUpperCase();
+                }
+            } catch (_) {}
         }
     } catch (e) {
         // Silently fail

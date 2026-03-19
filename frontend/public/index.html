@@ -379,7 +379,7 @@
                         
                         <div class="text-left bg-gray-50 p-4 rounded-lg mb-4">
                             <p class="text-sm text-gray-600 mb-2"><strong>Transaction ID:</strong> ${transactionData.transaction_no}</p>
-                            <p class="text-sm text-gray-600 mb-1"><strong>Date:</strong> ${new Date().toLocaleString()}</p>
+                            <p class="text-sm text-gray-600 mb-1"><strong>Date:</strong> ${formatDT(new Date().toISOString())}</p>
                             ${referenceRow}${phoneRow}
 
                             <div class="border-b border-gray-200 pb-2 mb-2 mt-3">

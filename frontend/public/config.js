@@ -203,3 +203,48 @@ async function loadSiteName() {
 }
 
 async function loadColorScheme() { await loadSiteName(); }
+
+// ============================================================
+// Shared timestamp formatting — PHT + clock_prefs-aware
+// ============================================================
+
+/**
+ * formatTS(isoStr, extraOpts)
+ * Returns a TIME string in Asia/Manila respecting clock_prefs.format.
+ */
+function formatTS(isoStr, extraOpts = {}) {
+    if (!isoStr) return 'N/A';
+    const prefs = (() => {
+        try { return JSON.parse(localStorage.getItem('clock_prefs') || '{}'); }
+        catch (e) { return {}; }
+    })();
+    const use12 = prefs.format !== '24h';
+    const tz = prefs.timezone || 'Asia/Manila';
+    const defaults = {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: use12,
+        timeZone: tz,
+    };
+    return new Date(isoStr).toLocaleTimeString('en-PH', { ...defaults, ...extraOpts });
+}
+
+/**
+ * formatDT(isoStr)
+ * Returns a DATE + TIME string in Asia/Manila respecting clock_prefs.format.
+ */
+function formatDT(isoStr) {
+    if (!isoStr) return 'N/A';
+    const prefs = (() => {
+        try { return JSON.parse(localStorage.getItem('clock_prefs') || '{}'); }
+        catch (e) { return {}; }
+    })();
+    const use12 = prefs.format !== '24h';
+    const tz = prefs.timezone || 'Asia/Manila';
+    return new Date(isoStr).toLocaleString('en-PH', {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+        hour12: use12,
+        timeZone: tz,
+    });
+}

@@ -360,10 +360,7 @@
                 const recent = transactions;
                 
                 tbody.innerHTML = recent.map(t => {
-                    const time = new Date(t.created_at).toLocaleTimeString('en-US', { 
-                        hour: '2-digit', 
-                        minute: '2-digit' 
-                    });
+                    const time = formatTS(t.created_at);
                     const itemCount = t.items_count !== undefined ? t.items_count : (t.items ? t.items.length : 0);
                     const paymentBadge = getPaymentBadge(t.payment_method);
                     const discountBadge = (t.discount_amount && parseFloat(t.discount_amount) > 0)
@@ -468,7 +465,7 @@
                 if (!response.ok) throw new Error('Failed to fetch transaction details');
                 const t = await response.json();
                 
-                const date = new Date(t.created_at).toLocaleString();
+                const date = formatDT(t.created_at);
                 const itemsHtml = t.items.map(item => `
                     <div class="flex justify-between text-sm py-1 border-b border-gray-100 last:border-0">
                         <div class="flex-1">
@@ -523,7 +520,7 @@
                         </div>
                         <div class="flex justify-between text-sm">
                             <span class="text-red-500">Voided At:</span>
-                            <span class="text-red-700">${t.voided_at ? new Date(t.voided_at).toLocaleString() : 'N/A'}</span>
+                            <span class="text-red-700">${formatDT(t.voided_at)}</span>
                         </div>
                         <div class="flex justify-between text-sm">
                             <span class="text-red-500">Reason:</span>
