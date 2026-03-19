@@ -1210,7 +1210,7 @@ class ShiftViewSet(viewsets.ModelViewSet):
             )
         return super().update(request, *args, **kwargs)
 
-    @action(detail=False, methods=['post'], url_path='open')
+    @action(detail=False, methods=['post'], url_path='open', permission_classes=[IsCashierOrAbove])
     def open_shift(self, request):
         """Open a new shift for the current user"""
         # Check if user already has an open shift
@@ -1230,7 +1230,7 @@ class ShiftViewSet(viewsets.ModelViewSet):
         
         return Response(ShiftSerializer(shift).data, status=status.HTTP_201_CREATED)
 
-    @action(detail=False, methods=['post'], url_path='close')
+    @action(detail=False, methods=['post'], url_path='close', permission_classes=[IsCashierOrAbove])
     def close_shift(self, request):
         """Close the current open shift for the user"""
         closing_cash = request.data.get('closing_cash')
