@@ -10,3 +10,4 @@ ADMIN_CREDENTIALS.txt
 wheels/
 .agents/
 backups/
+db.sqlite3
