@@ -216,9 +216,9 @@ class PosTransactionViewSet(viewsets.ViewSet):
 
                 # Reverse stock for each item in the transaction
                 for item_entry in transaction.items.all():
-                    item = Item.objects.get(pk=item_entry.item.pk)
-                    item.stock += item_entry.quantity
-                    item.save()
+                    Item.objects.filter(pk=item_entry.item.pk).update(
+                        stock=F('stock') + item_entry.quantity
+                    )
 
                 transaction.void = True
                 transaction.voided_at = timezone.now()
