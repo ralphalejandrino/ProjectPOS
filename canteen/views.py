@@ -1272,7 +1272,7 @@ class ShiftViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'], url_path='current', permission_classes=[IsCashierOrAbove])
     def current(self, request):
         """Return the currently open shift, or null if none."""
-        shift = Shift.objects.filter(is_open=True).order_by('-opened_at').first()
+        shift = Shift.objects.filter(cashier=request.user, is_open=True).order_by('-opened_at').first()
         if shift:
             return Response(ShiftSerializer(shift).data)
         return Response(False, status=200)
