@@ -2,6 +2,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from django.db import transaction as db_transaction
 from django.db.models import F
 from django.core.exceptions import ValidationError
+from rest_framework.exceptions import ValidationError as DRFValidationError
 from djmoney.money import Money
 from .models import Item, PosTransaction, PosTransactionItem, Shift
 import threading
@@ -13,6 +14,8 @@ def create_pos_transaction(items_data, payment_method, cashier=None, **kwargs):
     Expects items_data as list of dicts: [{'item_id' or 'id': ..., 'quantity': ...}]
     """
     with db_transaction.atomic():
+        if not items_data:
+            raise DRFValidationError("Transaction must contain at least one item.")
         from .models import BusinessProfile
         _bp = BusinessProfile.objects.first()
         _track_inventory = not _bp or _bp.track_inventory
