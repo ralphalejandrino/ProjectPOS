@@ -158,3 +158,67 @@ body {
     color: #f9fafb !important;
     border-color: #4b5563 !important;
 }
+
+/* =========================================================
+   Missing Tailwind utility patch — classes absent from
+   the pre-built styles.css purge output.
+   ========================================================= */
+
+/* Responsive display */
+@media (min-width: 640px) {
+  .sm\:block { display: block; }
+  .sm\:flex { display: flex; }
+}
+
+/* Typography */
+.leading-tight { line-height: 1.25; }
+.tabular-nums { font-variant-numeric: tabular-nums; }
+.font-black { font-weight: 900; }
+.tracking-widest { letter-spacing: 0.1em; }
+.text-base { font-size: 1rem; line-height: 1.5rem; }
+.text-\[10px\] { font-size: 10px; }
+
+/* Opacity / visibility */
+.opacity-60 { opacity: 0.6; }
+.bg-opacity-60 { --tw-bg-opacity: 0.6; }
+
+/* Colors */
+.bg-gray-900 { background-color: rgb(17 24 39 / var(--tw-bg-opacity, 1)); }
+
+/* Flex utilities */
+.flex-shrink-0 { flex-shrink: 0; }
+.flex-row-reverse { flex-direction: row-reverse; }
+
+/* Interaction */
+.cursor-not-allowed { cursor: not-allowed; }
+.select-none { user-select: none; }
+.pointer-events-none { pointer-events: none; }
+.active\:scale-95:active { transform: scale(0.95); }
+
+/* Sizing */
+.max-h-48 { max-height: 12rem; }
+
+/* Borders */
+.border-red-200 { border-color: rgb(254 202 202); }
+.border-dashed { border-style: dashed; }
+
+/* Backdrop */
+.backdrop-blur-sm { backdrop-filter: blur(4px); }
+
+/* Gradient overlay for product cards */
+.from-black\/70 {
+  --tw-gradient-from: rgb(0 0 0 / 0.7) var(--tw-gradient-from-position);
+  --tw-gradient-to: rgb(0 0 0 / 0) var(--tw-gradient-to-position);
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to);
+}
+.to-transparent {
+  --tw-gradient-to: transparent var(--tw-gradient-to-position);
+}
+
+/* Object fit */
+.object-contain { object-fit: contain; }
+
+/* Space reverse (RTL flex row) */
+.space-x-reverse > :not([hidden]) ~ :not([hidden]) {
+  --tw-space-x-reverse: 1;
+}
