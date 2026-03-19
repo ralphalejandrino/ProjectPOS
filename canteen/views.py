@@ -381,8 +381,8 @@ class PosTransactionViewSet(viewsets.ViewSet):
             completed.filter(discount_amount__gt=0).aggregate(total=Sum('discount_amount'))['total'] or 0
         )
 
-        # --- Net sales (gross minus voids) ---
-        net_sales = round(gross - void_total, 2)
+        # --- Net sales (voids already excluded from gross; void_total is informational only) ---
+        net_sales = round(gross, 2)
 
         # --- By payment method ---
         by_method_rows = []
