@@ -52,7 +52,9 @@ def create_pos_transaction(items_data, payment_method, cashier=None, **kwargs):
         final_total = total - discount_decimal
 
         # Attach the currently open shift, if any
-        current_shift = Shift.objects.filter(is_open=True).order_by('-opened_at').first()
+        current_shift = Shift.objects.filter(
+            cashier=cashier, is_open=True
+        ).order_by('-opened_at').first() if cashier else None
 
         # Create transaction
         cash_received = kwargs.get('cash_received')
