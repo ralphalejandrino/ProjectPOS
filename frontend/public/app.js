@@ -436,7 +436,7 @@ function applyModalDiscount(prefix) {
     if (!type) return;
 
     const subtotal = window.cart.items.reduce((sum, i) => sum + (parseFloat(i.price) * i.quantity), 0);
-    const vatRate = profile.vat_enabled ? (parseFloat(profile.vat_rate) || 12) / 100 : 0.12;
+    const vatRate = profile.vat_enabled ? (parseFloat(profile.vat_rate) || 12) / 100 : 0;
 
     let discountAmount = 0;
     let discountLabel = '';
