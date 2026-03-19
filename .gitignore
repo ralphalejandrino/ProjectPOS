@@ -9,3 +9,4 @@ __pycache__/
 ADMIN_CREDENTIALS.txt
 wheels/
 .agents/
+backups/
