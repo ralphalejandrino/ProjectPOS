@@ -225,13 +225,29 @@ function addToCart(product) {
         return;
     }
 
-    // Check if item already in cart
-    const existingItem = window.cart.items.find(item => item.id === product.id);
+    // If item has active variants, show picker instead of adding directly
+    if (product.variants && product.variants.filter(v => v.is_active).length > 0) {
+        showVariantPicker(product);
+        return;
+    }
+
+    addProductToCart(product, null);
+}
+
+function addProductToCart(item, variant) {
+    const _biz2 = (() => { try { return JSON.parse(localStorage.getItem('biz_profile') || '{}'); } catch(e) { return {}; } })();
+    const trackInventory = _biz2.track_inventory !== false;
+
+    const cartKey = variant ? `${item.id}__${variant.id}` : String(item.id);
+    const price = variant ? parseFloat(variant.price) : parseFloat(item.price);
+    const displayName = variant ? `${item.name} (${variant.name})` : item.name;
+
+    const existingItem = window.cart.items.find(i => i.cartKey === cartKey);
 
     if (existingItem) {
-        if (!trackInventory || existingItem.quantity < product.stock + existingItem.quantity) {
+        if (!trackInventory || existingItem.quantity < item.stock + existingItem.quantity) {
             existingItem.quantity++;
-            updateProductStock(product.id, -1); // decrement display (qty++)
+            updateProductStock(item.id, -1);
         } else {
             if (window.showCustomError) {
                 window.showCustomError('Stock Limit', 'Cannot add more than available stock!');
@@ -242,34 +258,60 @@ function addToCart(product) {
         }
     } else {
         window.cart.items.push({
-            id: product.id,
-            name: product.name,
-            price: parseFloat(product.price),
+            cartKey,
+            id: item.id,
+            variant_id: variant ? variant.id : null,
+            variant_name: variant ? variant.name : '',
+            name: displayName,
+            price,
             quantity: 1,
-            emoji: product.emoji || '🍽️'
+            emoji: item.emoji || '🍽️',
         });
-        updateProductStock(product.id, -1); // decrement display
+        updateProductStock(item.id, -1);
     }
     updateCart();
 }
 
-function removeFromCart(productId) {
-    const removedItem = window.cart.items.find(item => item.id === productId);
+function showVariantPicker(item) {
+    document.getElementById('variant-modal-title').textContent = item.name;
+    const opts = document.getElementById('variant-options');
+    opts.innerHTML = '';
+    item.variants.filter(v => v.is_active).forEach(v => {
+        const btn = document.createElement('button');
+        btn.className = 'w-full py-3 px-4 bg-indigo-50 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-200 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-800 text-left flex justify-between items-center transition';
+        btn.innerHTML = `<span>${escapeHtml(v.name)}</span><span class="font-semibold">&#x20B1;${parseFloat(v.price).toFixed(2)}</span>`;
+        btn.onclick = () => selectVariant(item, v);
+        opts.appendChild(btn);
+    });
+    document.getElementById('variant-modal').classList.remove('hidden');
+}
+
+function closeVariantModal() {
+    document.getElementById('variant-modal').classList.add('hidden');
+}
+
+function selectVariant(item, variant) {
+    closeVariantModal();
+    addProductToCart(item, variant);
+}
+
+function removeFromCart(cartKey) {
+    const removedItem = window.cart.items.find(item => item.cartKey === cartKey);
     if (removedItem) {
-        updateProductStock(productId, removedItem.quantity); // restore all qty
+        updateProductStock(removedItem.id, removedItem.quantity); // restore all qty
     }
-    window.cart.items = window.cart.items.filter(item => item.id !== productId);
+    window.cart.items = window.cart.items.filter(item => item.cartKey !== cartKey);
     updateCart();
 }
 
-function updateQuantity(productId, change) {
-    const item = window.cart.items.find(item => item.id === productId);
+function updateQuantity(cartKey, change) {
+    const item = window.cart.items.find(i => i.cartKey === cartKey);
     if (item) {
         if (item.quantity + change <= 0) {
-            removeFromCart(productId); // removeFromCart handles stock restore using current item.quantity
+            removeFromCart(cartKey); // removeFromCart handles stock restore using current item.quantity
         } else {
             item.quantity += change;
-            updateProductStock(productId, -change); // +1 qty = -1 stock, vice versa
+            updateProductStock(item.id, -change); // +1 qty = -1 stock, vice versa
             updateCart();
         }
     }
@@ -309,15 +351,15 @@ function updateCart() {
                         <div class="font-bold text-gray-800">${item.emoji} ${item.name}</div>
                         <div class="text-sm text-gray-600">₱${parseFloat(item.price || 0).toFixed(2)} each</div>
                     </div>
-                    <button onclick="removeFromCart('${item.id}')" class="text-red-500 hover:text-red-700 font-bold">
+                    <button onclick="removeFromCart('${item.cartKey}')" class="text-red-500 hover:text-red-700 font-bold">
                         ✕
                     </button>
                 </div>
                 <div class="flex justify-between items-center">
                     <div class="flex items-center space-x-2">
-                        <button onclick="updateQuantity('${item.id}', -1)" class="bg-gray-300 hover:bg-gray-400 w-8 h-8 rounded font-bold">-</button>
+                        <button onclick="updateQuantity('${item.cartKey}', -1)" class="bg-gray-300 hover:bg-gray-400 w-8 h-8 rounded font-bold">-</button>
                         <span class="w-12 text-center font-bold">${item.quantity}</span>
-                        <button onclick="updateQuantity('${item.id}', 1)" class="bg-blue-600 hover:bg-blue-700 text-white w-8 h-8 rounded font-bold">+</button>
+                        <button onclick="updateQuantity('${item.cartKey}', 1)" class="bg-blue-600 hover:bg-blue-700 text-white w-8 h-8 rounded font-bold">+</button>
                     </div>
                     <div class="font-bold text-blue-600">₱${parseFloat((item.price * item.quantity) || 0).toFixed(2)}</div>
                 </div>
@@ -354,6 +396,7 @@ function attachEventListeners() {
                     }
                 );
             } else if (confirm('Clear all items from cart?')) {
+                // i.id is the item UUID (unchanged — stock tracking uses item.id not cartKey)
                 window.cart.items.forEach(i => updateProductStock(i.id, i.quantity));
                 window.cart.items = [];
                 window.cart.total = 0;
@@ -365,6 +408,10 @@ function attachEventListeners() {
 
 // Make functions globally available
 window.addToCart = addToCart;
+window.addProductToCart = addProductToCart;
+window.showVariantPicker = showVariantPicker;
+window.closeVariantModal = closeVariantModal;
+window.selectVariant = selectVariant;
 window.removeFromCart = removeFromCart;
 window.updateQuantity = updateQuantity;
 window.updateCart = updateCart;
