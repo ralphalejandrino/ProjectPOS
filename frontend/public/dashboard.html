@@ -206,8 +206,12 @@
 
         document.addEventListener('DOMContentLoaded', async () => {
             loadSiteName();
-            // Role-gate: Z-Report nav link (manager/admin only)
+            // Role-gate: dashboard is manager/admin only
             const role = getUserRole();
+            if (!role || role === 'cashier') {
+                window.location.href = 'index.html';
+                return;
+            }
             if (role === 'manager' || role === 'admin') {
                 const shortcuts = document.getElementById('report-shortcuts');
                 if (shortcuts) { shortcuts.classList.remove('hidden'); shortcuts.classList.add('flex'); }
