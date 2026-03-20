@@ -33,7 +33,7 @@ def create_pos_transaction(items_data, payment_method, cashier=None, **kwargs):
             quantity = item_entry.get('quantity', 0)
 
             # Select item for update to prevent race conditions
-            item = Item.objects.get(id=item_id)
+            item = Item.objects.select_for_update().get(id=item_id)
 
             if _track_inventory and item.stock < quantity:
                 raise ValidationError(f"Insufficient stock for: {item.name}")
