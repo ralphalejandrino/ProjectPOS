@@ -130,7 +130,7 @@ class PosTransactionViewSet(viewsets.ViewSet):
         try:
             transaction = PosTransaction.objects.select_related(
                 'cashier', 'voided_by', 'shift'
-            ).prefetch_related('items__item').get(pk=pk)
+            ).prefetch_related('items__item', 'items__variant_selections').get(pk=pk)
             items_data = []
 
             # Get transaction items
@@ -139,7 +139,17 @@ class PosTransactionViewSet(viewsets.ViewSet):
                 items_data.append({
                     'name': item.item.name,
                     'quantity': item.quantity,
-                    'price': float(item.unit_price)
+                    'price': float(item.unit_price),
+                    'base_price': float(item.base_price) if item.base_price is not None else None,
+                    'final_price': float(item.final_price) if item.final_price is not None else None,
+                    'variant_selections': [
+                        {
+                            'group_name': v.group_name,
+                            'option_name': v.option_name,
+                            'price_modifier': float(v.price_modifier)
+                        }
+                        for v in item.variant_selections.all()
+                    ]
                 })
             
             data = {
