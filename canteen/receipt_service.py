@@ -72,6 +72,9 @@ def print_receipt(transaction):
             line = f'{name} {qty_price}'
             padding = RECEIPT_WIDTH - len(line) - len(subtotal)
             p.text(line + ' ' * max(padding, 1) + subtotal + '\n')
+            for vs in item.variant_selections.all():
+                modifier_str = f'+P{float(vs.price_modifier):.2f}' if vs.price_modifier > 0 else ''
+                p.text(f'  {vs.group_name}: {vs.option_name} {modifier_str}\n')
 
         p.text('-' * RECEIPT_WIDTH + '\n')
 
