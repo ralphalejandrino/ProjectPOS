@@ -1,4 +1,4 @@
-const CACHE_NAME = 'tarsierpos-v22';
+const CACHE_NAME = 'tarsierpos-v23';
 const ASSETS = [
   'index.html',
   'login.html',
@@ -45,12 +45,12 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  // Simple cache-first strategy for static assets, 
-  // but we might want network-first for index.html if it's dynamic
+  if (event.request.url.includes('/api/') || event.request.url.includes('/canteen/')) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
   event.respondWith(
     caches.match(event.request)
-      .then((response) => {
-        return response || fetch(event.request);
-      })
+      .then((r) => r || fetch(event.request))
   );
 });
