@@ -357,7 +357,7 @@ class PosTransactionViewSet(viewsets.ViewSet):
             return Response({'error': 'Invalid date format. Use YYYY-MM-DD.'}, status=status.HTTP_400_BAD_REQUEST)
 
         all_qs = PosTransaction.objects.filter(created_at__date=report_date)
-        completed = all_qs.filter(void=False)
+        completed = all_qs.filter(void=False, status='completed')
         voided = all_qs.filter(void=True)
 
         # --- Totals ---
@@ -552,7 +552,7 @@ class PosTransactionViewSet(viewsets.ViewSet):
         shift_qs = PosTransaction.objects.filter(
             shift=shift
         )
-        completed = shift_qs.filter(void=False)
+        completed = shift_qs.filter(void=False, status='completed')
         voided = shift_qs.filter(void=True)
 
         gross = float(completed.aggregate(
