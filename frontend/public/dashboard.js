@@ -250,8 +250,22 @@ async function viewReceipt(transactionId) {
                                 <span>${item.name} x${item.quantity}</span>
                                 <span class="font-semibold">₱${(item.price * item.quantity).toFixed(2)}</span>
                             </div>
+                            ${item.variant_selections && item.variant_selections.length > 0 ? item.variant_selections.map(v => `
+                                <div class="flex justify-between text-sm text-gray-500 pl-4">
+                                    <span>${v.group_name}: ${v.option_name}</span>
+                                    <span>+₱${parseFloat(v.price_modifier).toFixed(2)}</span>
+                                </div>
+                            `).join('') : ''}
                         `).join('') : '<p class="text-gray-500 text-sm">Items not available</p>'}
                     </div>
+                    ${txn.discount_amount > 0 ? `
+                    <div class="pb-4 border-b mb-4">
+                        <div class="flex justify-between text-sm text-gray-600">
+                            <span>Discount (${txn.discount_type || 'applied'}${txn.discount_id_number ? ' — ' + txn.discount_id_number : ''}):</span>
+                            <span class="text-red-600">-₱${parseFloat(txn.discount_amount).toFixed(2)}</span>
+                        </div>
+                    </div>
+                    ` : ''}
                     <div class="pt-4 border-t">
                         <div class="flex justify-between text-xl font-bold">
                             <span>Total:</span>

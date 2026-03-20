@@ -278,6 +278,7 @@ class PosTransactionViewSet(viewsets.ViewSet):
     def test_print(self, request):
         from .receipt_service import print_receipt
         from .models import BusinessProfile
+        from decimal import Decimal
         import threading
         profile = BusinessProfile.get_instance()
         if not profile.printer_enabled or not profile.printer_ip:
@@ -293,6 +294,9 @@ class PosTransactionViewSet(viewsets.ViewSet):
                 class _money:
                     amount = 200
                 self.subtotal = _money()
+                class _variants:
+                    def all(self): return []
+                self.variant_selections = _variants()
 
         class MockTransaction:
             transaction_no = 'TEST-001'
@@ -302,6 +306,9 @@ class PosTransactionViewSet(viewsets.ViewSet):
             customer_phone = None
             created_at = timezone.now()
             cashier = None
+            discount_amount = Decimal('0.00')
+            discount_type = ''
+            discount_id_number = ''
             class _total:
                 amount = 200
             total_amount = _total()
