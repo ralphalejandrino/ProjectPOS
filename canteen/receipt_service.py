@@ -92,7 +92,8 @@ def print_receipt(transaction):
 
         # VAT removed line (only for VAT-exempt SC/PWD transactions)
         if is_vat_exempt and stored_vat_amount > 0:
-            vat_rem_label = 'VAT (12%) Removed:'
+            vat_pct = int(profile.vat_rate) if profile and hasattr(profile, 'vat_rate') else 12
+            vat_rem_label = f'VAT ({vat_pct}%) Removed:'
             vat_rem_val = f'-PHP {stored_vat_amount:.2f}'
             vat_rem_padding = RECEIPT_WIDTH - len(vat_rem_label) - len(vat_rem_val)
             p.text(vat_rem_label + ' ' * max(vat_rem_padding, 1) + vat_rem_val + '\n')
@@ -101,9 +102,11 @@ def print_receipt(transaction):
         discount = float(transaction.discount_amount) if transaction.discount_amount else 0.0
         if discount > 0:
             if disc_type == 'sc':
-                disc_label = 'SC Discount (20%):'
+                sc_rate = int(profile.sc_discount_rate) if profile and hasattr(profile, 'sc_discount_rate') else 20
+                disc_label = f'SC Discount ({sc_rate}%):'
             elif disc_type == 'pwd':
-                disc_label = 'PWD Discount (20%):'
+                pwd_rate = int(profile.pwd_discount_rate) if profile and hasattr(profile, 'pwd_discount_rate') else 20
+                disc_label = f'PWD Discount ({pwd_rate}%):'
             elif disc_type == 'promo':
                 disc_label = 'Promo Discount:'
             else:
