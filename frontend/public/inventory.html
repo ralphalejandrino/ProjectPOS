@@ -240,15 +240,6 @@
                         <input type="file" id="product-image" accept="image/*" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
                     </div>
 
-                    <!-- Variants -->
-                    <div id="variant-section" class="mt-4">
-                      <div class="flex items-center justify-between mb-2">
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Variants (optional)</label>
-                        <button type="button" onclick="addVariantRow()" class="text-xs text-indigo-600 hover:underline">+ Add variant</button>
-                      </div>
-                      <div id="variant-rows" class="flex flex-col gap-2"></div>
-                    </div>
-
                     <!-- Variant Groups (Step 7) -->
                     <div class="mt-4">
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Variant Groups</label>
@@ -667,7 +658,6 @@
             document.getElementById('product-form').reset();
             document.getElementById('product-id').value = '';
             document.getElementById('product-threshold').value = 0;
-            document.getElementById('variant-rows').innerHTML = '';
             document.getElementById('product-modal').classList.remove('hidden');
         }
 
@@ -691,8 +681,6 @@
             document.getElementById('product-threshold').value = product.low_stock_threshold ?? 0;
             document.getElementById('product-expiry').value = product.expiry_date || '';
             document.getElementById('product-description').value = product.description || '';
-            document.getElementById('variant-rows').innerHTML = '';
-            loadVariants(product.id);
             loadProductVariantGroups(product.id);
 
             document.getElementById('product-modal').classList.remove('hidden');
@@ -730,7 +718,6 @@
                 
                 if (response.ok) {
                     const savedItem = await response.json();
-                    await saveVariants(savedItem.id);
                     await saveProductVariantGroups(savedItem.id);
                     closeProductModal();
                     await loadProducts();
@@ -879,62 +866,6 @@
                     alert(d.error || 'Failed to delete category.');
                 }
             } catch(e) { alert('Failed to delete category.'); }
-        }
-
-        // ── Variant management ───────────────────────────────────────────────
-
-        function addVariantRow(variant) {
-            const row = document.createElement('div');
-            row.className = 'flex gap-2 items-center variant-row';
-            row.innerHTML = `
-                <input type="text" placeholder="Name (e.g. Large)" class="variant-name flex-1 border rounded px-2 py-1 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white" value="${variant ? escapeHtml(variant.name) : ''}">
-                <input type="number" placeholder="Price" step="0.01" min="0" class="variant-price w-24 border rounded px-2 py-1 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white" value="${variant ? variant.price : ''}">
-                <button type="button" onclick="this.closest('.variant-row').remove()" class="text-red-500 hover:text-red-700 text-lg leading-none">&times;</button>
-            `;
-            if (variant && variant.id) row.dataset.variantId = variant.id;
-            document.getElementById('variant-rows').appendChild(row);
-        }
-
-        async function loadVariants(itemId) {
-            document.getElementById('variant-rows').innerHTML = '';
-            if (!itemId) return;
-            try {
-                const resp = await authenticatedFetch(`${API_BASE}/items/${itemId}/variants/`);
-                if (!resp.ok) return;
-                const variants = await resp.json();
-                const list = variants.results !== undefined ? variants.results : variants;
-                list.forEach(v => addVariantRow(v));
-            } catch (e) {
-                console.error('Failed to load variants:', e);
-            }
-        }
-
-        async function saveVariants(itemId) {
-            const rows = document.querySelectorAll('.variant-row');
-            for (const row of rows) {
-                const name = row.querySelector('.variant-name').value.trim();
-                const price = row.querySelector('.variant-price').value.trim();
-                if (!name || !price) continue;
-                const variantId = row.dataset.variantId;
-                const payload = { name, price: parseFloat(price) };
-                try {
-                    if (variantId) {
-                        await authenticatedFetch(`${API_BASE}/items/${itemId}/variants/${variantId}/`, {
-                            method: 'PATCH',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify(payload)
-                        });
-                    } else {
-                        await authenticatedFetch(`${API_BASE}/items/${itemId}/variants/`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify(payload)
-                        });
-                    }
-                } catch (e) {
-                    console.error('Failed to save variant:', e);
-                }
-            }
         }
 
         // ── Variant Manager (Step 6) ──────────────────────────────────────────
