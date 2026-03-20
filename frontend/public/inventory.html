@@ -1210,7 +1210,7 @@
                     const aData = await assignRes.json();
                     assigned = aData.results !== undefined ? aData.results : aData;
                 }
-                const assignedIds = assigned.map(a => String(a.variant_group || a.id || a));
+                const assignedIds = assigned.map(a => String(a.group.id));
                 if (!allGroups.length) {
                     container.innerHTML = '<p class="text-xs text-gray-400 text-center py-2">No variant groups defined. Create groups in Manage Variants first.</p>';
                     return;
@@ -1232,18 +1232,27 @@
             if (!categoryId) return;
             const checked = Array.from(document.querySelectorAll('.cat-vg-check:checked')).map(el => el.value);
             try {
-                const res = await authenticatedFetch(`${API_BASE}/categories/${categoryId}/variant-groups/`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ variant_group_ids: checked })
-                });
-                if (res.ok) {
-                    closeCatVariantModal();
-                    showAlert('Saved', 'Category variant groups updated.', '✅');
-                } else {
-                    const d = await res.json().catch(() => ({}));
-                    showAlert('Error', d.error || 'Failed to save.', '❌');
+                // Step 1: delete all existing assignments for this category
+                const existingRes = await authenticatedFetch(`${API_BASE}/categories/${categoryId}/variant-groups/`);
+                if (existingRes.ok) {
+                    const existingData = await existingRes.json();
+                    const existing = existingData.results !== undefined ? existingData.results : existingData;
+                    for (const assignment of existing) {
+                        await authenticatedFetch(`${API_BASE}/categories/${categoryId}/variant-groups/${assignment.id}/`, {
+                            method: 'DELETE'
+                        });
+                    }
                 }
+                // Step 2: create one assignment per checked group
+                for (const groupId of checked) {
+                    await authenticatedFetch(`${API_BASE}/categories/${categoryId}/variant-groups/`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ group_id: groupId })
+                    });
+                }
+                closeCatVariantModal();
+                showAlert('Saved', 'Category variant groups updated.', '✅');
             } catch (e) {
                 showAlert('Error', 'An error occurred: ' + e.message, '❌');
             }
@@ -1261,7 +1270,7 @@
             try {
                 const [groupsRes, overridesRes] = await Promise.all([
                     authenticatedFetch(`${API_BASE}/variant-groups/`),
-                    authenticatedFetch(`${API_BASE}/items/${productId}/variant-overrides/`)
+                    authenticatedFetch(`${API_BASE}/items/${productId}/variant-groups/`)
                 ]);
                 const groupsData = await groupsRes.json();
                 const allGroups = groupsData.results !== undefined ? groupsData.results : groupsData;
@@ -1271,15 +1280,15 @@
                     overrides = oData.results !== undefined ? oData.results : oData;
                 }
                 const overrideMap = {};
-                overrides.forEach(o => { overrideMap[String(o.variant_group || o.group_id)] = o; });
+                overrides.forEach(o => { overrideMap[String(o.group.id)] = o; });
                 if (!allGroups.length) {
                     container.innerHTML = '<p class="text-xs text-gray-400 text-center py-2">No variant groups defined.</p>';
                     return;
                 }
                 container.innerHTML = allGroups.map(g => {
                     const ov = overrideMap[String(g.id)];
-                    const enabled = ov ? ov.is_enabled !== false : true;
-                    const required = ov ? (ov.is_required !== null && ov.is_required !== undefined ? ov.is_required : g.is_required) : g.is_required;
+                    const enabled = ov ? ov.enabled !== false : true;
+                    const required = ov ? (ov.is_required_override !== null && ov.is_required_override !== undefined ? ov.is_required_override : g.is_required) : g.is_required;
                     return `
                     <div class="flex items-center gap-2 p-2 border border-gray-100 rounded">
                         <input type="checkbox" class="prod-vg-enabled w-4 h-4 rounded" value="${g.id}" ${enabled ? 'checked' : ''}>
@@ -1297,22 +1306,34 @@
         async function saveProductVariantGroups(productId) {
             if (!productId) return;
             const enabledEls = document.querySelectorAll('.prod-vg-enabled');
-            const overrides = Array.from(enabledEls).map(el => {
-                const reqEl = document.querySelector(`.prod-vg-required[data-group="${el.value}"]`);
-                return {
-                    variant_group_id: el.value,
-                    is_enabled: el.checked,
-                    is_required: reqEl ? reqEl.checked : null,
-                };
-            });
+            if (!enabledEls.length) return;
             try {
-                await authenticatedFetch(`${API_BASE}/items/${productId}/variant-overrides/`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ overrides })
-                });
+                // Step 1: fetch current assignments so we can delete them
+                const existingRes = await authenticatedFetch(`${API_BASE}/items/${productId}/variant-groups/`);
+                if (existingRes.ok) {
+                    const existingData = await existingRes.json();
+                    const existing = existingData.results !== undefined ? existingData.results : existingData;
+                    for (const assignment of existing) {
+                        await authenticatedFetch(`${API_BASE}/items/${productId}/variant-groups/${assignment.id}/`, {
+                            method: 'DELETE'
+                        });
+                    }
+                }
+                // Step 2: re-create one assignment per group with correct field names
+                for (const el of enabledEls) {
+                    const reqEl = document.querySelector(`.prod-vg-required[data-group="${el.value}"]`);
+                    await authenticatedFetch(`${API_BASE}/items/${productId}/variant-groups/`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            group_id: el.value,
+                            enabled: el.checked,
+                            is_required_override: reqEl ? reqEl.checked : null,
+                        })
+                    });
+                }
             } catch (e) {
-                console.error('Failed to save product variant overrides:', e);
+                console.error('Failed to save product variant groups:', e);
             }
         }
 
