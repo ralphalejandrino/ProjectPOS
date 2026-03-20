@@ -524,15 +524,15 @@
                         </td>
                         <td class="px-4 py-3">
                             <div class="flex items-center">
-                                <div class="font-medium text-gray-900">${item.name}</div>
+                                <div class="font-medium text-gray-900">${escapeHtml(item.name)}</div>
                                 ${lowStockBadge}
                             </div>
                         </td>
                         <td class="px-4 py-3 text-sm text-gray-600">
-                            ${item.sku || '-'}<br>
-                            <span class="text-xs">${item.bar_code || '-'}</span>
+                            ${escapeHtml(item.sku || '-')}<br>
+                            <span class="text-xs">${escapeHtml(item.bar_code || '-')}</span>
                         </td>
-                        <td class="px-4 py-3 text-sm">${item.category_name || 'General'}</td>
+                        <td class="px-4 py-3 text-sm">${escapeHtml(item.category_name || 'General')}</td>
                         <td class="px-4 py-3">₱${parseFloat(item.purchase_price || 0).toFixed(2)}</td>
                         <td class="px-4 py-3 font-medium">₱${parseFloat(item.price).toFixed(2)}</td>
                         <td class="px-4 py-3 font-medium ${marginClass}">${item.profit_margin != null ? item.profit_margin.toFixed(1) + '%' : 'N/A'}</td>
@@ -565,8 +565,8 @@
                 <div class="bg-white border border-red-300 rounded-lg p-3 shadow-sm">
                     <div class="flex items-start justify-between mb-2">
                         <div class="flex-1">
-                            <h4 class="font-medium text-gray-900">${item.name}</h4>
-                            <p class="text-sm text-gray-600">${item.category_name || 'General'}</p>
+                            <h4 class="font-medium text-gray-900">${escapeHtml(item.name)}</h4>
+                            <p class="text-sm text-gray-600">${escapeHtml(item.category_name || 'General')}</p>
                         </div>
                         <span class="text-2xl font-bold text-red-600">${item.stock}</span>
                     </div>
@@ -773,10 +773,10 @@
                 }
                 container.innerHTML = cats.map(cat => `
                     <div class="flex items-center gap-2 p-2 border border-gray-100 rounded-lg" id="cat-row-${cat.id}">
-                        <input type="text" value="${cat.emoji || ''}" maxlength="4"
+                        <input type="text" value="${escapeHtml(cat.emoji || '')}" maxlength="4"
                             class="w-12 px-1 py-1 border border-gray-200 rounded text-center text-lg"
                             id="cat-emoji-${cat.id}">
-                        <input type="text" value="${cat.name}"
+                        <input type="text" value="${escapeHtml(cat.name)}"
                             class="flex-1 px-2 py-1 border border-gray-200 rounded text-sm"
                             id="cat-name-${cat.id}">
                         <button onclick="saveCategory('${cat.id}')"
@@ -878,7 +878,7 @@
                 html += `<div class="mt-3 max-h-48 overflow-y-auto">
                     <p class="font-medium text-red-600 mb-1">Rows with errors:</p>`;
                 errorRows.forEach(r => {
-                    html += `<p class="text-red-500">Row ${r.row} — ${r.name || '?'}: ${r.message}</p>`;
+                    html += `<p class="text-red-500">Row ${r.row} — ${escapeHtml(r.name || '?')}: ${escapeHtml(r.message)}</p>`;
                 });
                 html += `</div>`;
             }

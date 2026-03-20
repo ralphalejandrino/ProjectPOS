@@ -348,7 +348,7 @@
                 const itemsList = transactionData.items || window.cart.items || [];
                 const itemsHtml = itemsList.map(item => `
                     <div class="flex justify-between text-sm text-gray-700">
-                        <span>${item.quantity} x ${item.name}</span>
+                        <span>${item.quantity} x ${escapeHtml(item.name)}</span>
                         <span>₱${parseFloat(item.price).toFixed(2)}</span>
                     </div>
                 `).join('');
@@ -362,14 +362,14 @@
                 const referenceRow = reference ? `
                     <div class="flex justify-between text-sm text-gray-600 mt-1">
                         <span>Reference No:</span>
-                        <span class="font-medium">${reference}</span>
+                        <span class="font-medium">${escapeHtml(reference)}</span>
                     </div>` : '';
 
                 const customerPhone = transactionData.customer_phone || '';
                 const phoneRow = `
                     <div class="flex justify-between text-sm text-gray-600 mt-1">
                         <span>Customer Phone:</span>
-                        <span class="font-medium">${customerPhone || 'N/A'}</span>
+                        <span class="font-medium">${customerPhone ? escapeHtml(customerPhone) : 'N/A'}</span>
                     </div>`;
 
                 modal.querySelector('.payment-message').innerHTML = `
@@ -392,11 +392,11 @@
                             </div>
                             ${(window.cart.discountAmount > 0) ? `
                             <div class="flex justify-between text-sm text-red-600 mb-1">
-                                <span>${window.cart.discountLabel || 'Discount'}</span>
+                                <span>${escapeHtml(window.cart.discountLabel || 'Discount')}</span>
                                 <span>-₱${parseFloat(window.cart.discountAmount).toFixed(2)}</span>
                             </div>
                             ${(window.cart.discountIdNumber && ['sc','pwd'].includes(window.cart.discountType))
-                                ? `<div class="text-xs text-gray-500 mb-1">${window.cart.discountType === 'sc' ? 'OSCA' : 'PWD'} ID: ${window.cart.discountIdNumber}</div>`
+                                ? `<div class="text-xs text-gray-500 mb-1">${window.cart.discountType === 'sc' ? 'OSCA' : 'PWD'} ID: ${escapeHtml(window.cart.discountIdNumber)}</div>`
                                 : ''}
                             ` : ''}
                             <div class="flex justify-between font-bold text-gray-800 text-xl mb-2">
@@ -969,7 +969,7 @@ async function logout() {
     function showPrintWarning(msg) {
         const toast = document.createElement('div');
         toast.className = 'fixed bottom-4 right-4 bg-yellow-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 flex items-center gap-2';
-        toast.innerHTML = '<span class="text-xl">&#9888;</span><span>' + (msg || 'Printer error') + '</span>';
+        toast.innerHTML = '<span class="text-xl">&#9888;</span><span>' + escapeHtml(msg || 'Printer error') + '</span>';
         document.body.appendChild(toast);
         setTimeout(() => toast.remove(), 5000);
     }

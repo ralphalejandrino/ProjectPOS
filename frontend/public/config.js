@@ -6,6 +6,17 @@ const PAYMENTS_API = isNginx ? `${_base}/api/payments` : `${_base}:9000/api/paym
 const AUTH_API = isNginx ? `${_base}/api/auth` : `${_base}:9000/api/auth`;
 const API_URL = API_BASE;
 
+// XSS defense — escape user/API string data before innerHTML injection
+const escapeHtml = (str) => {
+    if (str == null) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+};
+
 // Token Helpers
 const getToken = () => localStorage.getItem('access_token');
 const setToken = (access, refresh) => {

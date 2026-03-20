@@ -930,8 +930,8 @@
                 list.innerHTML = users.map(u => `
                     <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                         <div>
-                            <span class="font-medium text-gray-800">${u.username}</span>
-                            <span class="ml-2 text-xs px-2 py-0.5 rounded-full ${u.role === 'manager' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}">${u.role}</span>
+                            <span class="font-medium text-gray-800">${escapeHtml(u.username)}</span>
+                            <span class="ml-2 text-xs px-2 py-0.5 rounded-full ${u.role === 'manager' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}">${escapeHtml(u.role)}</span>
                             ${!u.is_active ? '<span class="ml-2 text-xs text-red-500">(inactive)</span>' : ''}
                         </div>
                         <div class="flex gap-2">

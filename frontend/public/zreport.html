@@ -442,7 +442,7 @@
             } else {
                 cashierTbody.innerHTML = data.by_cashier.map(row => `
                     <tr class="border-b border-gray-100">
-                        <td class="py-2 px-3 text-gray-800">${row.name}</td>
+                        <td class="py-2 px-3 text-gray-800">${escapeHtml(row.name)}</td>
                         <td class="py-2 px-3 text-right text-gray-700">${row.count}</td>
                         <td class="py-2 px-3 text-right font-medium text-gray-800">${fmt(row.subtotal)}</td>
                         <td class="py-2 px-3 text-right text-red-500">${row.void_count}</td>
@@ -458,7 +458,7 @@
                 topTbody.innerHTML = data.top_items.map((row, i) => `
                     <tr class="border-b border-gray-100">
                         <td class="py-2 px-3 text-gray-500">${i + 1}</td>
-                        <td class="py-2 px-3 text-gray-800">${row.name}</td>
+                        <td class="py-2 px-3 text-gray-800">${escapeHtml(row.name)}</td>
                         <td class="py-2 px-3 text-right text-gray-700">${row.units_sold}</td>
                         <td class="py-2 px-3 text-right font-medium text-gray-800">${fmt(row.revenue)}</td>
                     </tr>
@@ -472,10 +472,10 @@
             if (data.void_count > 0) {
                 const rows = (data.void_list || []).map(row => `
                     <tr class="border-b border-gray-100">
-                        <td class="py-2 px-3 font-mono text-xs text-gray-700">${row.transaction_no}</td>
+                        <td class="py-2 px-3 font-mono text-xs text-gray-700">${escapeHtml(row.transaction_no)}</td>
                         <td class="py-2 px-3 text-right text-red-600 font-medium">${fmt(row.amount)}</td>
-                        <td class="py-2 px-3 text-gray-700">${row.voided_by}</td>
-                        <td class="py-2 px-3 text-right text-gray-500">${row.voided_at}</td>
+                        <td class="py-2 px-3 text-gray-700">${escapeHtml(row.voided_by)}</td>
+                        <td class="py-2 px-3 text-right text-gray-500">${escapeHtml(row.voided_at)}</td>
                     </tr>`).join('');
                 voidWrap.innerHTML = `
                     <table class="w-full text-sm">
@@ -499,7 +499,7 @@
                 document.getElementById('rpt-discount-total-header').textContent = `-₱${data.total_discounts_given.toFixed(2)}`;
                 const discRows = (data.discount_breakdown || []).map(d => `
                     <tr class="border-b border-gray-100">
-                        <td class="py-2 px-3 text-gray-800">${d.label}</td>
+                        <td class="py-2 px-3 text-gray-800">${escapeHtml(d.label)}</td>
                         <td class="py-2 px-3 text-right text-gray-700">${d.count}</td>
                         <td class="py-2 px-3 text-right font-medium text-red-600">-${fmt(d.total_discount)}</td>
                     </tr>`).join('');

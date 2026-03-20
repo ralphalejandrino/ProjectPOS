@@ -408,7 +408,7 @@
                             <div class="flex items-center space-x-3">
                                 <span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-gray-100 text-gray-700 text-xs font-bold">${rank}</span>
                                 <div>
-                                    <p class="font-medium text-gray-900">${item.name}</p>
+                                    <p class="font-medium text-gray-900">${escapeHtml(item.name)}</p>
                                     <p class="text-sm text-gray-600">${item.quantity} sold today • ₱${parseFloat(item.revenue).toFixed(2)}</p>
                                 </div>
                             </div>
@@ -469,7 +469,7 @@
                 const itemsHtml = t.items.map(item => `
                     <div class="flex justify-between text-sm py-1 border-b border-gray-100 last:border-0">
                         <div class="flex-1">
-                            <span class="font-medium">${item.name}</span>
+                            <span class="font-medium">${escapeHtml(item.name)}</span>
                             <span class="text-gray-500 ml-1">x${item.quantity}</span>
                         </div>
                         <div class="text-gray-700">₱${(item.quantity * item.price).toFixed(2)}</div>
@@ -492,21 +492,21 @@
                         return `
                             <div class="flex justify-between text-sm">
                                 <span class="text-gray-500">GCash Reference:</span>
-                                <span class="font-mono text-gray-800">${t.gcash_reference || 'N/A'}</span>
+                                <span class="font-mono text-gray-800">${t.gcash_reference ? escapeHtml(t.gcash_reference) : 'N/A'}</span>
                             </div>
                             <div class="flex justify-between text-sm">
                                 <span class="text-gray-500">Customer Phone:</span>
-                                <span class="text-gray-800">${t.customer_phone || 'N/A'}</span>
+                                <span class="text-gray-800">${t.customer_phone ? escapeHtml(t.customer_phone) : 'N/A'}</span>
                             </div>`;
                     } else if (method === 'maya') {
                         return `
                             <div class="flex justify-between text-sm">
                                 <span class="text-gray-500">Maya Reference:</span>
-                                <span class="font-mono text-gray-800">${t.maya_reference || 'N/A'}</span>
+                                <span class="font-mono text-gray-800">${t.maya_reference ? escapeHtml(t.maya_reference) : 'N/A'}</span>
                             </div>
                             <div class="flex justify-between text-sm">
                                 <span class="text-gray-500">Customer Phone:</span>
-                                <span class="text-gray-800">${t.customer_phone || 'N/A'}</span>
+                                <span class="text-gray-800">${t.customer_phone ? escapeHtml(t.customer_phone) : 'N/A'}</span>
                             </div>`;
                     }
                     return '';
@@ -516,7 +516,7 @@
                     <div class="mt-3 pt-3 border-t border-red-200 space-y-1">
                         <div class="flex justify-between text-sm">
                             <span class="text-red-500">Voided By:</span>
-                            <span class="text-red-700 font-medium">${t.voided_by || 'N/A'}</span>
+                            <span class="text-red-700 font-medium">${t.voided_by ? escapeHtml(t.voided_by) : 'N/A'}</span>
                         </div>
                         <div class="flex justify-between text-sm">
                             <span class="text-red-500">Voided At:</span>
@@ -524,7 +524,7 @@
                         </div>
                         <div class="flex justify-between text-sm">
                             <span class="text-red-500">Reason:</span>
-                            <span class="text-red-700">${t.void_reason || 'N/A'}</span>
+                            <span class="text-red-700">${t.void_reason ? escapeHtml(t.void_reason) : 'N/A'}</span>
                         </div>
                     </div>` : '';
 
@@ -544,7 +544,7 @@
                         </div>`;
                     if (t.discount_id_number && (dtype === 'sc' || dtype === 'pwd')) {
                         html += `<div class="text-xs text-gray-500 mt-0.5">
-                            ${dtype === 'sc' ? 'OSCA ID' : 'PWD ID'}: ${t.discount_id_number}
+                            ${dtype === 'sc' ? 'OSCA ID' : 'PWD ID'}: ${escapeHtml(t.discount_id_number)}
                         </div>`;
                     }
                     return html;
@@ -554,7 +554,7 @@
                     <div class="space-y-3">
                         <div class="flex justify-between text-sm">
                             <span class="text-gray-500">Transaction #:</span>
-                            <span class="font-mono text-gray-800">${t.transaction_no || t.id}</span>
+                            <span class="font-mono text-gray-800">${escapeHtml(t.transaction_no || t.id)}</span>
                         </div>
                         <div class="flex justify-between text-sm">
                             <span class="text-gray-500">Date/Time:</span>
@@ -562,7 +562,7 @@
                         </div>
                         <div class="flex justify-between text-sm">
                             <span class="text-gray-500">Cashier:</span>
-                            <span class="text-gray-800">${t.cashier || 'N/A'}</span>
+                            <span class="text-gray-800">${t.cashier ? escapeHtml(t.cashier) : 'N/A'}</span>
                         </div>
                         <div class="flex justify-between text-sm">
                             <span class="text-gray-500">Payment:</span>
@@ -684,8 +684,8 @@
                 container.innerHTML = lowStock.map(item => `
                     <div class="flex items-center justify-between p-2 bg-red-50 border border-red-200 rounded">
                         <div class="flex-1">
-                            <p class="text-sm font-medium text-gray-900">${item.name}</p>
-                            <p class="text-xs text-gray-600">${item.category_name || 'General'}</p>
+                            <p class="text-sm font-medium text-gray-900">${escapeHtml(item.name)}</p>
+                            <p class="text-xs text-gray-600">${escapeHtml(item.category_name || 'General')}</p>
                         </div>
                         <span class="text-lg font-bold text-red-600">${item.stock}</span>
                     </div>
