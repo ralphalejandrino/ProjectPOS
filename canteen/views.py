@@ -24,7 +24,7 @@ from .serializers import (
 )
 from django.db.models import Sum, Count, F, FloatField
 from django.db.models.functions import TruncDate
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta, date, timezone as dt_tz
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.views import APIView
@@ -736,7 +736,8 @@ class DashboardViewSet(viewsets.ViewSet):
             backups = sorted(glob.glob(f'{backup_dir}/db_backup_*.sqlite3'))
             if backups:
                 last_backup_time = os.path.getmtime(backups[-1])
-                last_backup = datetime.fromtimestamp(last_backup_time).strftime('%Y-%m-%d %H:%M')
+                PHT = dt_tz(timedelta(hours=8))
+                last_backup = datetime.fromtimestamp(last_backup_time, tz=PHT).strftime('%Y-%m-%d %H:%M')
                 hours_since = (timezone.now().timestamp() - last_backup_time) / 3600
                 backup_warning = hours_since > 48
             else:
