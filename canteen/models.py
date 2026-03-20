@@ -459,7 +459,7 @@ class PosTransactionItem(BaseModelWithUUID):
 
     def save(self, *args, **kwargs):
         # Auto-calculate subtotal
-        if not self.subtotal:
+        if self.subtotal is None:
             self.subtotal = self.unit_price * self.quantity
         super().save(*args, **kwargs)
 
