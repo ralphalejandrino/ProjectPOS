@@ -389,7 +389,11 @@ class UserCreateSerializer(serializers.ModelSerializer):
 class PaymentGatewayConfigSerializer(serializers.ModelSerializer):
     class Meta:
         model = PaymentGatewayConfig
-        fields = '__all__'
+        fields = [
+            'id', 'gateway', 'is_active', 'use_mock_mode',
+            'merchant_id', 'webhook_url', 'enable_terminal', 'terminal_id',
+            'created_at', 'updated_at',
+        ]
 
 # ============================================================================
 # SHIFT SERIALIZERS
