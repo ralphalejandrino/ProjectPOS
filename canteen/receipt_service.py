@@ -73,7 +73,7 @@ def print_receipt(transaction):
             padding = RECEIPT_WIDTH - len(line) - len(subtotal)
             p.text(line + ' ' * max(padding, 1) + subtotal + '\n')
             for vs in item.variant_selections.all():
-                modifier_str = f'+P{float(vs.price_modifier):.2f}' if vs.price_modifier > 0 else ''
+                modifier_str = f'+PHP {float(vs.price_modifier):.2f}' if vs.price_modifier > 0 else ''
                 p.text(f'  {vs.group_name}: {vs.option_name} {modifier_str}\n')
 
         p.text('-' * RECEIPT_WIDTH + '\n')
@@ -82,7 +82,7 @@ def print_receipt(transaction):
         total = float(transaction.total_amount.amount) if hasattr(
             transaction.total_amount, 'amount') else float(transaction.total_amount)
         subtotal_label = 'Subtotal:'
-        subtotal_val = f'P{subtotal_sum:.2f}'
+        subtotal_val = f'PHP {subtotal_sum:.2f}'
         subtotal_padding = RECEIPT_WIDTH - len(subtotal_label) - len(subtotal_val)
         p.text(subtotal_label + ' ' * max(subtotal_padding, 1) + subtotal_val + '\n')
         # Discount line (only when a discount was applied)
@@ -100,7 +100,7 @@ def print_receipt(transaction):
             else:
                 disc_label = 'Discount:'
             
-            disc_val = f'-P{discount:.2f}'
+            disc_val = f'-PHP {discount:.2f}'
             disc_padding = RECEIPT_WIDTH - len(disc_label) - len(disc_val)
             p.text(disc_label + ' ' * max(disc_padding, 1) + disc_val + '\n')
             
@@ -111,7 +111,7 @@ def print_receipt(transaction):
                 p.text(f'{id_prefix}{id_number}\n')
         p.set(bold=True)
         total_label = 'TOTAL:'
-        total_val = f'P{total:.2f}'
+        total_val = f'PHP {total:.2f}'
         total_padding = RECEIPT_WIDTH - len(total_label) - len(total_val)
         p.text(total_label + ' ' * max(total_padding, 1) + total_val + '\n')
         p.set(bold=False)
@@ -120,7 +120,7 @@ def print_receipt(transaction):
             vat_rate = float(profile.vat_rate)
             vat_amount = total * vat_rate / (100 + vat_rate)
             vat_label = f'Incl. VAT ({vat_rate:.0f}%):'
-            vat_val = f'P{vat_amount:.2f}'
+            vat_val = f'PHP {vat_amount:.2f}'
             vat_padding = RECEIPT_WIDTH - len(vat_label) - len(vat_val)
             p.text(vat_label + ' ' * max(vat_padding, 1) + vat_val + '\n')
         p.text(f'Payment: {transaction.get_payment_method_display()}\n')
@@ -131,7 +131,7 @@ def print_receipt(transaction):
             cash_dec = Decimal(str(cash_raw))
             total_dec = Decimal(str(total))
             change_dec = (cash_dec - total_dec).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-            p.text(f'Cash: P{cash_dec:.2f}  Change: P{change_dec:.2f}\n')
+            p.text(f'Cash: PHP {cash_dec:.2f}  Change: PHP {change_dec:.2f}\n')
         elif transaction.payment_method in ('gcash', 'maya'):
             ref = transaction.gcash_reference or transaction.maya_reference or 'N/A'
             p.text(f'Ref#: {ref}\n')
@@ -183,10 +183,10 @@ def print_zreport_summary(data):
             pad = RECEIPT_WIDTH - len(label) - len(val)
             return label + ' ' * max(pad, 1) + val + '\n'
 
-        p.text(rrow('Gross Sales:', f"P{float(data.get('gross_sales', 0)):.2f}"))
-        p.text(rrow('Voids:', f"P{float(data.get('void_total', 0)):.2f}"))
+        p.text(rrow('Gross Sales:', f"PHP {float(data.get('gross_sales', 0)):.2f}"))
+        p.text(rrow('Voids:', f"PHP {float(data.get('void_total', 0)):.2f}"))
         p.set(bold=True)
-        p.text(rrow('Net Sales:', f"P{float(data.get('net_sales', 0)):.2f}"))
+        p.text(rrow('Net Sales:', f"PHP {float(data.get('net_sales', 0)):.2f}"))
         p.set(bold=False)
         p.text(rrow('Transactions:', str(data.get('transaction_count', 0))))
         p.text('-' * RECEIPT_WIDTH + '\n')
@@ -194,7 +194,7 @@ def print_zreport_summary(data):
             method = {'cash': 'Cash', 'gcash': 'GCash', 'maya': 'Maya'}.get(
                 row.get('payment_method', ''), row.get('payment_method', 'Other'))
             p.text(rrow(f"  {method} ({row.get('count', 0)}):",
-                        f"P{float(row.get('subtotal', 0)):.2f}"))
+                        f"PHP {float(row.get('subtotal', 0)):.2f}"))
         discount_breakdown = data.get('discount_breakdown', [])
         if discount_breakdown:
             p.text('-' * RECEIPT_WIDTH + '\n')
@@ -202,18 +202,18 @@ def print_zreport_summary(data):
             for d in discount_breakdown:
                 label = d.get('label', d.get('type', 'Discount'))[:16]
                 amount = float(d.get('total_discount', 0))
-                p.text(f"{label:<16}-P{amount:>10.2f}\n")
+                p.text(f"{label:<16}-PHP {amount:>10.2f}\n")
             total_disc = float(data.get('total_discounts_given', 0))
-            p.text(f"{'Total':<16}-P{total_disc:>10.2f}\n")
+            p.text(f"{'Total':<16}-PHP {total_disc:>10.2f}\n")
         p.text('-' * RECEIPT_WIDTH + '\n')
         cash_expected = float(data.get('cash_expected', 0))
-        p.text(rrow('Cash Expected:', f"P{cash_expected:.2f}"))
+        p.text(rrow('Cash Expected:', f"PHP {cash_expected:.2f}"))
         if data.get('closing_cash') is not None:
             closing_cash = float(data['closing_cash'])
             over_short = closing_cash - cash_expected
             sign = '+' if over_short >= 0 else ''
-            p.text(rrow('Closing Cash:', f"P{closing_cash:.2f}"))
-            p.text(rrow('Over/Short:', f"P{sign}{over_short:.2f}"))
+            p.text(rrow('Closing Cash:', f"PHP {closing_cash:.2f}"))
+            p.text(rrow('Over/Short:', f"PHP {sign}{over_short:.2f}"))
         else:
             p.text('Over/Short: ________________\n')
         p.text('-' * RECEIPT_WIDTH + '\n')
@@ -257,10 +257,10 @@ def print_xreport_summary(data):
             pad = RECEIPT_WIDTH - len(label) - len(val)
             return label + ' ' * max(pad, 1) + val + '\n'
 
-        p.text(rrow('Gross Sales:', f"P{float(data.get('gross_sales', 0)):.2f}"))
-        p.text(rrow('Voids:', f"P{float(data.get('void_total', 0)):.2f}"))
+        p.text(rrow('Gross Sales:', f"PHP {float(data.get('gross_sales', 0)):.2f}"))
+        p.text(rrow('Voids:', f"PHP {float(data.get('void_total', 0)):.2f}"))
         p.set(bold=True)
-        p.text(rrow('Net Sales:', f"P{float(data.get('net_sales', 0)):.2f}"))
+        p.text(rrow('Net Sales:', f"PHP {float(data.get('net_sales', 0)):.2f}"))
         p.set(bold=False)
         p.text(rrow('Transactions:', str(data.get('transaction_count', 0))))
         p.text('-' * RECEIPT_WIDTH + '\n')
@@ -268,7 +268,7 @@ def print_xreport_summary(data):
             method = {'cash': 'Cash', 'gcash': 'GCash', 'maya': 'Maya'}.get(
                 row.get('payment_method', ''), row.get('payment_method', 'Other'))
             p.text(rrow(f"  {method} ({row.get('count', 0)}):",
-                        f"P{float(row.get('subtotal', 0)):.2f}"))
+                        f"PHP {float(row.get('subtotal', 0)):.2f}"))
         p.text('-' * RECEIPT_WIDTH + '\n')
         p.set(align='center')
         if profile and profile.receipt_footer:
