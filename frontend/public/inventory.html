@@ -66,16 +66,6 @@
                 <div id="category-buttons" class="space-y-1">
                     <!-- Loaded dynamically -->
                 </div>
-                <div id="manage-categories-btn-wrapper" class="mt-4 hidden">
-                    <button onclick="openCategoryModal()"
-                        class="w-full px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition">
-                        ⚙️ Manage Categories
-                    </button>
-                    <button onclick="showVariantManager()"
-                        class="w-full px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition mt-1">
-                        🔀 Manage Variants
-                    </button>
-                </div>
             </div>
         </div>
 
@@ -127,15 +117,22 @@
 
             <!-- PRODUCTS TABLE -->
             <div id="products-section">
-                <div class="flex justify-between items-center mb-4">
+                <div class="flex flex-wrap justify-between items-center mb-4 gap-2">
                     <h2 class="text-xl font-bold text-gray-800">📦 All Products</h2>
-                    <div class="flex gap-2">
-                        <button onclick="openAddProductModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition">
+                    <div class="flex flex-wrap gap-2 items-center">
+                        <div id="manage-categories-btn-wrapper" class="flex flex-wrap gap-2 items-center hidden">
+                            <button onclick="openCategoryModal()" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium transition text-sm">
+                                ⚙️ Manage Categories
+                            </button>
+                            <button onclick="showVariantManager()" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium transition text-sm">
+                                🔀 Manage Variants
+                            </button>
+                        </div>
+                        <button onclick="openAddProductModal()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition text-sm">
                             ➕ Add Product
                         </button>
                         <input type="file" id="csv-file-input" accept=".csv" class="hidden">
-                        <button onclick="document.getElementById('csv-file-input').click()"
-                                class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium">
+                        <button onclick="document.getElementById('csv-file-input').click()" class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition text-sm">
                             📥 Import CSV
                         </button>
                     </div>
@@ -1361,7 +1358,7 @@
 
     <!-- Category Management Modal -->
     <div id="category-modal" class="fixed inset-0 bg-black bg-opacity-50 z-[9999] hidden flex items-center justify-center p-4">
-        <div class="bg-white rounded-xl shadow-xl w-full max-w-md">
+        <div class="bg-white rounded-xl shadow-xl w-full max-w-2xl">
             <div class="px-6 py-4 border-b flex items-center justify-between">
                 <h3 class="text-lg font-bold text-gray-800">Manage Categories</h3>
                 <button onclick="closeCategoryModal()" class="text-gray-400 hover:text-gray-600 text-xl">✕</button>
@@ -1386,16 +1383,16 @@
 
     <!-- Category Variant Groups Modal (Step 7) -->
     <div id="cat-variant-modal" class="fixed inset-0 bg-black bg-opacity-50 z-[10000] hidden flex items-center justify-center p-4">
-        <div class="bg-white rounded-xl shadow-xl w-full max-w-md">
-            <div class="px-6 py-4 border-b flex items-center justify-between">
+        <div class="bg-white rounded-xl shadow-xl w-full max-w-md flex flex-col" style="max-height: 85vh;">
+            <div class="px-6 py-4 border-b flex items-center justify-between flex-shrink-0">
                 <h3 class="text-lg font-bold text-gray-800" id="cat-variant-modal-title">Variant Groups for Category</h3>
                 <button onclick="closeCatVariantModal()" class="text-gray-400 hover:text-gray-600 text-xl">✕</button>
             </div>
-            <div class="p-6">
+            <div class="flex-1 overflow-y-auto p-6">
                 <p class="text-xs text-gray-500 mb-3">Select which variant groups apply to all products in this category.</p>
-                <div id="category-variant-groups" class="flex flex-col gap-2 max-h-48 overflow-y-auto"></div>
+                <div id="category-variant-groups" class="flex flex-col gap-2"></div>
             </div>
-            <div class="px-6 pb-5 flex gap-3">
+            <div class="flex gap-3 px-6 py-5 border-t border-gray-200 flex-shrink-0">
                 <button onclick="closeCatVariantModal()" class="flex-1 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition text-sm font-medium">Cancel</button>
                 <button onclick="saveCategoryVariantGroups()" class="flex-1 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition text-sm font-medium">Save</button>
             </div>
@@ -1425,12 +1422,12 @@
 
     <!-- Add Variant Group Modal (Step 6) -->
     <div id="add-group-modal" class="fixed inset-0 bg-black bg-opacity-50 z-[10000] hidden flex items-center justify-center p-4">
-        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
-            <div class="px-6 py-4 border-b flex items-center justify-between">
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-md flex flex-col" style="max-height: 85vh;">
+            <div class="px-6 py-4 border-b flex items-center justify-between flex-shrink-0">
                 <h3 class="text-lg font-bold text-gray-800" id="add-group-modal-title">Add Variant Group</h3>
                 <button onclick="closeAddGroupModal()" class="text-gray-400 hover:text-gray-600 text-xl">✕</button>
             </div>
-            <div class="p-6 space-y-4">
+            <div class="flex-1 overflow-y-auto p-6 space-y-4">
                 <input type="hidden" id="group-edit-id">
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Group Name *</label>
@@ -1452,7 +1449,7 @@
                     <input type="number" id="group-sort-order" value="0" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
                 </div>
             </div>
-            <div class="px-6 pb-5 flex gap-3">
+            <div class="flex gap-3 px-6 py-5 border-t border-gray-200 dark:border-gray-700 flex-shrink-0">
                 <button onclick="closeAddGroupModal()" class="flex-1 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition text-sm font-medium">Cancel</button>
                 <button onclick="saveGroup()" class="flex-1 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition text-sm font-medium">Save Group</button>
             </div>
@@ -1461,12 +1458,12 @@
 
     <!-- Add Option Modal (Step 6) -->
     <div id="add-option-modal" class="fixed inset-0 bg-black bg-opacity-50 z-[10000] hidden flex items-center justify-center p-4">
-        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-sm max-h-[90vh] overflow-y-auto">
-            <div class="px-6 py-4 border-b flex items-center justify-between">
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-sm flex flex-col" style="max-height: 85vh;">
+            <div class="px-6 py-4 border-b flex items-center justify-between flex-shrink-0">
                 <h3 class="text-lg font-bold text-gray-800" id="add-option-modal-title">Add Option</h3>
                 <button onclick="closeAddOptionModal()" class="text-gray-400 hover:text-gray-600 text-xl">✕</button>
             </div>
-            <div class="p-6 space-y-4">
+            <div class="flex-1 overflow-y-auto p-6 space-y-4">
                 <input type="hidden" id="option-edit-group-id">
                 <input type="hidden" id="option-edit-id">
                 <div>
@@ -1482,7 +1479,7 @@
                     <input type="number" id="option-sort-order" value="0" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
                 </div>
             </div>
-            <div class="px-6 pb-5 flex gap-3">
+            <div class="flex gap-3 px-6 py-5 border-t border-gray-200 dark:border-gray-700 flex-shrink-0">
                 <button onclick="closeAddOptionModal()" class="flex-1 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition text-sm font-medium">Cancel</button>
                 <button onclick="saveOption()" class="flex-1 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition text-sm font-medium">Save Option</button>
             </div>
