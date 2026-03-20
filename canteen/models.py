@@ -232,6 +232,21 @@ class ItemLog(BaseModelWithUUID):
 # TRANSACTIONS
 # ============================================================================
 
+class OfficialReceiptCounter(models.Model):
+    """Atomic per-day OR number counter. One row per calendar day (PHT)."""
+    date = models.DateField(unique=True)
+    counter = models.PositiveIntegerField(default=0)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['date']),
+        ]
+
+    def __str__(self):
+        return f"OR counter for {self.date}: {self.counter}"
+
+
 class Transaction(BaseModelWithUUID):
     """Base transaction model"""
     transaction_no = models.CharField(
@@ -418,12 +433,25 @@ class PosTransaction(Transaction):
         return f"POS Transaction {self.transaction_no}"
 
     def save(self, *args, **kwargs):
-        # Auto-generate transaction number if not provided
         if not self.transaction_no:
-            from django.utils import timezone as _tz
-            timestamp = _tz.localtime(_tz.now()).strftime('%Y%m%d%H%M%S')
-            self.transaction_no = f"TXN-{timestamp}-{uuid.uuid4().hex[:6].upper()}"
+            self.transaction_no = self._generate_or_number()
         super().save(*args, **kwargs)
+
+    @staticmethod
+    def _generate_or_number():
+        from django.db import transaction as db_tx
+        from datetime import timezone as dt_tz, timedelta
+        from django.utils import timezone as dj_tz
+        PHT = dt_tz(timedelta(hours=8))
+        today = dj_tz.now().astimezone(PHT).date()
+        with db_tx.atomic():
+            counter_obj, _ = OfficialReceiptCounter.objects.select_for_update().get_or_create(
+                date=today,
+                defaults={'counter': 0},
+            )
+            counter_obj.counter += 1
+            counter_obj.save(update_fields=['counter', 'updated_at'])
+            return f'OR-{today.strftime("%Y%m%d")}-{counter_obj.counter:04d}'
 
 
 class PosTransactionItem(BaseModelWithUUID):
