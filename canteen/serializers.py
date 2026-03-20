@@ -15,7 +15,12 @@ from .models import (
     EmployeeProfile,
     Attendance,
     PaymentGatewayConfig,
-    Shift
+    Shift,
+    VariantGroup,
+    VariantOption,
+    CategoryVariantGroup,
+    ProductVariantGroup,
+    TransactionItemVariant,
 )
 
 
@@ -84,6 +89,7 @@ class ItemSerializer(serializers.ModelSerializer):
     profit_per_unit = serializers.ReadOnlyField()
     is_low_stock = serializers.ReadOnlyField()
     photo = serializers.SerializerMethodField()
+    effective_variant_groups = serializers.SerializerMethodField()
 
     def get_photo(self, obj):
         request = self.context.get('request')
@@ -99,6 +105,29 @@ class ItemSerializer(serializers.ModelSerializer):
         # Fall back to curated demo photo
         return DEMO_PHOTO_MAP.get(obj.name, "https://picsum.photos/seed/cafe-default/400/300")
 
+    def get_effective_variant_groups(self, obj):
+        # Category-assigned groups
+        cat_groups = {}
+        if obj.category_id:
+            for cvg in obj.category.variant_groups.select_related('group').prefetch_related('group__options'):
+                cat_groups[str(cvg.group.id)] = {
+                    'group': VariantGroupSerializer(cvg.group).data,
+                    'is_required': cvg.is_required_override if cvg.is_required_override is not None else cvg.group.is_required,
+                    'source': 'category',
+                }
+        # Product overrides
+        for pvg in obj.variant_group_overrides.select_related('group').prefetch_related('group__options'):
+            gid = str(pvg.group.id)
+            if not pvg.enabled:
+                cat_groups.pop(gid, None)
+            else:
+                cat_groups[gid] = {
+                    'group': VariantGroupSerializer(pvg.group).data,
+                    'is_required': pvg.is_required_override if pvg.is_required_override is not None else pvg.group.is_required,
+                    'source': 'product',
+                }
+        return list(cat_groups.values())
+
     class Meta:
         model = Item
         fields = [
@@ -106,6 +135,7 @@ class ItemSerializer(serializers.ModelSerializer):
             'stock', 'low_stock_threshold', 'bar_code', 'bar_code_image',
             'photo', 'description', 'sku', 'expiry_date', 'is_active',
             'profit_margin', 'profit_per_unit', 'is_low_stock',
+            'effective_variant_groups',
             'created_at', 'updated_at'
         ]
 
@@ -144,17 +174,61 @@ class ItemLogSerializer(serializers.ModelSerializer):
 
 
 # ============================================================================
+# VARIANT SERIALIZERS
+# ============================================================================
+
+class VariantOptionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = VariantOption
+        fields = ['id', 'name', 'price_modifier', 'sort_order', 'is_active']
+
+
+class VariantGroupSerializer(serializers.ModelSerializer):
+    options = VariantOptionSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = VariantGroup
+        fields = ['id', 'name', 'selection_type', 'is_required', 'sort_order', 'is_active', 'options']
+
+
+class CategoryVariantGroupSerializer(serializers.ModelSerializer):
+    group = VariantGroupSerializer(read_only=True)
+    group_id = serializers.UUIDField(write_only=True)
+
+    class Meta:
+        model = CategoryVariantGroup
+        fields = ['id', 'group', 'group_id', 'is_required_override']
+
+
+class ProductVariantGroupSerializer(serializers.ModelSerializer):
+    group = VariantGroupSerializer(read_only=True)
+    group_id = serializers.UUIDField(write_only=True)
+
+    class Meta:
+        model = ProductVariantGroup
+        fields = ['id', 'group', 'group_id', 'enabled', 'is_required_override']
+
+
+class TransactionItemVariantSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TransactionItemVariant
+        fields = ['id', 'group_name', 'option_name', 'price_modifier']
+
+
+# ============================================================================
 # TRANSACTION SERIALIZERS
 # ============================================================================
 
 class PosTransactionItemSerializer(serializers.ModelSerializer):
     item_name = serializers.CharField(source='item.name', read_only=True)
+    variant_selections = TransactionItemVariantSerializer(many=True, read_only=True)
 
     class Meta:
         model = PosTransactionItem
         fields = [
             'id', 'item', 'item_name', 'quantity', 'unit_price',
-            'purchase_price', 'subtotal', 'remarks'
+            'purchase_price', 'subtotal', 'base_price', 'final_price',
+            'variant_selections', 'remarks'
         ]
 
 

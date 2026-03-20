@@ -4,14 +4,23 @@ from rest_framework.response import Response
 from rest_framework.exceptions import ValidationError
 from django.db import transaction as db_transaction
 from django.utils import timezone
+from django.shortcuts import get_object_or_404
 from .services import create_pos_transaction
-from .models import ItemCategory, Item, ItemLog, PosTransaction, PosTransactionItem, Shift
+from .models import (
+    ItemCategory, Item, ItemLog, PosTransaction, PosTransactionItem, Shift,
+    VariantGroup, VariantOption, CategoryVariantGroup, ProductVariantGroup,
+    TransactionItemVariant,
+)
 from .serializers import (
     ItemCategorySerializer,
     ItemSerializer,
     ItemCreateSerializer,
     ItemUpdateSerializer,
     ShiftSerializer,
+    VariantGroupSerializer,
+    VariantOptionSerializer,
+    CategoryVariantGroupSerializer,
+    ProductVariantGroupSerializer,
 )
 from django.db.models import Sum, Count, F, FloatField
 from django.db.models.functions import TruncDate
@@ -562,6 +571,64 @@ class PosTransactionViewSet(viewsets.ViewSet):
             'by_payment_method': by_method,
         })
 
+# ============================================================================
+# VARIANT VIEWSETS
+# ============================================================================
+
+class VariantGroupViewSet(viewsets.ModelViewSet):
+    queryset = VariantGroup.objects.prefetch_related('options').all()
+    serializer_class = VariantGroupSerializer
+    permission_classes = [IsManagerOrAbove]
+
+    @action(detail=True, methods=['patch'], url_path='reorder-options')
+    def reorder_options(self, request, pk=None):
+        group = self.get_object()
+        order = request.data.get('order', [])  # list of {id, sort_order}
+        for entry in order:
+            VariantOption.objects.filter(id=entry['id'], group=group).update(sort_order=entry['sort_order'])
+        return Response({'status': 'reordered'})
+
+
+class VariantOptionViewSet(viewsets.ModelViewSet):
+    serializer_class = VariantOptionSerializer
+    permission_classes = [IsManagerOrAbove]
+
+    def get_queryset(self):
+        return VariantOption.objects.filter(group_id=self.kwargs['group_pk'])
+
+    def perform_create(self, serializer):
+        group = get_object_or_404(VariantGroup, pk=self.kwargs['group_pk'])
+        serializer.save(group=group)
+
+
+class CategoryVariantGroupViewSet(viewsets.ModelViewSet):
+    serializer_class = CategoryVariantGroupSerializer
+    permission_classes = [IsManagerOrAbove]
+
+    def get_queryset(self):
+        return CategoryVariantGroup.objects.filter(category_id=self.kwargs['category_pk']).select_related('group')
+
+    def perform_create(self, serializer):
+        category = get_object_or_404(ItemCategory, pk=self.kwargs['category_pk'])
+        group_id = self.request.data.get('group_id')
+        group = get_object_or_404(VariantGroup, pk=group_id)
+        serializer.save(category=category, group=group)
+
+
+class ProductVariantGroupViewSet(viewsets.ModelViewSet):
+    serializer_class = ProductVariantGroupSerializer
+    permission_classes = [IsManagerOrAbove]
+
+    def get_queryset(self):
+        return ProductVariantGroup.objects.filter(product_id=self.kwargs['product_pk']).select_related('group')
+
+    def perform_create(self, serializer):
+        product = get_object_or_404(Item, pk=self.kwargs['product_pk'])
+        group_id = self.request.data.get('group_id')
+        group = get_object_or_404(VariantGroup, pk=group_id)
+        serializer.save(product=product, group=group)
+
+
 class DashboardViewSet(viewsets.ViewSet):
     """Dashboard statistics and analytics"""
     permission_classes = [IsManagerOrAbove]
@@ -1015,7 +1082,10 @@ class ItemViewSet(viewsets.ModelViewSet):
     serializer_class = ItemSerializer
 
     def get_queryset(self):
-        qs = Item.objects.all().select_related('category')
+        qs = Item.objects.all().select_related('category').prefetch_related(
+            'variant_group_overrides__group__options',
+            'category__variant_groups__group__options',
+        )
         sku = self.request.query_params.get('sku')
         search = self.request.query_params.get('search')
         if sku:
