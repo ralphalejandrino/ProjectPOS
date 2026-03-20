@@ -12,7 +12,20 @@ const setToken = (access, refresh) => {
     localStorage.setItem('access_token', access);
     if (refresh) localStorage.setItem('refresh_token', refresh);
 };
-const clearTokens = () => {
+const clearTokens = async () => {
+    const refresh = localStorage.getItem('refresh_token');
+    if (refresh) {
+        try {
+            await fetch(`${API_BASE}/auth/logout/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+                },
+                body: JSON.stringify({ refresh })
+            });
+        } catch (_) {}
+    }
     localStorage.removeItem('access_token');
     localStorage.removeItem('refresh_token');
 };

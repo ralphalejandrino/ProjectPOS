@@ -875,9 +875,8 @@
             document.getElementById('success-modal').classList.add('hidden');
         }
 
-        function logout() {
-            localStorage.removeItem('access_token');
-            localStorage.removeItem('refresh_token');
+        async function logout() {
+            await clearTokens();
             window.location.href = 'login.html';
         }
 

@@ -6,6 +6,8 @@ from rest_framework.response import Response
 from rest_framework import status, viewsets
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView
+from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.exceptions import TokenError
 from .models import User
 from .serializers import UserSerializer, UserCreateSerializer, LoginSerializer
 from .permissions import IsManagerOrAbove
@@ -62,6 +64,13 @@ def login_view(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def logout_view(request):
+    try:
+        refresh_token = request.data.get('refresh')
+        if refresh_token:
+            token = RefreshToken(refresh_token)
+            token.blacklist()
+    except TokenError:
+        pass  # already blacklisted or invalid — still complete logout
     logout(request)
     return Response({'message': 'Logout successful'})
 
