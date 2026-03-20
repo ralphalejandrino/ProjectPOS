@@ -914,7 +914,9 @@ async function logout() {
                     return;
                 }
                 const item = items[0];
-                if (!item.is_active || item.stock <= 0) {
+                const _bizScan = (() => { try { return JSON.parse(localStorage.getItem('biz_profile') || '{}'); } catch(e) { return {}; } })();
+                const trackInventoryScan = _bizScan.track_inventory !== false;
+                if (!item.is_active || (trackInventoryScan && item.stock <= 0)) {
                     showScanFeedback(`${item.name} is out of stock`, 'error');
                     return;
                 }
