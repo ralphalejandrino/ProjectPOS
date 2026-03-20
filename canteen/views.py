@@ -65,7 +65,7 @@ class ItemCategoryViewSet(viewsets.ModelViewSet):
         return [IsManagerOrAbove()]
 
 class PosTransactionViewSet(viewsets.ViewSet):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsCashierOrAbove]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['transaction_no']
     ordering_fields = ['created_at']
