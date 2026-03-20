@@ -288,12 +288,18 @@
         </div>
     </div>
 
-    <!-- MODAL: VARIANT PICKER -->
+    <!-- MODAL: VARIANT PICKER (Step 8) -->
     <div id="variant-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
-      <div class="bg-white dark:bg-gray-800 rounded-xl p-6 w-80 max-w-full shadow-xl">
+      <div class="bg-white dark:bg-gray-800 rounded-xl p-6 w-96 max-w-full shadow-xl overflow-y-auto max-h-screen">
         <h3 id="variant-modal-title" class="text-lg font-semibold text-gray-800 dark:text-white mb-4"></h3>
-        <div id="variant-options" class="flex flex-col gap-2"></div>
-        <button onclick="closeVariantModal()" class="mt-4 w-full py-2 px-4 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition">Cancel</button>
+        <div id="variant-modal-groups" class="flex flex-col gap-4"></div>
+        <div class="mt-4 flex items-center justify-between">
+          <span class="text-sm text-gray-500 dark:text-gray-400">Total: <span id="variant-modal-price" class="font-semibold text-gray-800 dark:text-white"></span></span>
+          <div class="flex gap-2">
+            <button onclick="closeVariantModal()" class="py-2 px-4 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition text-sm">Cancel</button>
+            <button onclick="confirmVariantSelection()" class="py-2 px-4 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition text-sm">Add to Cart</button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -540,7 +546,10 @@ window.confirmAction = confirmAction;
                             item_id: item.id,
                             quantity: item.quantity,
                             price: item.price,
-                            variant_id: item.variant_id || null,
+                            variant_selections: (item.variant_selections || []).map(s => ({
+                                group_id: s.group_id,
+                                option_id: s.option_id,
+                            })),
                         })),
                         payment_method: 'cash',
                         cash_received: received,
@@ -663,7 +672,7 @@ async function logout() {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        items: window.cart.items.map(item => ({ item_id: item.id, quantity: item.quantity, price: item.price, variant_id: item.variant_id || null })),
+                        items: window.cart.items.map(item => ({ item_id: item.id, quantity: item.quantity, price: item.price, variant_selections: (item.variant_selections || []).map(s => ({ group_id: s.group_id, option_id: s.option_id })) })),
                         payment_method: 'gcash',
                         gcash_reference: reference,
                         customer_phone: document.getElementById('gcash-customer-phone').value.trim(),
@@ -735,7 +744,7 @@ async function logout() {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        items: window.cart.items.map(item => ({ item_id: item.id, quantity: item.quantity, price: item.price, variant_id: item.variant_id || null })),
+                        items: window.cart.items.map(item => ({ item_id: item.id, quantity: item.quantity, price: item.price, variant_selections: (item.variant_selections || []).map(s => ({ group_id: s.group_id, option_id: s.option_id })) })),
                         payment_method: 'maya',
                         maya_reference: reference,
                         customer_phone: document.getElementById('maya-customer-phone').value.trim(),

@@ -212,6 +212,10 @@ function searchProducts() {
 // CART MANAGEMENT
 // ============================================
 
+// ── Variant picker state (Step 8) ────────────────────────────────────────────
+let _variantPickerItem = null;
+let _variantSelections = {};
+
 function addToCart(product) {
     const _biz2 = (() => { try { return JSON.parse(localStorage.getItem('biz_profile') || '{}'); } catch(e) { return {}; } })();
     const trackInventory = _biz2.track_inventory !== false;
@@ -225,22 +229,25 @@ function addToCart(product) {
         return;
     }
 
-    // If item has active variants, show picker instead of adding directly
-    if (product.variants && product.variants.filter(v => v.is_active).length > 0) {
+    const effectiveGroups = product.effective_variant_groups || [];
+    const activeGroups = effectiveGroups.filter(eg => eg.group && eg.group.options && eg.group.options.some(o => o.is_active));
+    if (activeGroups.length > 0) {
         showVariantPicker(product);
         return;
     }
-
-    addProductToCart(product, null);
+    addProductToCart(product, [], parseFloat(product.price));
 }
 
-function addProductToCart(item, variant) {
+function addProductToCart(item, variantSelections, finalPrice) {
     const _biz2 = (() => { try { return JSON.parse(localStorage.getItem('biz_profile') || '{}'); } catch(e) { return {}; } })();
     const trackInventory = _biz2.track_inventory !== false;
 
-    const cartKey = variant ? `${item.id}__${variant.id}` : String(item.id);
-    const price = variant ? parseFloat(variant.price) : parseFloat(item.price);
-    const displayName = variant ? `${item.name} (${variant.name})` : item.name;
+    variantSelections = variantSelections || [];
+    const variantKey = variantSelections.map(s => s.option_id).sort().join('_');
+    const cartKey = variantSelections.length > 0 ? `${item.id}__${variantKey}` : String(item.id);
+    const variantLabel = variantSelections.map(s => s.option_name).join(', ');
+    const displayName = variantLabel ? `${item.name} (${variantLabel})` : item.name;
+    const price = finalPrice !== undefined ? finalPrice : parseFloat(item.price);
 
     const existingItem = window.cart.items.find(i => i.cartKey === cartKey);
 
@@ -260,11 +267,11 @@ function addProductToCart(item, variant) {
         window.cart.items.push({
             cartKey,
             id: item.id,
-            variant_id: variant ? variant.id : null,
-            variant_name: variant ? variant.name : '',
             name: displayName,
+            baseName: item.name,
             price,
             quantity: 1,
+            variant_selections: variantSelections,
             emoji: item.emoji || '🍽️',
         });
         updateProductStock(item.id, -1);
@@ -273,26 +280,96 @@ function addProductToCart(item, variant) {
 }
 
 function showVariantPicker(item) {
-    document.getElementById('variant-modal-title').textContent = item.name;
-    const opts = document.getElementById('variant-options');
-    opts.innerHTML = '';
-    item.variants.filter(v => v.is_active).forEach(v => {
-        const btn = document.createElement('button');
-        btn.className = 'w-full py-3 px-4 bg-indigo-50 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-200 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-800 text-left flex justify-between items-center transition';
-        btn.innerHTML = `<span>${escapeHtml(v.name)}</span><span class="font-semibold">&#x20B1;${parseFloat(v.price).toFixed(2)}</span>`;
-        btn.onclick = () => selectVariant(item, v);
-        opts.appendChild(btn);
+    _variantPickerItem = item;
+    _variantSelections = {};
+    document.getElementById('variant-modal-title').textContent = escapeHtml(item.name);
+    const groups = document.getElementById('variant-modal-groups');
+    groups.innerHTML = '';
+    const effectiveGroups = item.effective_variant_groups || [];
+    if (effectiveGroups.length === 0) {
+        addProductToCart(item, [], parseFloat(item.price));
+        return;
+    }
+    effectiveGroups.forEach(eg => {
+        const g = eg.group;
+        const required = eg.is_required;
+        const section = document.createElement('div');
+        section.className = 'border border-gray-200 dark:border-gray-700 rounded-lg p-3';
+        section.innerHTML = `<div class="flex items-center gap-2 mb-2">
+            <span class="font-medium text-sm text-gray-700 dark:text-gray-300">${escapeHtml(g.name)}</span>
+            ${required ? '<span class="text-xs text-red-500">Required</span>' : ''}
+            <span class="text-xs text-gray-400">${g.selection_type === 'multi' ? 'Choose multiple' : 'Choose one'}</span>
+        </div>`;
+        const opts = document.createElement('div');
+        opts.className = 'flex flex-col gap-1';
+        (g.options || []).filter(o => o.is_active).forEach(opt => {
+            const inputType = g.selection_type === 'multi' ? 'checkbox' : 'radio';
+            const inputName = `vg_${g.id}`;
+            const pm = parseFloat(opt.price_modifier);
+            const priceLabel = pm > 0 ? `+₱${pm.toFixed(2)}` : pm < 0 ? `-₱${Math.abs(pm).toFixed(2)}` : '';
+            const row = document.createElement('label');
+            row.className = 'flex items-center gap-2 cursor-pointer text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200';
+            row.innerHTML = `<input type="${inputType}" name="${inputName}" value="${opt.id}" data-group="${g.id}" data-price="${opt.price_modifier}" class="variant-input"> ${escapeHtml(opt.name)}${priceLabel ? ' <span class="text-indigo-500">' + escapeHtml(priceLabel) + '</span>' : ''}`;
+            opts.appendChild(row);
+        });
+        section.appendChild(opts);
+        groups.appendChild(section);
     });
+    groups.querySelectorAll('.variant-input').forEach(input => {
+        input.addEventListener('change', updateVariantPrice);
+    });
+    updateVariantPrice();
     document.getElementById('variant-modal').classList.remove('hidden');
+}
+
+function updateVariantPrice() {
+    if (!_variantPickerItem) return;
+    let total = parseFloat(_variantPickerItem.price);
+    document.querySelectorAll('.variant-input:checked').forEach(input => {
+        total += parseFloat(input.dataset.price || 0);
+    });
+    document.getElementById('variant-modal-price').textContent = `₱${total.toFixed(2)}`;
 }
 
 function closeVariantModal() {
     document.getElementById('variant-modal').classList.add('hidden');
+    _variantPickerItem = null;
+    _variantSelections = {};
 }
 
-function selectVariant(item, variant) {
+function confirmVariantSelection() {
+    const item = _variantPickerItem;
+    if (!item) return;
+    const effectiveGroups = item.effective_variant_groups || [];
+    const selections = [];
+    let valid = true;
+    effectiveGroups.forEach(eg => {
+        if (!valid) return;
+        const g = eg.group;
+        const required = eg.is_required;
+        const checked = document.querySelectorAll(`.variant-input[data-group="${g.id}"]:checked`);
+        if (required && checked.length === 0) {
+            if (window.showCustomError) {
+                window.showCustomError('Selection Required', `Please select a "${escapeHtml(g.name)}" option.`);
+            }
+            valid = false;
+            return;
+        }
+        checked.forEach(input => {
+            const opt = (g.options || []).find(o => String(o.id) === String(input.value));
+            if (opt) selections.push({
+                group_id: g.id,
+                option_id: opt.id,
+                group_name: g.name,
+                option_name: opt.name,
+                price_modifier: opt.price_modifier
+            });
+        });
+    });
+    if (!valid) return;
+    const finalPrice = parseFloat(item.price) + selections.reduce((sum, s) => sum + parseFloat(s.price_modifier), 0);
     closeVariantModal();
-    addProductToCart(item, variant);
+    addProductToCart(item, selections, finalPrice);
 }
 
 function removeFromCart(cartKey) {
@@ -344,11 +421,16 @@ function updateCart() {
     if (window.cart.items.length === 0) {
         cartItemsContainer.innerHTML = '<p class="text-gray-400 text-center py-8">Cart is empty</p>';
     } else {
-        cartItemsContainer.innerHTML = window.cart.items.map(item => `
+        cartItemsContainer.innerHTML = window.cart.items.map(item => {
+            const variantSubtitle = item.variant_selections && item.variant_selections.length > 0
+                ? `<div class="text-xs text-gray-400">${escapeHtml(item.variant_selections.map(s => s.option_name).join(', '))}</div>`
+                : '';
+            return `
             <div class="cart-item bg-gray-50 p-3 rounded-lg">
                 <div class="flex justify-between items-start mb-2">
                     <div class="flex-1">
-                        <div class="font-bold text-gray-800">${item.emoji} ${item.name}</div>
+                        <div class="font-bold text-gray-800">${item.emoji} ${item.baseName || item.name}</div>
+                        ${variantSubtitle}
                         <div class="text-sm text-gray-600">₱${parseFloat(item.price || 0).toFixed(2)} each</div>
                     </div>
                     <button onclick="removeFromCart('${item.cartKey}')" class="text-red-500 hover:text-red-700 font-bold">
@@ -411,7 +493,8 @@ window.addToCart = addToCart;
 window.addProductToCart = addProductToCart;
 window.showVariantPicker = showVariantPicker;
 window.closeVariantModal = closeVariantModal;
-window.selectVariant = selectVariant;
+window.confirmVariantSelection = confirmVariantSelection;
+window.updateVariantPrice = updateVariantPrice;
 window.removeFromCart = removeFromCart;
 window.updateQuantity = updateQuantity;
 window.updateCart = updateCart;

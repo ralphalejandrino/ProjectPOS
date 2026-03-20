@@ -71,6 +71,10 @@
                         class="w-full px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition">
                         ⚙️ Manage Categories
                     </button>
+                    <button onclick="showVariantManager()"
+                        class="w-full px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition mt-1">
+                        🔀 Manage Variants
+                    </button>
                 </div>
             </div>
         </div>
@@ -121,8 +125,22 @@
                 </div>
             </div>
 
+            <!-- VARIANT MANAGER SECTION (hidden by default) -->
+            <div id="variant-manager-section" class="hidden">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl font-bold text-gray-800">🔀 Variant Groups</h2>
+                    <button onclick="openAddGroupModal()"
+                        class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium transition">
+                        ➕ Add Group
+                    </button>
+                </div>
+                <div id="variant-groups-list" class="space-y-3">
+                    <p class="text-gray-400 text-center py-8">Loading...</p>
+                </div>
+            </div>
+
             <!-- PRODUCTS TABLE -->
-            <div>
+            <div id="products-section">
                 <div class="flex justify-between items-center mb-4">
                     <h2 class="text-xl font-bold text-gray-800">📦 All Products</h2>
                     <div class="flex gap-2">
@@ -158,6 +176,7 @@
                     </table>
                 </div>
             </div>
+            </div><!-- /products-section -->
         </div>
     </div>
 
@@ -245,6 +264,15 @@
                         <button type="button" onclick="addVariantRow()" class="text-xs text-indigo-600 hover:underline">+ Add variant</button>
                       </div>
                       <div id="variant-rows" class="flex flex-col gap-2"></div>
+                    </div>
+
+                    <!-- Variant Groups (Step 7) -->
+                    <div class="mt-4">
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Variant Groups</label>
+                        <p class="text-xs text-gray-400 mb-2">Override category-level variant group settings for this product.</p>
+                        <div id="product-variant-groups" class="flex flex-col gap-2 max-h-48 overflow-y-auto border border-gray-100 rounded-lg p-2">
+                            <p class="text-xs text-gray-400 text-center py-2">Save product first to manage variant groups.</p>
+                        </div>
                     </div>
                 </form>
             </div>
@@ -682,6 +710,7 @@
             document.getElementById('product-description').value = product.description || '';
             document.getElementById('variant-rows').innerHTML = '';
             loadVariants(product.id);
+            loadProductVariantGroups(product.id);
 
             document.getElementById('product-modal').classList.remove('hidden');
         }
@@ -719,6 +748,7 @@
                 if (response.ok) {
                     const savedItem = await response.json();
                     await saveVariants(savedItem.id);
+                    await saveProductVariantGroups(savedItem.id);
                     closeProductModal();
                     await loadProducts();
                     await loadAnalytics();
@@ -797,6 +827,8 @@
                             class="px-3 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700 transition">Save</button>
                         <button onclick="deleteCategory('${cat.id}', '${cat.name}', ${cat.item_count || 0})"
                             class="px-3 py-1 bg-red-100 text-red-600 text-xs rounded hover:bg-red-200 transition">Del</button>
+                        <button onclick="openCatVariantModal('${cat.id}', '${cat.name.replace(/'/g, "\\'")}')"
+                            class="px-3 py-1 bg-indigo-100 text-indigo-600 text-xs rounded hover:bg-indigo-200 transition">VG</button>
                     </div>
                 `).join('');
             } catch(e) {
@@ -920,6 +952,390 @@
             }
         }
 
+        // ── Variant Manager (Step 6) ──────────────────────────────────────────
+
+        function showVariantManager() {
+            // Hide analytics + products section, show variant manager
+            document.querySelector('.mb-6').style.display = 'none'; // analytics
+            document.getElementById('products-section').style.display = 'none';
+            document.getElementById('variant-manager-section').classList.remove('hidden');
+            loadVariantGroups();
+        }
+
+        function hideVariantManager() {
+            document.querySelector('.mb-6').style.display = '';
+            document.getElementById('products-section').style.display = '';
+            document.getElementById('variant-manager-section').classList.add('hidden');
+        }
+
+        let _allVariantGroups = [];
+
+        async function loadVariantGroups() {
+            const container = document.getElementById('variant-groups-list');
+            container.innerHTML = '<p class="text-gray-400 text-center py-8">Loading...</p>';
+            try {
+                const res = await authenticatedFetch(`${API_BASE}/variant-groups/`);
+                if (!res.ok) {
+                    container.innerHTML = '<p class="text-red-400 text-center py-8">Failed to load variant groups.</p>';
+                    return;
+                }
+                const data = await res.json();
+                _allVariantGroups = data.results !== undefined ? data.results : data;
+                renderVariantGroups(_allVariantGroups);
+            } catch (e) {
+                container.innerHTML = '<p class="text-red-400 text-center py-8">Error loading variant groups.</p>';
+            }
+        }
+
+        function renderVariantGroups(groups) {
+            const container = document.getElementById('variant-groups-list');
+            if (!groups.length) {
+                container.innerHTML = '<p class="text-gray-400 text-center py-8">No variant groups yet. Click "Add Group" to create one.</p>';
+                return;
+            }
+            container.innerHTML = groups.map(g => `
+                <div class="bg-white border border-gray-200 rounded-lg shadow-sm" id="vg-row-${g.id}">
+                    <div class="flex items-center gap-3 p-4">
+                        <div class="flex-1">
+                            <span class="font-medium text-gray-900">${escapeHtml(g.name)}</span>
+                            <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-indigo-100 text-indigo-700">${escapeHtml(g.selection_type)}</span>
+                            ${g.is_required ? '<span class="ml-1 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700">Required</span>' : '<span class="ml-1 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">Optional</span>'}
+                            <span class="ml-2 text-xs text-gray-400">${(g.options || []).length} option(s)</span>
+                        </div>
+                        <button onclick="openEditGroupModal('${g.id}')" class="text-blue-600 hover:text-blue-800 text-sm px-2">✏️ Edit</button>
+                        <button onclick="toggleGroupOptions('${g.id}')" class="text-indigo-600 hover:text-indigo-800 text-sm px-2" id="vg-toggle-${g.id}">▼ Options</button>
+                        <button onclick="deleteGroup('${g.id}', '${escapeHtml(g.name).replace(/'/g, "\\'")}')" class="text-red-500 hover:text-red-700 text-sm px-2">🗑️</button>
+                    </div>
+                    <div id="vg-options-${g.id}" class="hidden border-t border-gray-100 p-4 bg-gray-50">
+                        <div id="vg-options-list-${g.id}" class="space-y-2 mb-3">
+                            ${(g.options || []).length === 0
+                                ? '<p class="text-xs text-gray-400">No options yet.</p>'
+                                : (g.options || []).map(opt => `
+                                <div class="flex items-center gap-2 p-2 bg-white border border-gray-100 rounded" id="vg-opt-row-${opt.id}">
+                                    <span class="flex-1 text-sm text-gray-700">${escapeHtml(opt.name)}</span>
+                                    <span class="text-xs text-gray-500">${parseFloat(opt.price_modifier) !== 0 ? (parseFloat(opt.price_modifier) > 0 ? '+₱' : '-₱') + Math.abs(parseFloat(opt.price_modifier)).toFixed(2) : 'no charge'}</span>
+                                    <span class="text-xs text-gray-400">sort:${opt.sort_order}</span>
+                                    <button onclick="openEditOptionModal('${g.id}','${opt.id}')" class="text-blue-500 hover:text-blue-700 text-xs">✏️</button>
+                                    <button onclick="deleteOption('${g.id}','${opt.id}','${escapeHtml(opt.name).replace(/'/g, "\\'")}')" class="text-red-500 hover:text-red-700 text-xs">🗑️</button>
+                                </div>`).join('')
+                            }
+                        </div>
+                        <button onclick="openAddOptionModal('${g.id}')" class="text-xs text-indigo-600 hover:text-indigo-800 underline">+ Add Option</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function toggleGroupOptions(groupId) {
+            const el = document.getElementById(`vg-options-${groupId}`);
+            const btn = document.getElementById(`vg-toggle-${groupId}`);
+            if (el.classList.contains('hidden')) {
+                el.classList.remove('hidden');
+                btn.textContent = '▲ Options';
+            } else {
+                el.classList.add('hidden');
+                btn.textContent = '▼ Options';
+            }
+        }
+
+        function openAddGroupModal() {
+            document.getElementById('add-group-modal-title').textContent = 'Add Variant Group';
+            document.getElementById('group-edit-id').value = '';
+            document.getElementById('group-name').value = '';
+            document.getElementById('group-selection-type').value = 'single';
+            document.getElementById('group-is-required').checked = false;
+            document.getElementById('group-sort-order').value = 0;
+            document.getElementById('add-group-modal').classList.remove('hidden');
+        }
+
+        function openEditGroupModal(groupId) {
+            const g = _allVariantGroups.find(x => x.id === groupId || x.id === parseInt(groupId));
+            if (!g) return;
+            document.getElementById('add-group-modal-title').textContent = 'Edit Variant Group';
+            document.getElementById('group-edit-id').value = g.id;
+            document.getElementById('group-name').value = g.name;
+            document.getElementById('group-selection-type').value = g.selection_type;
+            document.getElementById('group-is-required').checked = !!g.is_required;
+            document.getElementById('group-sort-order').value = g.sort_order || 0;
+            document.getElementById('add-group-modal').classList.remove('hidden');
+        }
+
+        function closeAddGroupModal() {
+            document.getElementById('add-group-modal').classList.add('hidden');
+        }
+
+        async function saveGroup() {
+            const id = document.getElementById('group-edit-id').value;
+            const name = document.getElementById('group-name').value.trim();
+            if (!name) {
+                showAlert('Validation Error', 'Group name is required.', '⚠️');
+                return;
+            }
+            const payload = {
+                name,
+                selection_type: document.getElementById('group-selection-type').value,
+                is_required: document.getElementById('group-is-required').checked,
+                sort_order: parseInt(document.getElementById('group-sort-order').value) || 0,
+            };
+            try {
+                const url = id ? `${API_BASE}/variant-groups/${id}/` : `${API_BASE}/variant-groups/`;
+                const method = id ? 'PATCH' : 'POST';
+                const res = await authenticatedFetch(url, {
+                    method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (res.ok) {
+                    closeAddGroupModal();
+                    await loadVariantGroups();
+                    showAlert('Saved', id ? 'Variant group updated.' : 'Variant group created.', '✅');
+                } else {
+                    const d = await res.json();
+                    showAlert('Error', 'Failed to save: ' + JSON.stringify(d), '❌');
+                }
+            } catch (e) {
+                showAlert('Error', 'An error occurred: ' + e.message, '❌');
+            }
+        }
+
+        async function deleteGroup(groupId, groupName) {
+            const ok = await showConfirm('Delete Variant Group', `Delete "${groupName}"? All options and assignments will be removed.`, 'Delete');
+            if (!ok) return;
+            try {
+                const res = await authenticatedFetch(`${API_BASE}/variant-groups/${groupId}/`, { method: 'DELETE' });
+                if (res.ok || res.status === 204) {
+                    await loadVariantGroups();
+                    showAlert('Deleted', `Variant group "${groupName}" removed.`, '✅');
+                } else {
+                    const d = await res.json().catch(() => ({}));
+                    showAlert('Error', d.error || 'Failed to delete group.', '❌');
+                }
+            } catch (e) {
+                showAlert('Error', 'An error occurred: ' + e.message, '❌');
+            }
+        }
+
+        function openAddOptionModal(groupId) {
+            document.getElementById('add-option-modal-title').textContent = 'Add Option';
+            document.getElementById('option-edit-group-id').value = groupId;
+            document.getElementById('option-edit-id').value = '';
+            document.getElementById('option-name').value = '';
+            document.getElementById('option-price').value = 0;
+            document.getElementById('option-sort-order').value = 0;
+            document.getElementById('add-option-modal').classList.remove('hidden');
+        }
+
+        function openEditOptionModal(groupId, optionId) {
+            const g = _allVariantGroups.find(x => String(x.id) === String(groupId));
+            if (!g) return;
+            const opt = (g.options || []).find(o => String(o.id) === String(optionId));
+            if (!opt) return;
+            document.getElementById('add-option-modal-title').textContent = 'Edit Option';
+            document.getElementById('option-edit-group-id').value = groupId;
+            document.getElementById('option-edit-id').value = optionId;
+            document.getElementById('option-name').value = opt.name;
+            document.getElementById('option-price').value = opt.price_modifier || 0;
+            document.getElementById('option-sort-order').value = opt.sort_order || 0;
+            document.getElementById('add-option-modal').classList.remove('hidden');
+        }
+
+        function closeAddOptionModal() {
+            document.getElementById('add-option-modal').classList.add('hidden');
+        }
+
+        async function saveOption() {
+            const groupId = document.getElementById('option-edit-group-id').value;
+            const optionId = document.getElementById('option-edit-id').value;
+            const name = document.getElementById('option-name').value.trim();
+            if (!name) {
+                showAlert('Validation Error', 'Option name is required.', '⚠️');
+                return;
+            }
+            const payload = {
+                name,
+                price_modifier: parseFloat(document.getElementById('option-price').value) || 0,
+                sort_order: parseInt(document.getElementById('option-sort-order').value) || 0,
+            };
+            try {
+                const url = optionId
+                    ? `${API_BASE}/variant-groups/${groupId}/options/${optionId}/`
+                    : `${API_BASE}/variant-groups/${groupId}/options/`;
+                const method = optionId ? 'PATCH' : 'POST';
+                const res = await authenticatedFetch(url, {
+                    method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (res.ok) {
+                    closeAddOptionModal();
+                    await loadVariantGroups();
+                    showAlert('Saved', optionId ? 'Option updated.' : 'Option added.', '✅');
+                } else {
+                    const d = await res.json();
+                    showAlert('Error', 'Failed to save: ' + JSON.stringify(d), '❌');
+                }
+            } catch (e) {
+                showAlert('Error', 'An error occurred: ' + e.message, '❌');
+            }
+        }
+
+        async function deleteOption(groupId, optionId, optionName) {
+            const ok = await showConfirm('Delete Option', `Delete option "${optionName}"?`, 'Delete');
+            if (!ok) return;
+            try {
+                const res = await authenticatedFetch(
+                    `${API_BASE}/variant-groups/${groupId}/options/${optionId}/`,
+                    { method: 'DELETE' }
+                );
+                if (res.ok || res.status === 204) {
+                    await loadVariantGroups();
+                    showAlert('Deleted', `Option "${optionName}" removed.`, '✅');
+                } else {
+                    const d = await res.json().catch(() => ({}));
+                    showAlert('Error', d.error || 'Failed to delete option.', '❌');
+                }
+            } catch (e) {
+                showAlert('Error', 'An error occurred: ' + e.message, '❌');
+            }
+        }
+
+        // ── Category Variant Groups (Step 7) ────────────────────────────────
+
+        let _catVariantModalCategoryId = null;
+
+        async function openCatVariantModal(categoryId, categoryName) {
+            _catVariantModalCategoryId = categoryId;
+            document.getElementById('cat-variant-modal-title').textContent = `Variant Groups — ${escapeHtml(categoryName)}`;
+            document.getElementById('cat-variant-modal').classList.remove('hidden');
+            await loadCategoryVariantGroups(categoryId);
+        }
+
+        function closeCatVariantModal() {
+            document.getElementById('cat-variant-modal').classList.add('hidden');
+            _catVariantModalCategoryId = null;
+        }
+
+        async function loadCategoryVariantGroups(categoryId) {
+            const container = document.getElementById('category-variant-groups');
+            container.innerHTML = '<p class="text-xs text-gray-400 text-center py-2">Loading...</p>';
+            try {
+                const [groupsRes, assignRes] = await Promise.all([
+                    authenticatedFetch(`${API_BASE}/variant-groups/`),
+                    authenticatedFetch(`${API_BASE}/categories/${categoryId}/variant-groups/`)
+                ]);
+                const groupsData = await groupsRes.json();
+                const allGroups = groupsData.results !== undefined ? groupsData.results : groupsData;
+                let assigned = [];
+                if (assignRes.ok) {
+                    const aData = await assignRes.json();
+                    assigned = aData.results !== undefined ? aData.results : aData;
+                }
+                const assignedIds = assigned.map(a => String(a.variant_group || a.id || a));
+                if (!allGroups.length) {
+                    container.innerHTML = '<p class="text-xs text-gray-400 text-center py-2">No variant groups defined. Create groups in Manage Variants first.</p>';
+                    return;
+                }
+                container.innerHTML = allGroups.map(g => `
+                    <label class="flex items-center gap-2 p-2 border border-gray-100 rounded cursor-pointer hover:bg-gray-50">
+                        <input type="checkbox" class="cat-vg-check w-4 h-4 rounded" value="${g.id}" ${assignedIds.includes(String(g.id)) ? 'checked' : ''}>
+                        <span class="flex-1 text-sm text-gray-700">${escapeHtml(g.name)}</span>
+                        <span class="text-xs text-gray-400">${escapeHtml(g.selection_type)}${g.is_required ? ' · required' : ''}</span>
+                    </label>
+                `).join('');
+            } catch (e) {
+                container.innerHTML = '<p class="text-xs text-red-400 text-center py-2">Failed to load.</p>';
+            }
+        }
+
+        async function saveCategoryVariantGroups() {
+            const categoryId = _catVariantModalCategoryId;
+            if (!categoryId) return;
+            const checked = Array.from(document.querySelectorAll('.cat-vg-check:checked')).map(el => el.value);
+            try {
+                const res = await authenticatedFetch(`${API_BASE}/categories/${categoryId}/variant-groups/`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ variant_group_ids: checked })
+                });
+                if (res.ok) {
+                    closeCatVariantModal();
+                    showAlert('Saved', 'Category variant groups updated.', '✅');
+                } else {
+                    const d = await res.json().catch(() => ({}));
+                    showAlert('Error', d.error || 'Failed to save.', '❌');
+                }
+            } catch (e) {
+                showAlert('Error', 'An error occurred: ' + e.message, '❌');
+            }
+        }
+
+        // ── Product Variant Groups (Step 7) ─────────────────────────────────
+
+        async function loadProductVariantGroups(productId) {
+            const container = document.getElementById('product-variant-groups');
+            if (!productId) {
+                container.innerHTML = '<p class="text-xs text-gray-400 text-center py-2">Save product first to manage variant groups.</p>';
+                return;
+            }
+            container.innerHTML = '<p class="text-xs text-gray-400 text-center py-2">Loading...</p>';
+            try {
+                const [groupsRes, overridesRes] = await Promise.all([
+                    authenticatedFetch(`${API_BASE}/variant-groups/`),
+                    authenticatedFetch(`${API_BASE}/items/${productId}/variant-overrides/`)
+                ]);
+                const groupsData = await groupsRes.json();
+                const allGroups = groupsData.results !== undefined ? groupsData.results : groupsData;
+                let overrides = [];
+                if (overridesRes.ok) {
+                    const oData = await overridesRes.json();
+                    overrides = oData.results !== undefined ? oData.results : oData;
+                }
+                const overrideMap = {};
+                overrides.forEach(o => { overrideMap[String(o.variant_group || o.group_id)] = o; });
+                if (!allGroups.length) {
+                    container.innerHTML = '<p class="text-xs text-gray-400 text-center py-2">No variant groups defined.</p>';
+                    return;
+                }
+                container.innerHTML = allGroups.map(g => {
+                    const ov = overrideMap[String(g.id)];
+                    const enabled = ov ? ov.is_enabled !== false : true;
+                    const required = ov ? (ov.is_required !== null && ov.is_required !== undefined ? ov.is_required : g.is_required) : g.is_required;
+                    return `
+                    <div class="flex items-center gap-2 p-2 border border-gray-100 rounded">
+                        <input type="checkbox" class="prod-vg-enabled w-4 h-4 rounded" value="${g.id}" ${enabled ? 'checked' : ''}>
+                        <span class="flex-1 text-sm text-gray-700">${escapeHtml(g.name)}</span>
+                        <label class="flex items-center gap-1 text-xs text-gray-500">
+                            <input type="checkbox" class="prod-vg-required w-3 h-3" data-group="${g.id}" ${required ? 'checked' : ''}> req
+                        </label>
+                    </div>`;
+                }).join('');
+            } catch (e) {
+                container.innerHTML = '<p class="text-xs text-red-400 text-center py-2">Failed to load.</p>';
+            }
+        }
+
+        async function saveProductVariantGroups(productId) {
+            if (!productId) return;
+            const enabledEls = document.querySelectorAll('.prod-vg-enabled');
+            const overrides = Array.from(enabledEls).map(el => {
+                const reqEl = document.querySelector(`.prod-vg-required[data-group="${el.value}"]`);
+                return {
+                    variant_group_id: el.value,
+                    is_enabled: el.checked,
+                    is_required: reqEl ? reqEl.checked : null,
+                };
+            });
+            try {
+                await authenticatedFetch(`${API_BASE}/items/${productId}/variant-overrides/`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ overrides })
+                });
+            } catch (e) {
+                console.error('Failed to save product variant overrides:', e);
+            }
+        }
+
         document.getElementById('csv-file-input').addEventListener('change', async function(e) {
             const file = e.target.files[0];
             if (!file) return;
@@ -981,6 +1397,90 @@
                 <div id="category-list" class="space-y-2 max-h-72 overflow-y-auto">
                     <p class="text-gray-400 text-sm text-center py-4">Loading...</p>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Category Variant Groups Modal (Step 7) -->
+    <div id="cat-variant-modal" class="fixed inset-0 bg-black bg-opacity-50 z-[10000] hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-xl w-full max-w-md">
+            <div class="px-6 py-4 border-b flex items-center justify-between">
+                <h3 class="text-lg font-bold text-gray-800" id="cat-variant-modal-title">Variant Groups for Category</h3>
+                <button onclick="closeCatVariantModal()" class="text-gray-400 hover:text-gray-600 text-xl">✕</button>
+            </div>
+            <div class="p-6">
+                <p class="text-xs text-gray-500 mb-3">Select which variant groups apply to all products in this category.</p>
+                <div id="category-variant-groups" class="flex flex-col gap-2 max-h-48 overflow-y-auto"></div>
+            </div>
+            <div class="px-6 pb-5 flex gap-3">
+                <button onclick="closeCatVariantModal()" class="flex-1 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition text-sm font-medium">Cancel</button>
+                <button onclick="saveCategoryVariantGroups()" class="flex-1 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition text-sm font-medium">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Variant Group Modal (Step 6) -->
+    <div id="add-group-modal" class="fixed inset-0 bg-black bg-opacity-50 z-[10000] hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-xl w-full max-w-md">
+            <div class="px-6 py-4 border-b flex items-center justify-between">
+                <h3 class="text-lg font-bold text-gray-800" id="add-group-modal-title">Add Variant Group</h3>
+                <button onclick="closeAddGroupModal()" class="text-gray-400 hover:text-gray-600 text-xl">✕</button>
+            </div>
+            <div class="p-6 space-y-4">
+                <input type="hidden" id="group-edit-id">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Group Name *</label>
+                    <input type="text" id="group-name" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="e.g. Size, Sugar Level">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Selection Type</label>
+                    <select id="group-selection-type" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        <option value="single">Single (choose one)</option>
+                        <option value="multi">Multi (choose multiple)</option>
+                    </select>
+                </div>
+                <div class="flex items-center gap-2">
+                    <input type="checkbox" id="group-is-required" class="w-4 h-4 rounded">
+                    <label for="group-is-required" class="text-sm text-gray-700">Required</label>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Sort Order</label>
+                    <input type="number" id="group-sort-order" value="0" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+            </div>
+            <div class="px-6 pb-5 flex gap-3">
+                <button onclick="closeAddGroupModal()" class="flex-1 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition text-sm font-medium">Cancel</button>
+                <button onclick="saveGroup()" class="flex-1 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition text-sm font-medium">Save Group</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Option Modal (Step 6) -->
+    <div id="add-option-modal" class="fixed inset-0 bg-black bg-opacity-50 z-[10000] hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-xl w-full max-w-sm">
+            <div class="px-6 py-4 border-b flex items-center justify-between">
+                <h3 class="text-lg font-bold text-gray-800" id="add-option-modal-title">Add Option</h3>
+                <button onclick="closeAddOptionModal()" class="text-gray-400 hover:text-gray-600 text-xl">✕</button>
+            </div>
+            <div class="p-6 space-y-4">
+                <input type="hidden" id="option-edit-group-id">
+                <input type="hidden" id="option-edit-id">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Option Name *</label>
+                    <input type="text" id="option-name" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="e.g. Large, 25% sugar">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Price Modifier (₱)</label>
+                    <input type="number" id="option-price" value="0" step="0.01" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Sort Order</label>
+                    <input type="number" id="option-sort-order" value="0" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+            </div>
+            <div class="px-6 pb-5 flex gap-3">
+                <button onclick="closeAddOptionModal()" class="flex-1 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition text-sm font-medium">Cancel</button>
+                <button onclick="saveOption()" class="flex-1 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition text-sm font-medium">Save Option</button>
             </div>
         </div>
     </div>
