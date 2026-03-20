@@ -129,6 +129,27 @@ class Item(BaseModelWithUUID):
         super().save(*args, **kwargs)
 
 
+class ItemVariant(BaseModelWithUUID):
+    """Size/flavor/option variants for an Item — each has its own selling price"""
+    item = models.ForeignKey(
+        to=Item,
+        on_delete=models.CASCADE,
+        related_name='variants',
+        verbose_name="Item"
+    )
+    name = models.CharField(max_length=100, verbose_name="Variant Name")  # e.g. "Small", "Large", "Hot"
+    price = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Variant Price")
+    is_active = models.BooleanField(default=True)
+    sort_order = models.PositiveSmallIntegerField(default=0, verbose_name="Display Order")
+
+    class Meta:
+        ordering = ['sort_order', 'name']
+        unique_together = [['item', 'name']]
+
+    def __str__(self):
+        return f"{self.item.name} — {self.name} (₱{self.price})"
+
+
 class ItemLog(BaseModelWithUUID):
     """Inventory tracking log - records all stock changes"""
     item = models.ForeignKey(to=Item, on_delete=models.CASCADE, verbose_name="Item", related_name="logs")
@@ -393,6 +414,20 @@ class PosTransactionItem(BaseModelWithUUID):
         max_digits=10,
         decimal_places=2,
         verbose_name="Subtotal"
+    )
+    variant = models.ForeignKey(
+        'ItemVariant',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='transaction_items',
+        verbose_name="Variant"
+    )
+    variant_name = models.CharField(
+        max_length=100,
+        blank=True,
+        default='',
+        verbose_name="Variant Name (snapshot)"
     )
     remarks = models.TextField(null=True, blank=True)
 
