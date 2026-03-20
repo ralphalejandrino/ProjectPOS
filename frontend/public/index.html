@@ -911,28 +911,8 @@ async function logout() {
                     showScanFeedback(`${item.name} is out of stock`, 'error');
                     return;
                 }
-                // Add to cart — find existing cart item or add new
-                if (!window.cart) window.cart = { items: [], total: 0 };
-                const existing = window.cart.items.find(i => i.id === item.id);
-                if (existing) {
-                    if (existing.quantity >= item.stock) {
-                        showScanFeedback(`Max stock reached for ${item.name}`, 'error');
-                        return;
-                    }
-                    existing.quantity += 1;
-                } else {
-                    window.cart.items.push({
-                        id: item.id,
-                        name: item.name,
-                        price: parseFloat(item.price),
-                        quantity: 1,
-                        stock: item.stock
-                    });
-                }
-                window.cart.total = window.cart.items.reduce(
-                    (sum, i) => sum + i.price * i.quantity, 0);
-                if (typeof renderCart === 'function') renderCart();
-                if (typeof updateCartDisplay === 'function') updateCartDisplay();
+                // Add to cart — route through addToCart to handle variants and updateCart
+                addToCart(item);
                 showScanFeedback(`✅ ${item.name} added`, 'success');
             } catch(err) {
                 showScanFeedback('Scan error: ' + err.message, 'error');
