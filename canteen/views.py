@@ -9,7 +9,7 @@ from .services import create_pos_transaction
 from .models import (
     ItemCategory, Item, ItemLog, PosTransaction, PosTransactionItem, Shift,
     VariantGroup, VariantOption, CategoryVariantGroup, ProductVariantGroup,
-    TransactionItemVariant,
+    TransactionItemVariant, BusinessProfile,
 )
 from .serializers import (
     ItemCategorySerializer,
@@ -233,11 +233,13 @@ class PosTransactionViewSet(viewsets.ViewSet):
                     return Response({'error': 'This transaction has already been voided or refunded.'},
                                     status=status.HTTP_400_BAD_REQUEST)
 
-                # Reverse stock for each item in the transaction
-                for item_entry in transaction.items.all():
-                    Item.objects.filter(pk=item_entry.item.pk).update(
-                        stock=F('stock') + item_entry.quantity
-                    )
+                # Reverse stock for each item in the transaction (only if inventory tracking is enabled)
+                _bp = BusinessProfile.objects.first()
+                if not _bp or _bp.track_inventory:
+                    for item_entry in transaction.items.all():
+                        Item.objects.filter(pk=item_entry.item.pk).update(
+                            stock=F('stock') + item_entry.quantity
+                        )
 
                 transaction.void = True
                 transaction.voided_at = timezone.now()
