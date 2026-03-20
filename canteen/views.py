@@ -1179,7 +1179,7 @@ class ItemViewSet(viewsets.ModelViewSet):
             )
 
         with db_transaction.atomic():
-            item = Item.objects.get(pk=pk)
+            item = Item.objects.select_for_update().get(pk=pk)
             old_stock = item.stock
             new_stock = item.stock + adjustment
             if new_stock < 0:
