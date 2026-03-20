@@ -57,6 +57,65 @@ class ItemCategory(BaseModelWithUUID):
         return self.name
 
 
+class VariantGroup(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=100)
+    selection_type = models.CharField(
+        max_length=10,
+        choices=[('single', 'Single'), ('multi', 'Multi')],
+        default='single',
+    )
+    is_required = models.BooleanField(default=False)
+    sort_order = models.PositiveSmallIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['sort_order', 'name']
+
+    def __str__(self):
+        return self.name
+
+
+class VariantOption(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    group = models.ForeignKey(VariantGroup, on_delete=models.CASCADE, related_name='options')
+    name = models.CharField(max_length=100)
+    price_modifier = models.DecimalField(max_digits=8, decimal_places=2, default=0)
+    sort_order = models.PositiveSmallIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['sort_order', 'name']
+
+    def __str__(self):
+        return f"{self.group.name} — {self.name}"
+
+
+class CategoryVariantGroup(models.Model):
+    category = models.ForeignKey('ItemCategory', on_delete=models.CASCADE, related_name='variant_groups')
+    group = models.ForeignKey(VariantGroup, on_delete=models.CASCADE, related_name='category_assignments')
+    is_required_override = models.BooleanField(null=True, blank=True)
+
+    class Meta:
+        unique_together = [('category', 'group')]
+
+    def __str__(self):
+        return f"{self.category.name} → {self.group.name}"
+
+
+class ProductVariantGroup(models.Model):
+    product = models.ForeignKey('Item', on_delete=models.CASCADE, related_name='variant_group_overrides')
+    group = models.ForeignKey(VariantGroup, on_delete=models.CASCADE, related_name='product_overrides')
+    enabled = models.BooleanField(default=True)
+    is_required_override = models.BooleanField(null=True, blank=True)
+
+    class Meta:
+        unique_together = [('product', 'group')]
+
+    def __str__(self):
+        return f"{self.product.name} → {self.group.name} ({'on' if self.enabled else 'off'})"
+
+
 class Item(BaseModelWithUUID):
     """Products/Items for sale"""
     category = models.ForeignKey(
@@ -127,27 +186,6 @@ class Item(BaseModelWithUUID):
             self.bar_code_image.save(filename, ContentFile(buffer.read()), save=False)
 
         super().save(*args, **kwargs)
-
-
-class ItemVariant(BaseModelWithUUID):
-    """Size/flavor/option variants for an Item — each has its own selling price"""
-    item = models.ForeignKey(
-        to=Item,
-        on_delete=models.CASCADE,
-        related_name='variants',
-        verbose_name="Item"
-    )
-    name = models.CharField(max_length=100, verbose_name="Variant Name")  # e.g. "Small", "Large", "Hot"
-    price = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Variant Price")
-    is_active = models.BooleanField(default=True)
-    sort_order = models.PositiveSmallIntegerField(default=0, verbose_name="Display Order")
-
-    class Meta:
-        ordering = ['sort_order', 'name']
-        unique_together = [['item', 'name']]
-
-    def __str__(self):
-        return f"{self.item.name} — {self.name} (₱{self.price})"
 
 
 class ItemLog(BaseModelWithUUID):
@@ -415,20 +453,8 @@ class PosTransactionItem(BaseModelWithUUID):
         decimal_places=2,
         verbose_name="Subtotal"
     )
-    variant = models.ForeignKey(
-        'ItemVariant',
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='transaction_items',
-        verbose_name="Variant"
-    )
-    variant_name = models.CharField(
-        max_length=100,
-        blank=True,
-        default='',
-        verbose_name="Variant Name (snapshot)"
-    )
+    base_price = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
+    final_price = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
     remarks = models.TextField(null=True, blank=True)
 
     def save(self, *args, **kwargs):
@@ -439,6 +465,19 @@ class PosTransactionItem(BaseModelWithUUID):
 
     def __str__(self):
         return f"{self.item.name} x{self.quantity} = ₱{self.subtotal}"
+
+
+class TransactionItemVariant(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    transaction_item = models.ForeignKey(
+        'PosTransactionItem', on_delete=models.CASCADE, related_name='variant_selections'
+    )
+    group_name = models.CharField(max_length=100)
+    option_name = models.CharField(max_length=100)
+    price_modifier = models.DecimalField(max_digits=8, decimal_places=2)
+
+    def __str__(self):
+        return f"{self.group_name}: {self.option_name}"
 
 
 # ============================================================================

@@ -19,7 +19,4 @@ urlpatterns = [
     path('business/', views.get_business_profile, name='get_business_profile'),
     path('business/update/', views.update_business_profile, name='update_business_profile'),
     path('business/logo/', views.upload_business_logo, name='upload-business-logo'),
-    # Item variants — nested under items
-    path('items/<uuid:item_pk>/variants/', views.ItemVariantViewSet.as_view({'get': 'list', 'post': 'create'}), name='item-variants-list'),
-    path('items/<uuid:item_pk>/variants/<uuid:pk>/', views.ItemVariantViewSet.as_view({'get': 'retrieve', 'put': 'update', 'patch': 'partial_update', 'delete': 'destroy'}), name='item-variants-detail'),
 ]

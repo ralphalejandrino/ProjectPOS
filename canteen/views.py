@@ -5,11 +5,10 @@ from rest_framework.exceptions import ValidationError
 from django.db import transaction as db_transaction
 from django.utils import timezone
 from .services import create_pos_transaction
-from .models import ItemCategory, Item, ItemVariant, ItemLog, PosTransaction, PosTransactionItem, Shift
+from .models import ItemCategory, Item, ItemLog, PosTransaction, PosTransactionItem, Shift
 from .serializers import (
     ItemCategorySerializer,
     ItemSerializer,
-    ItemVariantSerializer,
     ItemCreateSerializer,
     ItemUpdateSerializer,
     ShiftSerializer,
@@ -1010,21 +1009,13 @@ def get_gateway_qr_config(request, gateway):
         return Response({'error': 'Failed to load payment QR configuration.'}, status=500)
 
 
-class ItemVariantViewSet(viewsets.ModelViewSet):
-    serializer_class = ItemVariantSerializer
-    permission_classes = [IsManagerOrAbove]
-
-    def get_queryset(self):
-        return ItemVariant.objects.filter(item_id=self.kwargs['item_pk'])
-
-
 class ItemViewSet(viewsets.ModelViewSet):
     """Complete CRUD for Items"""
     queryset = Item.objects.all().select_related('category')
     serializer_class = ItemSerializer
 
     def get_queryset(self):
-        qs = Item.objects.all().select_related('category').prefetch_related('variants')
+        qs = Item.objects.all().select_related('category')
         sku = self.request.query_params.get('sku')
         search = self.request.query_params.get('search')
         if sku:

@@ -4,7 +4,7 @@ from django.db.models import F
 from django.core.exceptions import ValidationError
 from rest_framework.exceptions import ValidationError as DRFValidationError
 from djmoney.money import Money
-from .models import Item, ItemVariant, PosTransaction, PosTransactionItem, Shift
+from .models import Item, PosTransaction, PosTransactionItem, Shift
 import threading
 from .receipt_service import print_receipt, kick_cash_drawer
 
@@ -34,18 +34,7 @@ def create_pos_transaction(items_data, payment_method, cashier=None, **kwargs):
             if _track_inventory and item.stock < quantity:
                 raise ValidationError(f"Insufficient stock for: {item.name}")
 
-            variant_id = item_entry.get('variant_id')
-            variant_obj = None
-            variant_name_snapshot = ''
-            if variant_id:
-                try:
-                    variant_obj = ItemVariant.objects.get(id=variant_id, item=item, is_active=True)
-                    unit_price = variant_obj.price
-                    variant_name_snapshot = variant_obj.name
-                except ItemVariant.DoesNotExist:
-                    raise DRFValidationError(f"Variant not found or inactive for item: {item.name}")
-            else:
-                unit_price = item.price
+            unit_price = item.price
 
             subtotal = Decimal(str(unit_price)) * Decimal(str(quantity))
             total += subtotal
@@ -56,8 +45,6 @@ def create_pos_transaction(items_data, payment_method, cashier=None, **kwargs):
                 'unit_price': unit_price,
                 'purchase_price': item.purchase_price,
                 'subtotal': subtotal,
-                'variant': variant_obj,
-                'variant_name': variant_name_snapshot,
             })
 
         # Apply discount — server-side validation
@@ -139,8 +126,6 @@ def create_pos_transaction(items_data, payment_method, cashier=None, **kwargs):
                 unit_price=entry['unit_price'],
                 purchase_price=entry['purchase_price'],
                 subtotal=entry['subtotal'],
-                variant=entry['variant'],
-                variant_name=entry['variant_name'],
             )
 
             if _track_inventory:

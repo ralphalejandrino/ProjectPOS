@@ -6,7 +6,6 @@ from django.contrib.auth import authenticate
 from .models import (
     ItemCategory,
     Item,
-    ItemVariant,
     ItemLog,
     PosTransaction,
     PosTransactionItem,
@@ -79,15 +78,8 @@ DEMO_PHOTO_MAP = {
     "Waffle with Cream": "https://picsum.photos/seed/waffle/400/300",
 }
 
-class ItemVariantSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = ItemVariant
-        fields = ['id', 'name', 'price', 'is_active', 'sort_order']
-
-
 class ItemSerializer(serializers.ModelSerializer):
     category_name = serializers.CharField(source='category.name', read_only=True)
-    variants = ItemVariantSerializer(many=True, read_only=True)
     profit_margin = serializers.ReadOnlyField()
     profit_per_unit = serializers.ReadOnlyField()
     is_low_stock = serializers.ReadOnlyField()
@@ -114,7 +106,7 @@ class ItemSerializer(serializers.ModelSerializer):
             'stock', 'low_stock_threshold', 'bar_code', 'bar_code_image',
             'photo', 'description', 'sku', 'expiry_date', 'is_active',
             'profit_margin', 'profit_per_unit', 'is_low_stock',
-            'created_at', 'updated_at', 'variants'
+            'created_at', 'updated_at'
         ]
 
 
@@ -157,14 +149,12 @@ class ItemLogSerializer(serializers.ModelSerializer):
 
 class PosTransactionItemSerializer(serializers.ModelSerializer):
     item_name = serializers.CharField(source='item.name', read_only=True)
-    variant_id = serializers.UUIDField(write_only=True, allow_null=True, required=False)
-    variant_name = serializers.CharField(read_only=True)
 
     class Meta:
         model = PosTransactionItem
         fields = [
             'id', 'item', 'item_name', 'quantity', 'unit_price',
-            'purchase_price', 'subtotal', 'remarks', 'variant_id', 'variant_name'
+            'purchase_price', 'subtotal', 'remarks'
         ]
 
 
