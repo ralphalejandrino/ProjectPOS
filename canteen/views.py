@@ -542,7 +542,7 @@ class PosTransactionViewSet(viewsets.ViewSet):
         void_count = voided.count()
         void_total = float(voided.aggregate(
             total=Sum('total_amount'))['total'] or 0)
-        net_sales = round(gross - void_total, 2)
+        net_sales = round(gross, 2)
         average_transaction = round(
             gross / transaction_count, 2) if transaction_count else 0
 
