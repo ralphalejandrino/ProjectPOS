@@ -569,6 +569,9 @@ window.confirmAction = confirmAction;
                     autoPrintReceipt(data.id);
                     window.cart.items = [];
                     window.cart.total = 0;
+                    window.cart.discountType = '';
+                    window.cart.discountAmount = 0;
+                    window.cart.discountIdNumber = '';
                     updateCart();
                 } else {
                     showCustomError('Transaction Failed', data.error || 'Please try again');
@@ -689,6 +692,9 @@ async function logout() {
                     autoPrintReceipt(data.id);
                     window.cart.items = [];
                     window.cart.total = 0;
+                    window.cart.discountType = '';
+                    window.cart.discountAmount = 0;
+                    window.cart.discountIdNumber = '';
                     updateCart();
                 } else {
                     showCustomError('Transaction Failed', data.error || 'Please try again');
@@ -761,6 +767,9 @@ async function logout() {
                     autoPrintReceipt(data.id);
                     window.cart.items = [];
                     window.cart.total = 0;
+                    window.cart.discountType = '';
+                    window.cart.discountAmount = 0;
+                    window.cart.discountIdNumber = '';
                     updateCart();
                 } else {
                     showCustomError('Transaction Failed', data.error || 'Please try again');
