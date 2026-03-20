@@ -28,8 +28,14 @@ class CustomTokenObtainPairView(TokenObtainPairView):
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def login_view(request):
-    ip = request.META.get('REMOTE_ADDR', 'unknown')
-    cache_key = f'login_attempts_{ip}'
+    # Prefer X-Real-IP set by nginx over REMOTE_ADDR (which is always 127.0.0.1
+    # behind a local reverse proxy). Fall back to X-Forwarded-For, then REMOTE_ADDR.
+    forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR', '')
+    ip = (request.META.get('HTTP_X_REAL_IP')
+          or (forwarded_for.split(',')[0].strip() if forwarded_for else None)
+          or request.META.get('REMOTE_ADDR', 'unknown'))
+    username = request.data.get('username', '')
+    cache_key = f'login_attempts:{ip}:{username}'
     attempts = cache.get(cache_key, 0)
     if attempts >= 10:
         return Response(
