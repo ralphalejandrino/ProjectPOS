@@ -109,6 +109,6 @@ class UserViewSet(viewsets.ModelViewSet):
         """Return usernames for quick-login buttons. No passwords or roles exposed."""
         users = (User.objects
                  .filter(is_active=True, role__in=['cashier', 'manager'])
-                 .values('username')
+                 .values('username', 'first_name', 'last_name')
                  .order_by('username'))
         return Response(list(users))

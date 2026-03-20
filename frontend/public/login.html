@@ -91,8 +91,13 @@
 
     <script src="config.js"></script>
     <script>
+        // Redirect if already authenticated
+        if (localStorage.getItem('access_token')) {
+            window.location.replace('index.html');
+        }
+
         // API_BASE is defined in config.js (loaded before this script)
-        
+
         const loginForm = document.getElementById('loginForm');
         const errorMessage = document.getElementById('errorMessage');
         const errorText = document.getElementById('errorText');
@@ -152,7 +157,6 @@
                     loginBtn.textContent = 'Sign In';
                 }
             } catch (error) {
-                console.error('Login error:', error);
                 errorText.textContent = 'Connection error. Please try again.';
                 errorMessage.classList.remove('hidden');
                 loginBtn.disabled = false;
@@ -168,14 +172,21 @@
                 const users = await response.json();
                 const container = document.getElementById('quick-login-buttons');
                 if (!container) return;
-                const managers = users.filter(u => u.role === 'manager' || u.role === 'admin').slice(0, 1);
-                const cashiers = users.filter(u => u.role === 'cashier').slice(0, 2);
-                const shown = [...managers, ...cashiers];
+                const shown = users.slice(0, 6);
                 shown.forEach(user => {
                     const btn = document.createElement('button');
                     btn.type = 'button';
-                    btn.className = 'flex-1 py-2 px-3 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 transition truncate';
-                    btn.textContent = user.username;
+                    // Compute initials from first_name + last_name, fallback to username initials
+                    const initials = (user.first_name && user.last_name)
+                        ? (user.first_name[0] + user.last_name[0]).toUpperCase()
+                        : user.username.slice(0, 2).toUpperCase();
+                    const displayName = (user.first_name || user.username);
+
+                    btn.innerHTML = `
+                        <div class="w-12 h-12 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-lg mx-auto mb-1">${initials}</div>
+                        <span class="text-sm text-gray-700 truncate max-w-full">${displayName}</span>
+                    `;
+                    btn.className = 'flex flex-col items-center p-2 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer w-20';
                     btn.onclick = () => {
                         document.getElementById('username').value = user.username;
                         document.getElementById('password').focus();
@@ -186,7 +197,7 @@
                     document.getElementById('quick-login-section').classList.remove('hidden');
                 }
             } catch (e) {
-                console.error('Quick login fetch failed:', e);
+                // fetch failed silently — quick login is non-critical
             }
         }
 
@@ -196,7 +207,7 @@
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
       navigator.serviceWorker.register('sw.js')
-        .catch(err => console.log('SW registration failed:', err));
+        .catch(() => {});
     });
   }
 </script>
