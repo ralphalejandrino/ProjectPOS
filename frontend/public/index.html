@@ -513,6 +513,11 @@ window.confirmAction = confirmAction;
             const _cashDiscId = document.getElementById('cash-discount-id');
             if (_cashDiscId) window.cart.discountIdNumber = _cashDiscId.value.trim();
 
+            if ((window.cart.discountType === 'sc' || window.cart.discountType === 'pwd') && !window.cart.discountIdNumber?.trim()) {
+                showCustomError('ID Required', 'SC/PWD ID number is required.');
+                return;
+            }
+
             _paymentInProgress = true;
             const btn = document.getElementById('btn-complete-cash');
             if (btn) { btn.disabled = true; btn.textContent = 'Processing...'; }
@@ -636,6 +641,10 @@ async function logout() {
             if (!reference) { showCustomError('Reference Required', 'Please enter the GCash reference number'); return; }
             const _gcashDiscId = document.getElementById('gcash-discount-id');
             if (_gcashDiscId) window.cart.discountIdNumber = _gcashDiscId.value.trim();
+            if ((window.cart.discountType === 'sc' || window.cart.discountType === 'pwd') && !window.cart.discountIdNumber?.trim()) {
+                showCustomError('ID Required', 'SC/PWD ID number is required.');
+                return;
+            }
             _paymentInProgress = true;
             const btn = document.getElementById('btn-confirm-gcash');
             if (btn) { btn.disabled = true; btn.textContent = 'Processing...'; }
@@ -704,6 +713,10 @@ async function logout() {
             if (!reference) { showCustomError('Reference Required', 'Please enter the Maya reference number'); return; }
             const _mayaDiscId = document.getElementById('maya-discount-id');
             if (_mayaDiscId) window.cart.discountIdNumber = _mayaDiscId.value.trim();
+            if ((window.cart.discountType === 'sc' || window.cart.discountType === 'pwd') && !window.cart.discountIdNumber?.trim()) {
+                showCustomError('ID Required', 'SC/PWD ID number is required.');
+                return;
+            }
             _paymentInProgress = true;
             const btn = document.getElementById('btn-confirm-maya');
             if (btn) { btn.disabled = true; btn.textContent = 'Processing...'; }

@@ -76,6 +76,12 @@ def create_pos_transaction(items_data, payment_method, cashier=None, **kwargs):
                     f"(₱{expected}) for discount type '{discount_type}'."
                 )
 
+        # Require a non-empty ID number for SC/PWD discounts
+        if discount_type in ('sc', 'pwd'):
+            discount_id_number = kwargs.get('discount_id_number', '')
+            if not discount_id_number or not str(discount_id_number).strip():
+                raise DRFValidationError("SC/PWD ID number is required.")
+
         final_total = total - discount_decimal
 
         # Attach the currently open shift, if any
