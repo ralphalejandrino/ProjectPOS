@@ -36,8 +36,9 @@ async function loadDashboard() {
     try {
         // Fetch transactions
         const response = await authenticatedFetch(`${API_URL}/transactions/`);
-        const transactions = await response.json();
-        allTransactions = transactions;
+        const transactionsRaw = await response.json();
+        allTransactions = transactionsRaw.results !== undefined ? transactionsRaw.results : transactionsRaw;
+        const transactions = allTransactions;
 
         // Calculate daily sales for last 7 days
         const last7Days = [];
@@ -46,7 +47,7 @@ async function loadDashboard() {
             const date = new Date(today);
             date.setDate(date.getDate() - i);
             const dateStr = date.toISOString().split('T')[0];
-            
+
             const dayTransactions = transactions.filter(t => {
                 const txnDate = new Date(t.created_at).toISOString().split('T')[0];
                 return txnDate === dateStr;
@@ -147,7 +148,8 @@ async function loadDashboard() {
 async function loadTransactionHistory() {
     try {
         const response = await authenticatedFetch(`${API_URL}/transactions/`);
-        allTransactions = await response.json();
+        const historyRaw = await response.json();
+        allTransactions = historyRaw.results !== undefined ? historyRaw.results : historyRaw;
         renderTransactionHistory(allTransactions);
     } catch (error) {
         console.error('Error loading history:', error);
