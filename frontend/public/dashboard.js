@@ -1,5 +1,27 @@
 // API_URL is defined in config.js (loaded before this script)
 
+// Minimal alert helper — matches the dynamic modal pattern used in viewReceipt()
+function showDashboardAlert(message) {
+    const modal = document.createElement('div');
+    modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4';
+    modal.innerHTML = `
+        <div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full">
+            <div class="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-5 text-center rounded-t-2xl">
+                <h2 class="text-lg font-bold">Notice</h2>
+            </div>
+            <div class="p-6 text-center text-gray-700">${message}</div>
+            <div class="px-6 pb-6">
+                <button onclick="this.closest('.fixed').remove()"
+                        class="w-full bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700">
+                    OK
+                </button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+}
+
 let allTransactions = [];
 let revenueChart = null;
 let topItemsChart = null;
@@ -250,7 +272,7 @@ async function viewReceipt(transactionId) {
         };
     } catch (error) {
         console.error('Error loading receipt:', error);
-        alert('Error loading receipt details');
+        showDashboardAlert('Error loading receipt details');
     }
 }
 
@@ -259,7 +281,7 @@ async function loadDailyReport() {
     const selectedDate = dateInput.value;
     
     if (!selectedDate) {
-        alert('Please select a date');
+        showDashboardAlert('Please select a date');
         return;
     }
     
