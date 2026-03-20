@@ -131,12 +131,14 @@ def create_pos_transaction(items_data, payment_method, cashier=None, **kwargs):
         # Re-derive expected discount from BusinessProfile rates
         if discount_decimal > Decimal('0.00') and discount_type:
             _bp_check = BusinessProfile.objects.first()
-            if discount_type == 'sc':
+            if discount_type in ('sc', 'pwd'):
                 rate = Decimal(str(_bp_check.sc_discount_rate if _bp_check else 20)) / Decimal('100')
-                expected = (total * rate).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-            elif discount_type == 'pwd':
-                rate = Decimal(str(_bp_check.pwd_discount_rate if _bp_check else 20)) / Decimal('100')
-                expected = (total * rate).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+                if _bp_check and _bp_check.vat_enabled:
+                    vat_rate = Decimal(str(_bp_check.vat_rate)) / Decimal('100')
+                    vat_exclusive = (total / (1 + vat_rate)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+                else:
+                    vat_exclusive = total
+                expected = (vat_exclusive * rate).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
             elif discount_type == 'promo':
                 if not (_bp_check and _bp_check.promo_discount_enabled):
                     raise DRFValidationError("Promo discounts are not enabled.")
