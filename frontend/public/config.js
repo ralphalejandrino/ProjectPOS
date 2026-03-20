@@ -47,9 +47,32 @@ async function authenticatedFetch(url, options = {}) {
 
     const response = await fetch(url, { ...options, headers });
 
-    // Handle session expiry
+    // Handle session expiry — attempt token refresh before redirecting
     if (response.status === 401) {
-        console.warn('Unauthorized request. Redirecting to login...');
+        const refreshToken = localStorage.getItem('refresh_token');
+        if (refreshToken) {
+            try {
+                const refreshResponse = await fetch(`${AUTH_API}/token/refresh/`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ refresh: refreshToken })
+                });
+                if (refreshResponse.ok) {
+                    const refreshData = await refreshResponse.json();
+                    setToken(refreshData.access, refreshData.refresh || null);
+                    // Retry original request directly with fetch() — NOT authenticatedFetch() to prevent infinite loop
+                    const retryHeaders = { ...(options.headers || {}) };
+                    retryHeaders['Authorization'] = `Bearer ${refreshData.access}`;
+                    if (!(options.body instanceof FormData)) {
+                        retryHeaders['Content-Type'] = retryHeaders['Content-Type'] || 'application/json';
+                    }
+                    return await fetch(url, { ...options, headers: retryHeaders });
+                }
+            } catch (e) {
+                console.error('Token refresh failed:', e);
+            }
+        }
+        console.warn('Session expired. Redirecting to login...');
         clearTokens();
         if (!window.location.pathname.includes('login.html')) {
             window.location.href = 'login.html';

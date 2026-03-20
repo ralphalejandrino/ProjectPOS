@@ -1,15 +1,21 @@
+# DEPRECATED — frontend is now served by nginx over HTTPS (FIX-047)
+# nginx site config: /etc/nginx/sites-available/canteen-pos
+# TLS cert: /home/ralph/TarsierPOS/certs/ralph-optiplex-3060.example-tailnet.ts.net.{crt,key}
+# Cert renewal: sudo tailscale cert ralph-optiplex-3060.example-tailnet.ts.net
+#               then: sudo mv ralph-optiplex-3060.*.{crt,key} /home/ralph/TarsierPOS/certs/
+#               then: sudo systemctl reload nginx
+#
+# This Python HTTP server service is DISABLED.
+# To re-enable plain-HTTP fallback on :8081 (local/dev only), restore this file.
 [Unit]
-Description=TarsierPos Frontend (Static :8081)
+Description=TarsierPos Frontend — DISABLED (nginx handles HTTPS, see FIX-047)
 After=network.target
+ConditionPathExists=/dev/null
 
 [Service]
-User=__DEPLOY_USER__
-WorkingDirectory=/home/__DEPLOY_USER__/TarsierPOS/frontend/public
-ExecStart=/usr/bin/python3 -c "import os, sys; sys.path.insert(0, os.getcwd()); from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer; server = ThreadingHTTPServer(('0.0.0.0', 8081), SimpleHTTPRequestHandler); server.serve_forever()"
-Restart=always
-RestartSec=5
-StandardOutput=journal
-StandardError=journal
+Type=oneshot
+ExecStart=/bin/true
+RemainAfterExit=yes
 
 [Install]
 WantedBy=multi-user.target
