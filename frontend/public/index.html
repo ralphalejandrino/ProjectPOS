@@ -306,7 +306,14 @@
     <!-- SCRIPTS -->
     <script src="config.js"></script>
     <script src="app.js"></script>
-    <script src="payments.js"></script>
+    <!-- payments.js intentionally NOT loaded: ISSUE-016 confirmed it is dead code.
+         The PaymentSystem object in payments.js attaches event listeners to
+         #gcash-payment-btn / #maya-payment-btn which do not exist in this HTML.
+         Its payment flows target ${PAYMENTS_API}/gcash|maya|card/ (wrong endpoints)
+         and lack discount fields. All active payment handling (cash, GCash, Maya)
+         is implemented inline below via completeCashSale / completeGCashSale /
+         completeMayaSale. The file is retained for reference — do not delete until
+         Ralph confirms the legacy endpoints are fully decommissioned. -->
     <script>
         // Cash Payment Functions
         function showCashModal() {

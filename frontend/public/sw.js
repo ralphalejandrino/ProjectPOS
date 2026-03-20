@@ -1,4 +1,4 @@
-const CACHE_NAME = 'tarsierpos-v24';
+const CACHE_NAME = 'tarsierpos-v25';
 const ASSETS = [
   'index.html',
   'login.html',
@@ -10,7 +10,6 @@ const ASSETS = [
   'app.js',
   'config.js',
   'dashboard.js',
-  'payments.js',
   'styles.css',
   'shared-styles.css',
   'manifest.json',
