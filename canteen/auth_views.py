@@ -100,9 +100,9 @@ class UserViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'], permission_classes=[AllowAny], url_path='quick-login')
     def quick_login(self, request):
-        """Return usernames + roles for quick-login buttons. No passwords exposed."""
+        """Return usernames for quick-login buttons. No passwords or roles exposed."""
         users = (User.objects
                  .filter(is_active=True, role__in=['cashier', 'manager'])
-                 .values('username', 'role')
-                 .order_by('role', 'username'))
+                 .values('username')
+                 .order_by('username'))
         return Response(list(users))
