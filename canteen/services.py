@@ -139,6 +139,8 @@ def create_pos_transaction(items_data, payment_method, cashier=None, **kwargs):
         discount_amount = kwargs.get('discount_amount', 0)
         discount_decimal = Decimal(str(discount_amount)) if discount_amount else Decimal('0.00')
         discount_type = kwargs.get('discount_type', '')
+        _sc_pwd_vat_amount = Decimal('0.00')
+        _is_vat_exempt = False
 
         if discount_decimal > total:
             raise DRFValidationError(
@@ -153,6 +155,8 @@ def create_pos_transaction(items_data, payment_method, cashier=None, **kwargs):
                 if _bp_check and _bp_check.vat_enabled:
                     vat_rate = Decimal(str(_bp_check.vat_rate)) / Decimal('100')
                     vat_exclusive = (total / (1 + vat_rate)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+                    _sc_pwd_vat_amount = (total - vat_exclusive).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+                    _is_vat_exempt = True
                 else:
                     vat_exclusive = total
                 expected = (vat_exclusive * rate).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
@@ -161,6 +165,8 @@ def create_pos_transaction(items_data, payment_method, cashier=None, **kwargs):
                 if _bp_check and _bp_check.vat_enabled:
                     vat_rate = Decimal(str(_bp_check.vat_rate)) / Decimal('100')
                     vat_exclusive = (total / (1 + vat_rate)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+                    _sc_pwd_vat_amount = (total - vat_exclusive).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+                    _is_vat_exempt = True
                 else:
                     vat_exclusive = total
                 expected = (vat_exclusive * rate).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
@@ -182,7 +188,12 @@ def create_pos_transaction(items_data, payment_method, cashier=None, **kwargs):
             if not discount_id_number or not str(discount_id_number).strip():
                 raise DRFValidationError("SC/PWD ID number is required.")
 
-        final_total = total - discount_decimal
+        if _is_vat_exempt:
+            final_total = (total - _sc_pwd_vat_amount - discount_decimal).quantize(
+                Decimal('0.01'), rounding=ROUND_HALF_UP
+            )
+        else:
+            final_total = total - discount_decimal
 
         # Attach the currently open shift, if any
         current_shift = Shift.objects.filter(
@@ -201,6 +212,8 @@ def create_pos_transaction(items_data, payment_method, cashier=None, **kwargs):
             discount_amount=discount_decimal,
             discount_type=kwargs.get('discount_type', ''),
             discount_id_number=kwargs.get('discount_id_number', ''),
+            vat_exempt=_is_vat_exempt,
+            vat_amount=_sc_pwd_vat_amount,
             status='completed',
             payment_method=payment_method,
             cash_received=cash_received_amount,

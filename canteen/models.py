@@ -1,5 +1,6 @@
 import io
 import uuid
+from decimal import Decimal
 from barcode import Code128
 from barcode.writer import ImageWriter
 from django.core.files.base import ContentFile
@@ -409,6 +410,16 @@ class PosTransaction(Transaction):
         default='',
         help_text='SC/PWD ID number for audit trail',
         max_length=50
+    )
+    vat_exempt = models.BooleanField(
+        default=False,
+        help_text='True when transaction is VAT-exempt (SC/PWD under RA 9994 / RA 10754)',
+    )
+    vat_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        help_text='VAT amount removed from transaction total (0.00 for non-exempt or VAT-disabled)',
     )
     shift = models.ForeignKey(
         'Shift',

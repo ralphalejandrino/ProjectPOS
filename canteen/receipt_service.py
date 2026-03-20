@@ -81,16 +81,25 @@ def print_receipt(transaction):
         # Summary subtotal + total
         total = float(transaction.total_amount.amount) if hasattr(
             transaction.total_amount, 'amount') else float(transaction.total_amount)
-        subtotal_label = 'Subtotal:'
+        is_vat_exempt = getattr(transaction, 'vat_exempt', False)
+        stored_vat_amount = float(getattr(transaction, 'vat_amount', 0) or 0)
+        disc_type = getattr(transaction, 'discount_type', '')
+
+        subtotal_label = 'Subtotal (VAT-inc):' if (profile and profile.vat_enabled) or is_vat_exempt else 'Subtotal:'
         subtotal_val = f'PHP {subtotal_sum:.2f}'
         subtotal_padding = RECEIPT_WIDTH - len(subtotal_label) - len(subtotal_val)
         p.text(subtotal_label + ' ' * max(subtotal_padding, 1) + subtotal_val + '\n')
+
+        # VAT removed line (only for VAT-exempt SC/PWD transactions)
+        if is_vat_exempt and stored_vat_amount > 0:
+            vat_rem_label = 'VAT (12%) Removed:'
+            vat_rem_val = f'-PHP {stored_vat_amount:.2f}'
+            vat_rem_padding = RECEIPT_WIDTH - len(vat_rem_label) - len(vat_rem_val)
+            p.text(vat_rem_label + ' ' * max(vat_rem_padding, 1) + vat_rem_val + '\n')
+
         # Discount line (only when a discount was applied)
         discount = float(transaction.discount_amount) if transaction.discount_amount else 0.0
         if discount > 0:
-            # Handle PH Law SC/PWD discount labels
-            # TODO: SC/PWD VAT exemption — full BIR compliance in Tier 2
-            disc_type = getattr(transaction, 'discount_type', '')
             if disc_type == 'sc':
                 disc_label = 'SC Discount (20%):'
             elif disc_type == 'pwd':
@@ -99,30 +108,41 @@ def print_receipt(transaction):
                 disc_label = 'Promo Discount:'
             else:
                 disc_label = 'Discount:'
-            
+
             disc_val = f'-PHP {discount:.2f}'
             disc_padding = RECEIPT_WIDTH - len(disc_label) - len(disc_val)
             p.text(disc_label + ' ' * max(disc_padding, 1) + disc_val + '\n')
-            
+
             # Print SC/PWD ID if provided
             id_number = getattr(transaction, 'discount_id_number', '')
             if id_number and disc_type in ('sc', 'pwd'):
                 id_prefix = 'SC ID: ' if disc_type == 'sc' else 'PWD ID: '
                 p.text(f'{id_prefix}{id_number}\n')
+
         p.set(bold=True)
         total_label = 'TOTAL:'
         total_val = f'PHP {total:.2f}'
         total_padding = RECEIPT_WIDTH - len(total_label) - len(total_val)
         p.text(total_label + ' ' * max(total_padding, 1) + total_val + '\n')
         p.set(bold=False)
-        # VAT info line (after TOTAL, when VAT is enabled on the profile)
-        if profile and profile.vat_enabled:
+
+        # VAT info line — only for non-exempt VAT-enabled transactions
+        if profile and profile.vat_enabled and not is_vat_exempt:
             vat_rate = float(profile.vat_rate)
             vat_amount = total * vat_rate / (100 + vat_rate)
             vat_label = f'Incl. VAT ({vat_rate:.0f}%):'
             vat_val = f'PHP {vat_amount:.2f}'
             vat_padding = RECEIPT_WIDTH - len(vat_label) - len(vat_val)
             p.text(vat_label + ' ' * max(vat_padding, 1) + vat_val + '\n')
+
+        # VAT-exempt declaration (RA 9994 for SC, RA 10754 for PWD)
+        if is_vat_exempt:
+            ra_ref = 'RA 9994' if disc_type == 'sc' else 'RA 10754'
+            p.set(align='center', bold=True)
+            p.text('VAT-EXEMPT TRANSACTION\n')
+            p.set(bold=False)
+            p.text(f'({ra_ref})\n')
+            p.set(align='left')
         p.text(f'Payment: {transaction.get_payment_method_display()}\n')
 
         if transaction.payment_method == 'cash' and transaction.cash_received:
