@@ -1,11 +1,12 @@
 from django.contrib import admin
 from .models import (
-    ItemCategory, 
-    Item, 
-    ItemLog, 
-    PosTransaction, 
-    PosTransactionItem, 
-    Cart, 
+    ItemCategory,
+    Item,
+    ItemLog,
+    OfficialReceiptCounter,
+    PosTransaction,
+    PosTransactionItem,
+    Cart,
     CartItem,
     User,
     EmployeeProfile,
@@ -27,6 +28,21 @@ class ItemAdmin(admin.ModelAdmin):
 @admin.register(ItemLog)
 class ItemLogAdmin(admin.ModelAdmin):
     list_display = ['item', 'action', 'created_at']
+
+@admin.register(OfficialReceiptCounter)
+class OfficialReceiptCounterAdmin(admin.ModelAdmin):
+    list_display = ['date', 'counter', 'updated_at']
+    readonly_fields = ['date', 'counter', 'updated_at']
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
 
 @admin.register(PosTransaction)
 class PosTransactionAdmin(admin.ModelAdmin):
