@@ -1001,7 +1001,7 @@ def get_gateway_qr_config(request, gateway):
         if not config:
             return Response({'qr_url': None, 'is_active': False})
         return Response({
-            'qr_url': request.build_absolute_uri(config.qr_image.url) if config.qr_image else None,
+            'qr_url': None,
             'is_active': config.is_active
         })
     except Exception as e:

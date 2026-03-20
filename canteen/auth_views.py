@@ -92,12 +92,6 @@ class UserViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'], permission_classes=[AllowAny], url_path='quick-login')
     def quick_login(self, request):
         """Return usernames + roles for quick-login buttons. No passwords exposed."""
-        ip = request.META.get('REMOTE_ADDR', 'unknown')
-        cache_key = f'quick_login_list_{ip}'
-        if cache.get(cache_key):
-            return Response({'error': 'Too many requests.'}, status=429)
-        cache.set(cache_key, True, timeout=10)  # 1 request per 10 seconds per IP
-
         users = (User.objects
                  .filter(is_active=True, role__in=['cashier', 'manager'])
                  .values('username', 'role')

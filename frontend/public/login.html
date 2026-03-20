@@ -185,7 +185,9 @@
                 if (shown.length > 0) {
                     document.getElementById('quick-login-section').classList.remove('hidden');
                 }
-            } catch (e) { /* silently fail — quick login is optional */ }
+            } catch (e) {
+                console.error('Quick login fetch failed:', e);
+            }
         }
 
         document.addEventListener('DOMContentLoaded', loadQuickLoginButtons);
