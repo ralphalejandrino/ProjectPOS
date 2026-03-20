@@ -26,10 +26,17 @@ fi
 
 # Use SQLite backup API for safe, consistent backups (not cp)
 if sqlite3 "$DB_SRC" ".backup '$DEST'" 2>/dev/null; then
-    # Rotate — keep only the 7 most recent backups
-    ls -t "$BACKUP_DIR"/db_*.sqlite3 2>/dev/null | tail -n +8 | xargs rm -f 2>/dev/null || true
-    KEPT=$(ls "$BACKUP_DIR"/db_*.sqlite3 2>/dev/null | wc -l)
-    echo "[$TIMESTAMP] Backed up to $FILENAME ($KEPT kept)" >> "$LOG"
+    # Verify the backup file is a valid, readable SQLite database
+    INTEGRITY=$(sqlite3 "$DEST" "PRAGMA integrity_check;" 2>/dev/null)
+    if [ "$INTEGRITY" = "ok" ]; then
+        # Rotate — keep only the 7 most recent backups
+        ls -t "$BACKUP_DIR"/db_*.sqlite3 2>/dev/null | tail -n +8 | xargs rm -f 2>/dev/null || true
+        KEPT=$(ls "$BACKUP_DIR"/db_*.sqlite3 2>/dev/null | wc -l)
+        echo "[$TIMESTAMP] Backed up to $FILENAME — integrity OK ($KEPT kept)" >> "$LOG"
+    else
+        echo "[$TIMESTAMP] ERROR: Backup integrity check failed ($INTEGRITY) — deleting $FILENAME" >> "$LOG"
+        rm -f "$DEST"
+    fi
 else
     echo "[$TIMESTAMP] ERROR: sqlite3 backup failed for $DEST" >> "$LOG"
 fi
