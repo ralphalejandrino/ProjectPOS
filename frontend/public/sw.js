@@ -1,4 +1,4 @@
-const CACHE_NAME = 'tarsierpos-v39';
+const CACHE_NAME = 'tarsierpos-v40';
 const ASSETS = [
   'index.html',
   'login.html',
