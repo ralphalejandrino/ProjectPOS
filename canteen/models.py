@@ -592,6 +592,9 @@ class PaymentGatewayConfig(models.Model):
     enable_terminal = models.BooleanField(default=False)
     terminal_id = models.CharField(max_length=255, blank=True, null=True)
 
+    # QR Code image
+    qr_image = models.ImageField(upload_to='qr/', blank=True, null=True)
+
     # Metadata
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
