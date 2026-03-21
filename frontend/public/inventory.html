@@ -408,13 +408,14 @@
                 const data = await response.json();
                 allCategories = data.results !== undefined ? data.results : data;
                 displayCategories();
-                
+
                 const select = document.getElementById('product-category');
                 select.innerHTML = '<option value="">Select category...</option>';
                 allCategories.forEach(cat => {
                     select.innerHTML += `<option value="${cat.id}">${cat.name}</option>`;
                 });
             } catch (error) {
+                showAlert('Load Error', 'Failed to load categories: ' + error.message, '❌');
             }
         }
 
@@ -478,11 +479,18 @@
         async function loadProducts() {
             try {
                 const response = await authenticatedFetch(`${API_BASE}/items/`);
+                if (!response.ok) {
+                    document.getElementById('products-table-body').innerHTML =
+                        `<tr><td colspan="9" class="px-6 py-8 text-center text-red-500">Failed to load products (${response.status}). Please refresh.</td></tr>`;
+                    return;
+                }
                 const raw = await response.json();
                 allProducts = raw.results !== undefined ? raw.results : raw;
                 renderProductsTable(allProducts);
                 renderLowStockAlerts();
             } catch (error) {
+                document.getElementById('products-table-body').innerHTML =
+                    `<tr><td colspan="9" class="px-6 py-8 text-center text-red-500">Error loading products: ${error.message}. Please refresh.</td></tr>`;
             }
         }
 
@@ -497,11 +505,13 @@
 
                 document.getElementById('stat-total-items').textContent = data.total_items;
                 document.getElementById('stat-low-stock').textContent = data.low_stock_count;
-                document.getElementById('stat-avg-margin').textContent = `${data.average_profit_margin.toFixed(1)}%`;
-                document.getElementById('stat-inventory-value').textContent = `₱${data.total_inventory_value.toFixed(2)}`;
-                document.getElementById('stat-total-cost').textContent = `₱${data.total_cost_value.toFixed(2)}`;
-                document.getElementById('stat-potential-profit').textContent = `₱${data.potential_profit.toFixed(2)}`;
+                document.getElementById('stat-avg-margin').textContent =
+                    data.average_profit_margin != null ? `${Number(data.average_profit_margin).toFixed(1)}%` : 'N/A';
+                document.getElementById('stat-inventory-value').textContent = `₱${Number(data.total_inventory_value || 0).toFixed(2)}`;
+                document.getElementById('stat-total-cost').textContent = `₱${Number(data.total_cost_value || 0).toFixed(2)}`;
+                document.getElementById('stat-potential-profit').textContent = `₱${Number(data.potential_profit || 0).toFixed(2)}`;
             } catch (error) {
+                // Analytics failure is non-fatal — products still load
             }
         }
 
@@ -1164,18 +1174,27 @@
                     const existingData = await existingRes.json();
                     const existing = existingData.results !== undefined ? existingData.results : existingData;
                     for (const assignment of existing) {
-                        await authenticatedFetch(`${API_BASE}/categories/${categoryId}/variant-groups/${assignment.id}/`, {
+                        const delRes = await authenticatedFetch(`${API_BASE}/categories/${categoryId}/variant-groups/${assignment.id}/`, {
                             method: 'DELETE'
                         });
+                        if (!delRes.ok && delRes.status !== 404) {
+                            showAlert('Save Error', `Failed to remove assignment (${delRes.status}). Please try again.`, '❌');
+                            return;
+                        }
                     }
                 }
                 // Step 2: create one assignment per checked group
                 for (const groupId of checked) {
-                    await authenticatedFetch(`${API_BASE}/categories/${categoryId}/variant-groups/`, {
+                    const postRes = await authenticatedFetch(`${API_BASE}/categories/${categoryId}/variant-groups/`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ group_id: groupId })
                     });
+                    if (!postRes.ok) {
+                        const errData = await postRes.json().catch(() => ({}));
+                        showAlert('Save Error', `Failed to assign group (${postRes.status}): ${JSON.stringify(errData)}`, '❌');
+                        return;
+                    }
                 }
                 closeCatVariantModal();
                 showAlert('Saved', 'Category variant groups updated.', '✅');
