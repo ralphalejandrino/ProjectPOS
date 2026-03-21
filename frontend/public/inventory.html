@@ -1224,9 +1224,11 @@
                     <div class="flex items-center gap-2 p-2 border border-gray-100 rounded">
                         <input type="checkbox" class="prod-vg-enabled w-4 h-4 rounded" value="${g.id}" ${enabled ? 'checked' : ''}>
                         <span class="flex-1 text-sm text-gray-700">${escapeHtml(g.name)}</span>
-                        <label class="flex items-center gap-1 text-xs text-gray-500">
-                            <input type="checkbox" class="prod-vg-required w-3 h-3" data-group="${g.id}" ${required ? 'checked' : ''}> req
-                        </label>
+                        <select class="prod-vg-required text-xs border border-gray-200 rounded px-1 py-0.5" data-group="${g.id}">
+                            <option value="inherit" ${ov ? '' : 'selected'}>Default</option>
+                            <option value="required" ${(ov && ov.is_required_override === true) ? 'selected' : ''}>Required</option>
+                            <option value="optional" ${(ov && ov.is_required_override === false) ? 'selected' : ''}>Optional</option>
+                        </select>
                     </div>`;
                 }).join('');
             } catch (e) {
@@ -1259,7 +1261,9 @@
                         body: JSON.stringify({
                             group_id: el.value,
                             enabled: el.checked,
-                            is_required_override: reqEl ? reqEl.checked : null,
+                            is_required_override: reqEl
+                                    ? (reqEl.value === 'required' ? true : reqEl.value === 'optional' ? false : null)
+                                    : null,
                         })
                     });
                 }
