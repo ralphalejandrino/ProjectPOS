@@ -222,10 +222,15 @@
                 const bpData = await bp.json();
                 if (bpData.low_stock_threshold) lowStockThreshold = bpData.low_stock_threshold;
             } catch (e) {}
-            // Initial load with potential date filters
-            const dateFrom = document.getElementById('date-from').value;
-            const dateTo = document.getElementById('date-to').value;
-            await loadDashboardData(dateFrom, dateTo);
+            // Default date range: last 30 days
+            const today = new Date();
+            const thirtyDaysAgo = new Date(today);
+            thirtyDaysAgo.setDate(today.getDate() - 30);
+            const toStr = today.toISOString().split('T')[0];
+            const fromStr = thirtyDaysAgo.toISOString().split('T')[0];
+            document.getElementById('date-from').value = fromStr;
+            document.getElementById('date-to').value = toStr;
+            await loadDashboardData(fromStr, toStr);
             loadSiteName();
             loadColorScheme();
         });
