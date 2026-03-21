@@ -75,7 +75,7 @@ async function loadDashboard() {
                 return txnDate === dateStr;
             });
             
-            const total = dayTransactions.reduce((sum, t) => sum + parseFloat(t.total), 0);
+            const total = dayTransactions.reduce((sum, t) => sum + parseFloat(t.total_amount), 0);
             const count = dayTransactions.length;
             
             last7Days.push({
@@ -197,7 +197,7 @@ function renderTransactionHistory(transactions) {
                     ${txn.payment_method === 'cash' ? '💵 Cash' : '💙 GCash'}
                 </span>
             </td>
-            <td class="px-4 py-3 text-right font-bold">₱${parseFloat(txn.total).toFixed(2)}</td>
+            <td class="px-4 py-3 text-right font-bold">₱${parseFloat(txn.total_amount).toFixed(2)}</td>
             <td class="px-4 py-3 text-center">
                 <button onclick="viewReceipt('${txn.id}')" 
                         class="text-blue-600 hover:text-blue-800 font-semibold text-sm">
@@ -269,7 +269,7 @@ async function viewReceipt(transactionId) {
                     <div class="pt-4 border-t">
                         <div class="flex justify-between text-xl font-bold">
                             <span>Total:</span>
-                            <span class="text-blue-600">₱${parseFloat(txn.total).toFixed(2)}</span>
+                            <span class="text-blue-600">₱${parseFloat(txn.total_amount).toFixed(2)}</span>
                         </div>
                     </div>
                     <button onclick="this.closest('.fixed').remove()"
@@ -304,9 +304,9 @@ async function loadDailyReport() {
         return txnDate === selectedDate;
     });
     
-    const total = filtered.reduce((sum, txn) => sum + parseFloat(txn.total), 0);
-    const cash = filtered.filter(t => t.payment_method === 'cash').reduce((sum, t) => sum + parseFloat(t.total), 0);
-    const gcash = filtered.filter(t => t.payment_method === 'gcash').reduce((sum, t) => sum + parseFloat(t.total), 0);
+    const total = filtered.reduce((sum, txn) => sum + parseFloat(txn.total_amount), 0);
+    const cash = filtered.filter(t => t.payment_method === 'cash').reduce((sum, t) => sum + parseFloat(t.total_amount), 0);
+    const gcash = filtered.filter(t => t.payment_method === 'gcash').reduce((sum, t) => sum + parseFloat(t.total_amount), 0);
     
     const content = document.getElementById('daily-report-content');
     content.innerHTML = `
