@@ -162,7 +162,6 @@ async function loadDashboard() {
         });
 
     } catch (error) {
-        console.error('Error loading dashboard:', error);
     }
 }
 
@@ -174,7 +173,6 @@ async function loadTransactionHistory() {
         allTransactions = historyRaw.results !== undefined ? historyRaw.results : historyRaw;
         renderTransactionHistory(allTransactions);
     } catch (error) {
-        console.error('Error loading history:', error);
     }
 }
 
@@ -285,7 +283,6 @@ async function viewReceipt(transactionId) {
             if (e.target === modal) modal.remove();
         };
     } catch (error) {
-        console.error('Error loading receipt:', error);
         showDashboardAlert('Error loading receipt details');
     }
 }

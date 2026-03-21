@@ -64,7 +64,6 @@ async function loadCategories() {
         allCategories = data.results !== undefined ? data.results : data;
         displayCategories();
     } catch (error) {
-        console.error('Failed to load categories:', error);
     }
 }
 
@@ -72,7 +71,6 @@ function displayCategories() {
     const container = document.getElementById('category-buttons');
     
     if (!container) {
-        console.error('category-buttons element not found!');
         return;
     }
     
@@ -107,7 +105,6 @@ async function loadProducts() {
         allProducts = data.results !== undefined ? data.results : data;
         displayProducts(allProducts);
     } catch (error) {
-        console.error('Failed to load products:', error);
         const grid = document.getElementById('products-grid');
         if (grid) {
             grid.innerHTML = '<p class="col-span-full text-red-500 text-center p-4">Failed to load menu items. Please refresh the page.</p>';
@@ -119,7 +116,6 @@ function displayProducts(products) {
     const grid = document.getElementById('products-grid');
 
     if (!grid) {
-        console.error('products-grid element not found!');
         return;
     }
 
