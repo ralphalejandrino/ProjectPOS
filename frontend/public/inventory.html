@@ -415,7 +415,6 @@
                     select.innerHTML += `<option value="${cat.id}">${cat.name}</option>`;
                 });
             } catch (error) {
-                console.error('Error loading categories:', error);
             }
         }
 
@@ -484,7 +483,6 @@
                 renderProductsTable(allProducts);
                 renderLowStockAlerts();
             } catch (error) {
-                console.error('Error loading products:', error);
             }
         }
 
@@ -504,7 +502,6 @@
                 document.getElementById('stat-total-cost').textContent = `₱${data.total_cost_value.toFixed(2)}`;
                 document.getElementById('stat-potential-profit').textContent = `₱${data.potential_profit.toFixed(2)}`;
             } catch (error) {
-                console.error('Error loading analytics:', error);
             }
         }
 
@@ -728,7 +725,6 @@
                     showAlert('Error', 'Failed to save product: ' + JSON.stringify(error), '❌');
                 }
             } catch (error) {
-                console.error('Error saving product:', error);
                 showAlert('Error', 'An error occurred while saving. Please try again.', '❌');
             }
         }
@@ -748,7 +744,6 @@
                     showAlert('Error', 'Failed to delete product. Please try again.', '❌');
                 }
             } catch (error) {
-                console.error('Error:', error);
                 showAlert('Error', 'An error occurred. Please try again.', '❌');
             }
         }
@@ -825,9 +820,9 @@
                     loadCategories(); // refresh sidebar + product form dropdown
                 } else {
                     const d = await res.json();
-                    alert(d.error || 'Failed to add category.');
+                    showAlert('Error', d.error || 'Failed to add category.', '❌');
                 }
-            } catch(e) { alert('Failed to add category.'); }
+            } catch(e) { showAlert('Error', 'Failed to add category.', '❌'); }
         }
 
         async function saveCategory(id) {
@@ -843,9 +838,9 @@
                 if (res.ok) {
                     loadCategories(); // refresh sidebar + dropdown
                 } else {
-                    alert('Failed to save category.');
+                    showAlert('Error', 'Failed to save category.', '❌');
                 }
-            } catch(e) { alert('Failed to save category.'); }
+            } catch(e) { showAlert('Error', 'Failed to save category.', '❌'); }
         }
 
         async function deleteCategory(id, name, productCount) {
@@ -863,9 +858,9 @@
                     loadCategories();
                 } else {
                     const d = await res.json();
-                    alert(d.error || 'Failed to delete category.');
+                    showAlert('Error', d.error || 'Failed to delete category.', '❌');
                 }
-            } catch(e) { alert('Failed to delete category.'); }
+            } catch(e) { showAlert('Error', 'Failed to delete category.', '❌'); }
         }
 
         // ── Variant Manager (Step 6) ──────────────────────────────────────────
@@ -1268,7 +1263,6 @@
                     });
                 }
             } catch (e) {
-                console.error('Failed to save product variant groups:', e);
             }
         }
 
@@ -1286,7 +1280,7 @@
                 const data = await res.json();
                 showImportResult(data);
             } catch (err) {
-                alert('Import failed: ' + err.message);
+                showAlert('Import Failed', err.message, '❌');
             }
             this.value = '';
         });

@@ -225,6 +225,7 @@
                            class="w-24 border border-gray-300 rounded-lg px-3 py-2 text-sm"
                            placeholder="0">
                     <span class="text-sm text-gray-600">% discount</span>
+                    <span class="text-xs text-gray-400">(max 50%)</span>
                     <button onclick="applyModalDiscount('cash')"
                             class="px-3 py-2 bg-gray-700 text-white rounded-lg text-sm font-medium">
                         Apply
@@ -599,7 +600,6 @@ window.confirmAction = confirmAction;
 
         // Dropdown Menu
         document.addEventListener('DOMContentLoaded', () => {
-            loadSiteName();
             const menuButton = document.getElementById('menu-button');
             const dropdown = document.getElementById('dropdown-menu');
             const arrow = document.getElementById('menu-arrow');
@@ -954,7 +954,7 @@ async function logout() {
         const btn = document.getElementById('thermal-print-btn');
         if (!btn) return;
         const txId = btn.dataset.transactionId;
-        if (!txId) { alert('No transaction ID — cannot print.'); return; }
+        if (!txId) { showCustomError('Print Error', 'No transaction ID — cannot print.'); return; }
         btn.disabled = true;
         btn.textContent = 'Printing...';
         try {
@@ -1063,6 +1063,7 @@ async function logout() {
                            class="w-24 border border-gray-300 rounded-lg px-3 py-2 text-sm"
                            placeholder="0">
                     <span class="text-sm text-gray-600">% discount</span>
+                    <span class="text-xs text-gray-400">(max 50%)</span>
                     <button onclick="applyModalDiscount('gcash')"
                             class="px-3 py-2 bg-gray-700 text-white rounded-lg text-sm font-medium">
                         Apply
@@ -1132,6 +1133,7 @@ async function logout() {
                            class="w-24 border border-gray-300 rounded-lg px-3 py-2 text-sm"
                            placeholder="0">
                     <span class="text-sm text-gray-600">% discount</span>
+                    <span class="text-xs text-gray-400">(max 50%)</span>
                     <button onclick="applyModalDiscount('maya')"
                             class="px-3 py-2 bg-gray-700 text-white rounded-lg text-sm font-medium">
                         Apply

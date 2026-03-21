@@ -263,7 +263,7 @@
 
             document.getElementById('confirm-void-btn').onclick = async function() {
                 const reason = document.getElementById('void-reason').value;
-                if (!reason) { alert('Please select a reason for voiding.'); return; }
+                if (!reason) { showDashboardAlert('Please select a reason for voiding.'); return; }
                 const errorDiv = document.getElementById('void-error');
 
                 try {
@@ -613,7 +613,7 @@
                 document.getElementById('detail-modal').classList.remove('hidden');
             } catch (error) {
                 console.error('Error loading transaction details:', error);
-                alert('Could not load transaction details.');
+                showDashboardAlert('Could not load transaction details.');
             }
         }
 
