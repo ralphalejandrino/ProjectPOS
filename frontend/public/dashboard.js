@@ -240,18 +240,18 @@ async function viewReceipt(transactionId) {
                 <div class="p-6">
                     <div class="mb-4 pb-4 border-b">
                         <p class="text-sm text-gray-500">Date: ${new Date(txn.created_at).toLocaleString()}</p>
-                        <p class="text-sm text-gray-500">Payment: ${txn.payment_method === 'cash' ? 'Cash' : 'GCash'}</p>
+                        <p class="text-sm text-gray-500">Payment: ${{cash:'Cash',gcash:'GCash',maya:'Maya',card:'Card'}[txn.payment_method] || txn.payment_method}</p>
                     </div>
                     <div class="space-y-3 mb-4">
                         ${txn.items ? txn.items.map(item => `
                             <div class="flex justify-between">
-                                <span>${item.name} x${item.quantity}</span>
-                                <span class="font-semibold">₱${(item.price * item.quantity).toFixed(2)}</span>
+                                <span>${item.item_name} x${item.quantity}</span>
+                                <span class="font-semibold">₱${parseFloat(item.subtotal).toFixed(2)}</span>
                             </div>
                             ${item.variant_selections && item.variant_selections.length > 0 ? item.variant_selections.map(v => `
                                 <div class="flex justify-between text-sm text-gray-500 pl-4">
                                     <span>${v.group_name}: ${v.option_name}</span>
-                                    <span>+₱${parseFloat(v.price_modifier).toFixed(2)}</span>
+                                    <span>${parseFloat(v.price_modifier) !== 0 ? (parseFloat(v.price_modifier) > 0 ? '+' : '') + '₱' + parseFloat(v.price_modifier).toFixed(2) : ''}</span>
                                 </div>
                             `).join('') : ''}
                         `).join('') : '<p class="text-gray-500 text-sm">Items not available</p>'}
