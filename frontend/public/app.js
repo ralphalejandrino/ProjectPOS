@@ -442,7 +442,7 @@ function updateCart() {
                     <div class="font-bold text-blue-600">₱${parseFloat((item.price * item.quantity) || 0).toFixed(2)}</div>
                 </div>
             </div>
-        `).join('');
+        `}).join('');
     }
 }
 
