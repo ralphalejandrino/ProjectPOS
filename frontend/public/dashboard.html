@@ -74,7 +74,7 @@
             <div class="bg-white rounded-lg shadow-lg p-6 border-l-4 border-blue-500">
                 <div class="flex items-center justify-between">
                     <div>
-                        <p class="text-sm text-gray-600 mb-1">Today's Sales</p>
+                        <p class="text-sm text-gray-600 mb-1">This Month's Sales</p>
                         <p id="today-sales" class="text-3xl font-bold text-blue-600">₱0</p>
                     </div>
                     <div class="text-5xl">💰</div>
@@ -320,14 +320,14 @@
                 const response = await authenticatedFetch(`${API_BASE}/dashboard/`);
                 const data = await response.json();
                 
-                const todaySales = data.today.revenue;
+                const monthSales = data.month.revenue;
                 const totalRevenue = data.all_time.revenue;
-                const todayCount = data.today.transactions;
-                const avgTransaction = todayCount > 0 ? todaySales / todayCount : 0;
+                const monthCount = data.month.transactions;
+                const avgTransaction = monthCount > 0 ? monthSales / monthCount : 0;
 
-                document.getElementById('today-sales').textContent = `₱${todaySales.toFixed(2)}`;
+                document.getElementById('today-sales').textContent = `₱${monthSales.toFixed(2)}`;
                 document.getElementById('total-revenue').textContent = `₱${totalRevenue.toFixed(2)}`;
-                document.getElementById('today-transactions').textContent = todayCount;
+                document.getElementById('today-transactions').textContent = monthCount;
                 document.getElementById('avg-transaction').textContent = `₱${avgTransaction.toFixed(2)}`;
 
                 // Low stock count (remains separate or could be added to dashboard endpoint)

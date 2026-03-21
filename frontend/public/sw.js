@@ -1,4 +1,4 @@
-const CACHE_NAME = 'tarsierpos-v41';
+const CACHE_NAME = 'tarsierpos-v42';
 const ASSETS = [
   'index.html',
   'login.html',
@@ -49,7 +49,15 @@ self.addEventListener('fetch', (event) => {
     return;
   }
   event.respondWith(
-    caches.match(event.request)
-      .then((r) => r || fetch(event.request))
+    caches.match(event.request).then((cached) => {
+      if (cached) return cached;
+      return fetch(event.request).then((response) => {
+        // Cache successful same-origin responses (images, JS, CSS, HTML)
+        if (response && response.status === 200 && response.type === 'basic') {
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, response.clone()));
+        }
+        return response;
+      });
+    })
   );
 });

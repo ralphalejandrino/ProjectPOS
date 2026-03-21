@@ -62,10 +62,10 @@ async function loadDashboard() {
         allTransactions = transactionsRaw.results !== undefined ? transactionsRaw.results : transactionsRaw;
         const transactions = allTransactions;
 
-        // Calculate daily sales for last 7 days
-        const last7Days = [];
+        // Calculate daily sales for last 30 days
+        const last30Days = [];
         const today = new Date();
-        for (let i = 6; i >= 0; i--) {
+        for (let i = 29; i >= 0; i--) {
             const date = new Date(today);
             date.setDate(date.getDate() - i);
             const dateStr = date.toISOString().split('T')[0];
@@ -74,23 +74,16 @@ async function loadDashboard() {
                 const txnDate = new Date(t.created_at).toISOString().split('T')[0];
                 return txnDate === dateStr;
             });
-            
+
             const total = dayTransactions.reduce((sum, t) => sum + parseFloat(t.total_amount), 0);
             const count = dayTransactions.length;
-            
-            last7Days.push({
+
+            last30Days.push({
                 date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
                 total: total,
                 count: count
             });
         }
-
-        // Update today's stats
-        const todayStats = last7Days[last7Days.length - 1];
-        document.getElementById('today-sales').textContent = `₱${todayStats.total.toFixed(2)}`;
-        document.getElementById('today-transactions').textContent = todayStats.count;
-        document.getElementById('avg-transaction').textContent = 
-            `₱${(todayStats.total / todayStats.count || 0).toFixed(2)}`;
 
         // Revenue chart
         if (revenueChart) revenueChart.destroy();
@@ -98,10 +91,10 @@ async function loadDashboard() {
         revenueChart = new Chart(revenueCtx, {
             type: 'line',
             data: {
-                labels: last7Days.map(d => d.date),
+                labels: last30Days.map(d => d.date),
                 datasets: [{
                     label: 'Daily Revenue',
-                    data: last7Days.map(d => d.total),
+                    data: last30Days.map(d => d.total),
                     borderColor: 'rgb(59, 130, 246)',
                     backgroundColor: 'rgba(59, 130, 246, 0.1)',
                     tension: 0.4,
