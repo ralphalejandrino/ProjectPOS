@@ -7,6 +7,7 @@ from django.core.files.base import ContentFile
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.conf import settings
+from django.utils import timezone as dj_tz
 from djmoney.models.fields import MoneyField
 
 
@@ -754,3 +755,102 @@ class Shift(models.Model):
 
     def __str__(self):
         return f"Shift {self.id} — {self.cashier.username} ({'open' if self.is_open else 'closed'})"
+
+
+# ============================================================================
+# INGREDIENT INVENTORY
+# ============================================================================
+
+class IngredientUnit(models.Model):
+    """Units of measurement for ingredients (g, kg, ml, l, pcs, etc.)"""
+    name = models.CharField(max_length=50, unique=True)
+    abbreviation = models.CharField(max_length=10, unique=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['name']
+
+    def __str__(self):
+        return f"{self.name} ({self.abbreviation})"
+
+
+class Supplier(models.Model):
+    """Suppliers for ingredients"""
+    name = models.CharField(max_length=255)
+    contact_person = models.CharField(max_length=255, blank=True)
+    phone = models.CharField(max_length=50, blank=True)
+    address = models.TextField(blank=True)
+    notes = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
+
+class Ingredient(models.Model):
+    """Ingredients used in recipes and food preparation"""
+    name = models.CharField(max_length=255)
+    unit = models.ForeignKey(IngredientUnit, on_delete=models.PROTECT)
+    cost_per_unit = models.DecimalField(max_digits=10, decimal_places=4)
+    current_stock = models.DecimalField(max_digits=10, decimal_places=4, default=0)
+    par_level = models.DecimalField(max_digits=10, decimal_places=4, default=0)
+    supplier = models.ForeignKey(Supplier, null=True, blank=True, on_delete=models.SET_NULL)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['name']
+
+    @property
+    def is_low_stock(self):
+        """Check if ingredient is below par level"""
+        return self.current_stock <= self.par_level
+
+    def __str__(self):
+        return f"{self.name} ({self.unit.abbreviation})"
+
+
+class IngredientRestockLog(models.Model):
+    """Log of ingredient restocking events"""
+    ingredient = models.ForeignKey(Ingredient, on_delete=models.CASCADE, related_name='restock_logs')
+    quantity_added = models.DecimalField(max_digits=10, decimal_places=4)
+    cost_per_unit = models.DecimalField(max_digits=10, decimal_places=4)
+    date = models.DateTimeField(default=dj_tz.now)
+    notes = models.TextField(blank=True)
+    recorded_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
+
+    class Meta:
+        ordering = ['-date']
+
+    def save(self, *args, **kwargs):
+        # Update ingredient stock when saving restock log
+        super().save(*args, **kwargs)
+        self.ingredient.current_stock += self.quantity_added
+        self.ingredient.save(update_fields=['current_stock'])
+
+    def __str__(self):
+        return f"+{self.quantity_added} {self.ingredient.unit.abbreviation} of {self.ingredient.name}"
+
+
+class RecipeIngredient(models.Model):
+    """Ingredients used in recipes for menu items"""
+    item = models.ForeignKey('Item', null=True, blank=True, on_delete=models.CASCADE, related_name='recipe_ingredients')
+    variant = models.ForeignKey('VariantOption', null=True, blank=True, on_delete=models.CASCADE, related_name='recipe_ingredients')
+    ingredient = models.ForeignKey(Ingredient, on_delete=models.CASCADE, related_name='recipes')
+    quantity_used = models.DecimalField(max_digits=10, decimal_places=4)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                check=(
+                    (models.Q(item__isnull=False) & models.Q(variant__isnull=True)) |
+                    (models.Q(item__isnull=True) & models.Q(variant__isnull=False))
+                ),
+                name='recipe_item_or_variant_not_both'
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.ingredient.name} x{self.quantity_used} for {self.item or self.variant}"
