@@ -11,6 +11,10 @@ router.register(r'shifts', views.ShiftViewSet, basename='shift')
 router.register(r'dashboard', views.DashboardViewSet, basename='dashboard')
 router.register(r'users', auth_views.UserViewSet, basename='user')
 router.register(r'variant-groups', views.VariantGroupViewSet, basename='variant-groups')
+router.register(r'ingredient-units', views.IngredientUnitViewSet, basename='ingredient-units')
+router.register(r'suppliers', views.SupplierViewSet, basename='suppliers')
+router.register(r'ingredients', views.IngredientViewSet, basename='ingredients')
+router.register(r'recipe-ingredients', views.RecipeIngredientViewSet, basename='recipe-ingredients')
 
 urlpatterns = [
     path('', include(router.urls)),

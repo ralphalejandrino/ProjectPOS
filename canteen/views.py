@@ -10,6 +10,7 @@ from .models import (
     ItemCategory, Item, ItemLog, PosTransaction, PosTransactionItem, Shift,
     VariantGroup, VariantOption, CategoryVariantGroup, ProductVariantGroup,
     TransactionItemVariant, BusinessProfile, RecipeIngredient, Ingredient,
+    IngredientUnit, Supplier, IngredientRestockLog,
 )
 from .serializers import (
     ItemCategorySerializer,
@@ -21,6 +22,11 @@ from .serializers import (
     VariantOptionSerializer,
     CategoryVariantGroupSerializer,
     ProductVariantGroupSerializer,
+    IngredientUnitSerializer,
+    SupplierSerializer,
+    IngredientSerializer,
+    IngredientRestockLogSerializer,
+    RecipeIngredientSerializer,
 )
 from django.db.models import Sum, Count, F, FloatField
 from django.db.models.functions import TruncDate
@@ -1462,3 +1468,63 @@ def upload_business_logo(request):
     profile.logo = uploaded
     profile.save()
     return Response({'success': True, 'logo': request.build_absolute_uri(profile.logo.url)})
+
+
+# ============================================================================
+# INGRENT VIEWSETS
+# ============================================================================
+
+class IngredientUnitViewSet(viewsets.ModelViewSet):
+    queryset = IngredientUnit.objects.all().order_by('name')
+    serializer_class = IngredientUnitSerializer
+    permission_classes = [IsAuthenticated]
+
+
+class SupplierViewSet(viewsets.ModelViewSet):
+    queryset = Supplier.objects.filter(is_active=True).order_by('name')
+    serializer_class = SupplierSerializer
+    permission_classes = [IsAuthenticated]
+
+
+class IngredientViewSet(viewsets.ModelViewSet):
+    queryset = Ingredient.objects.filter(is_active=True).select_related('unit','supplier').order_by('name')
+    serializer_class = IngredientSerializer
+    permission_classes = [IsAuthenticated]
+
+    @action(detail=True, methods=['post'])
+    def restock(self, request, pk=None):
+        ingredient = self.get_object()
+        serializer = IngredientRestockLogSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save(ingredient=ingredient, recorded_by=request.user)
+            return Response(serializer.data, status=201)
+        return Response(serializer.errors, status=400)
+
+    @action(detail=True, methods=['get'])
+    def restock_logs(self, request, pk=None):
+        ingredient = self.get_object()
+        logs = ingredient.restock_logs.all().order_by('-date')[:50]
+        serializer = IngredientRestockLogSerializer(logs, many=True)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['get'])
+    def low_stock(self, request):
+        low = [i for i in self.get_queryset() if i.is_low_stock]
+        serializer = self.get_serializer(low, many=True)
+        return Response(serializer.data)
+
+
+class RecipeIngredientViewSet(viewsets.ModelViewSet):
+    queryset = RecipeIngredient.objects.select_related('ingredient','item','variant').all()
+    serializer_class = RecipeIngredientSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        item_id = self.request.query_params.get('item')
+        variant_id = self.request.query_params.get('variant')
+        if item_id:
+            qs = qs.filter(item_id=item_id)
+        if variant_id:
+            qs = qs.filter(variant_id=variant_id)
+        return qs

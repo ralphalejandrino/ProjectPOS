@@ -21,6 +21,11 @@ from .models import (
     CategoryVariantGroup,
     ProductVariantGroup,
     TransactionItemVariant,
+    IngredientUnit,
+    Supplier,
+    Ingredient,
+    IngredientRestockLog,
+    RecipeIngredient,
 )
 
 
@@ -409,3 +414,54 @@ class ShiftSerializer(serializers.ModelSerializer):
             'opening_cash', 'closing_cash', 'is_open'
         ]
         read_only_fields = ['cashier', 'opened_at', 'closed_at', 'is_open']
+
+
+# ============================================================================
+# INGREDIENT SERIALIZERS
+# ============================================================================
+
+class IngredientUnitSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = IngredientUnit
+        fields = ['id', 'name', 'abbreviation', 'is_active']
+
+
+class SupplierSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Supplier
+        fields = ['id', 'name', 'contact_person', 'phone', 'address', 'notes', 'is_active']
+
+
+class IngredientSerializer(serializers.ModelSerializer):
+    unit_detail = IngredientUnitSerializer(source='unit', read_only=True)
+    supplier_detail = SupplierSerializer(source='supplier', read_only=True)
+    is_low_stock = serializers.ReadOnlyField()
+
+    class Meta:
+        model = Ingredient
+        fields = [
+            'id', 'name', 'unit', 'unit_detail', 'cost_per_unit',
+            'current_stock', 'par_level', 'supplier', 'supplier_detail',
+            'is_active', 'is_low_stock'
+        ]
+
+
+class IngredientRestockLogSerializer(serializers.ModelSerializer):
+    ingredient_name = serializers.CharField(source='ingredient.name', read_only=True)
+    recorded_by_name = serializers.CharField(source='recorded_by.username', read_only=True)
+
+    class Meta:
+        model = IngredientRestockLog
+        fields = [
+            'id', 'ingredient', 'ingredient_name', 'quantity_added',
+            'cost_per_unit', 'date', 'notes', 'recorded_by', 'recorded_by_name'
+        ]
+        read_only_fields = ['recorded_by', 'date']
+
+
+class RecipeIngredientSerializer(serializers.ModelSerializer):
+    ingredient_detail = IngredientSerializer(source='ingredient', read_only=True)
+
+    class Meta:
+        model = RecipeIngredient
+        fields = ['id', 'item', 'variant', 'ingredient', 'ingredient_detail', 'quantity_used']
