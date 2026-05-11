@@ -5,11 +5,11 @@ from rest_framework.exceptions import ValidationError
 from django.db import transaction as db_transaction
 from django.utils import timezone
 from django.shortcuts import get_object_or_404
-from .services import create_pos_transaction
+from .services import create_pos_transaction, _restore_ingredients
 from .models import (
     ItemCategory, Item, ItemLog, PosTransaction, PosTransactionItem, Shift,
     VariantGroup, VariantOption, CategoryVariantGroup, ProductVariantGroup,
-    TransactionItemVariant, BusinessProfile,
+    TransactionItemVariant, BusinessProfile, RecipeIngredient, Ingredient,
 )
 from .serializers import (
     ItemCategorySerializer,
@@ -240,6 +240,8 @@ class PosTransactionViewSet(viewsets.ViewSet):
                         Item.objects.filter(pk=item_entry.item.pk).update(
                             stock=F('stock') + item_entry.quantity
                         )
+                        # Ingredient stock restore
+                        _restore_ingredients(item_entry.item, item_entry, item_entry.quantity)
 
                 transaction.void = True
                 transaction.voided_at = timezone.now()

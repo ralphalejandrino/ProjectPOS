@@ -8,9 +8,79 @@ from .models import (
     Item, PosTransaction, PosTransactionItem, Shift,
     VariantGroup, VariantOption,
     CategoryVariantGroup, ProductVariantGroup, TransactionItemVariant,
+    RecipeIngredient, Ingredient,
 )
 import threading
 from .receipt_service import print_receipt, kick_cash_drawer
+
+
+def _deplete_ingredients(item, variant_option_ids, quantity):
+    """
+    Deplete ingredient stock for a sold item.
+    Variant recipes take priority over item recipes.
+    Uses F() for atomic DB updates.
+    Silently skips if no recipe is configured.
+    """
+    depleted_ingredient_ids = set()
+
+    # Variant-level recipes first
+    if variant_option_ids:
+        variant_recipes = RecipeIngredient.objects.filter(
+            variant_id__in=variant_option_ids
+        ).select_related('ingredient')
+        for recipe in variant_recipes:
+            Ingredient.objects.filter(pk=recipe.ingredient.pk).update(
+                current_stock=F('current_stock') - (recipe.quantity_used * quantity)
+            )
+            depleted_ingredient_ids.add(recipe.ingredient.pk)
+
+    # Item-level recipes for ingredients not covered by variants
+    item_recipes = RecipeIngredient.objects.filter(
+        item=item
+    ).select_related('ingredient')
+    for recipe in item_recipes:
+        if recipe.ingredient.pk not in depleted_ingredient_ids:
+            Ingredient.objects.filter(pk=recipe.ingredient.pk).update(
+                current_stock=F('current_stock') - (recipe.quantity_used * quantity)
+            )
+
+
+def _restore_ingredients(item, transaction_item, quantity):
+    """
+    Restore ingredient stock when a transaction is voided.
+    Matches variant selections by option_name snapshot.
+    Silently skips if no recipe is configured.
+    """
+    restored_ingredient_ids = set()
+
+    # Get variant option IDs from snapshot names
+    variant_option_ids = list(
+        VariantOption.objects.filter(
+            name__in=transaction_item.variant_selections.values_list('option_name', flat=True)
+        ).values_list('id', flat=True)
+    )
+
+    # Variant-level restore first
+    if variant_option_ids:
+        variant_recipes = RecipeIngredient.objects.filter(
+            variant_id__in=variant_option_ids
+        ).select_related('ingredient')
+        for recipe in variant_recipes:
+            Ingredient.objects.filter(pk=recipe.ingredient.pk).update(
+                current_stock=F('current_stock') + (recipe.quantity_used * quantity)
+            )
+            restored_ingredient_ids.add(recipe.ingredient.pk)
+
+    # Item-level restore
+    item_recipes = RecipeIngredient.objects.filter(
+        item=item
+    ).select_related('ingredient')
+    for recipe in item_recipes:
+        if recipe.ingredient.pk not in restored_ingredient_ids:
+            Ingredient.objects.filter(pk=recipe.ingredient.pk).update(
+                current_stock=F('current_stock') + (recipe.quantity_used * quantity)
+            )
+
 
 def create_pos_transaction(items_data, payment_method, cashier=None, **kwargs):
     """
@@ -260,6 +330,13 @@ def create_pos_transaction(items_data, payment_method, cashier=None, **kwargs):
                     raise ValidationError(
                         f"Insufficient stock for: {item.name} (sold out during checkout)"
                     )
+
+                # Ingredient depletion
+                variant_option_ids = [
+                    rv.get('option_id') for rv in entry.get('resolved_variants', [])
+                    if rv.get('option_id')
+                ]
+                _deplete_ingredients(item, variant_option_ids, entry['quantity'])
 
         # Fire-and-forget print + cashbox kick — never blocks the sale
         threading.Thread(target=print_receipt, args=(transaction,), daemon=True).start()
