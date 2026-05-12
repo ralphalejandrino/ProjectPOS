@@ -4,12 +4,15 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Ingredients — TarsierPOS</title>
+  <script>if(localStorage.getItem('darkMode')==='true')document.documentElement.classList.add('dark');</script>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="manifest" href="manifest.json" />
-  <link rel="icon" href="icon-192.png" />
+  <link rel="icon" type="image/png" href="assets/tarsier-icon.png" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
   <style>
     [x-cloak] { display: none !important; }
-    .tab-active { background: #1d4ed8; color: #fff; }
+    .tab-active   { background: #1d4ed8; color: #fff; }
     .tab-inactive { background: #e5e7eb; color: #374151; }
     .tab-inactive:hover { background: #d1d5db; }
     .toast { animation: slideIn 0.3s ease, fadeOut 0.5s ease 2.5s forwards; }
@@ -23,48 +26,44 @@
     .tab-bar::-webkit-scrollbar { display: none; }
   </style>
 </head>
-<body class="bg-gray-100 min-h-screen font-sans">
+<body class="bg-gray-50 min-h-screen font-sans">
 
-<!-- ───────────── NAV ───────────── -->
-<nav class="bg-gradient-to-r from-blue-800 to-blue-600 text-white shadow-lg sticky top-0 z-40">
-  <div class="max-w-full px-4 py-3 flex items-center justify-between">
+<!-- ───────────── NAV (matches dashboard.html) ───────────── -->
+<nav class="bg-gradient-to-r from-blue-600 to-blue-800 text-white shadow-lg sticky top-0 z-50">
+  <div class="container mx-auto px-4 py-3 flex justify-between items-center">
 
-    <!-- Left: Logo + title -->
-    <div class="flex items-center gap-3">
-      <img src="icon-192.png" alt="Logo" class="w-8 h-8 rounded-full shadow" />
+    <!-- Left: emoji + site name + tagline -->
+    <div class="flex items-center space-x-3">
+      <span class="text-3xl">🍽️</span>
       <div>
-        <div class="font-bold text-base leading-none" id="navBizName">TarsierPOS</div>
-        <div class="text-blue-200 text-xs" id="navClock">--:-- --</div>
+        <h1 class="text-xl font-bold text-white" id="site-name">TarsierPOS</h1>
+        <p class="text-blue-200 text-sm" id="site-tagline">AI Powered Point of Sale System</p>
       </div>
     </div>
 
-    <!-- Right: User info + dropdown -->
-    <div class="relative" id="navDropdownWrapper">
-      <button id="navMenuBtn"
-        class="flex items-center gap-2 bg-blue-700 hover:bg-blue-900 px-3 py-1.5 rounded-lg transition text-sm"
-        onclick="toggleNavDropdown()">
-        <div id="navAvatar"
-          class="w-7 h-7 rounded-full bg-white text-blue-700 font-bold text-xs flex items-center justify-center">--</div>
-        <span id="navUsername" class="hidden sm:inline">Loading...</span>
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-        </svg>
-      </button>
-
-      <!-- Dropdown -->
-      <div id="navDropdown"
-        class="hidden absolute right-0 mt-2 w-52 bg-white rounded-xl shadow-xl border border-gray-100 py-1 z-50 text-gray-700">
-        <div class="px-4 py-2 border-b border-gray-100 text-xs text-gray-400 uppercase tracking-wide">Navigation</div>
-        <a href="index.html"   class="block px-4 py-2 text-sm hover:bg-gray-100">🛒 POS</a>
-        <a href="dashboard.html" class="block px-4 py-2 text-sm hover:bg-gray-100" id="navDashLink">📊 Dashboard</a>
-        <a href="inventory.html" class="block px-4 py-2 text-sm hover:bg-gray-100">📦 Inventory</a>
-        <a href="ingredients.html" class="block px-4 py-2 text-sm bg-blue-50 text-blue-700 font-semibold">🧪 Ingredients</a>
-        <a href="xreport.html"  class="block px-4 py-2 text-sm hover:bg-gray-100" id="navXLink">📈 X-Report</a>
-        <a href="zreport.html"  class="block px-4 py-2 text-sm hover:bg-gray-100" id="navZLink">📉 Z-Report</a>
-        <a href="settings.html" class="block px-4 py-2 text-sm hover:bg-gray-100" id="navSettingsLink">⚙️ Settings</a>
-        <div class="border-t border-gray-100 mt-1 pt-1">
-          <button onclick="handleLogout()"
-            class="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50">🚪 Logout</button>
+    <!-- Right: clock + user info + ☰ Menu -->
+    <div class="flex items-center gap-4">
+      <span id="live-clock" class="text-sm font-mono tabular-nums text-blue-100 hidden sm:block"></span>
+      <div class="text-right hidden sm:block border-r border-blue-400 pr-4 mr-2">
+        <p class="text-sm font-bold text-white leading-tight" id="userName"></p>
+        <p class="text-[10px] text-blue-200 uppercase tracking-widest font-black leading-tight" id="userRole"></p>
+      </div>
+      <div class="relative">
+        <button id="menu-button"
+          class="bg-blue-700 hover:bg-blue-800 px-4 py-2 rounded-lg font-medium transition flex items-center space-x-2">
+          <span>☰ Menu</span>
+          <span id="menu-arrow">▼</span>
+        </button>
+        <div id="dropdown-menu" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl z-50">
+          <a href="index.html"      class="block px-4 py-3 text-gray-700 hover:bg-gray-100 rounded-t-lg">🛒 POS</a>
+          <a href="inventory.html"  class="block px-4 py-3 text-gray-700 hover:bg-gray-100">📦 Inventory</a>
+          <a href="ingredients.html" class="block px-4 py-3 text-blue-600 bg-blue-50 font-bold">🧪 Ingredients</a>
+          <a href="dashboard.html"  class="block px-4 py-3 text-gray-700 hover:bg-gray-100" id="navDashLink">📊 Dashboard</a>
+          <a href="settings.html"   class="block px-4 py-3 text-gray-700 hover:bg-gray-100" id="navSettingsLink">⚙️ Settings</a>
+          <a href="xreport.html"    class="block px-4 py-3 text-gray-700 hover:bg-gray-100" id="navXLink">📈 X-Report</a>
+          <a href="zreport.html"    class="block px-4 py-3 text-gray-700 hover:bg-gray-100" id="navZLink">📉 Z-Report</a>
+          <a href="#" onclick="handleLogout(); return false;"
+            class="block px-4 py-3 text-red-600 hover:bg-red-50 rounded-b-lg">🚪 Logout</a>
         </div>
       </div>
     </div>
@@ -76,11 +75,11 @@
 <div id="toastContainer" class="fixed bottom-5 right-5 z-[100] flex flex-col gap-2 pointer-events-none"></div>
 
 <!-- ───────────── MAIN CONTENT ───────────── -->
-<div class="max-w-7xl mx-auto px-4 py-6">
+<div class="container mx-auto px-4 py-6">
 
   <!-- Page header -->
   <div class="mb-5">
-    <h1 class="text-2xl font-bold text-gray-800">🧪 Ingredient Inventory</h1>
+    <h2 class="text-3xl font-bold text-gray-800">🧪 Ingredient Inventory</h2>
     <p class="text-gray-500 text-sm mt-0.5">Manage ingredients, suppliers, units, restock history, and recipes.</p>
   </div>
 
@@ -185,6 +184,22 @@
         + Add Unit
       </button>
     </div>
+
+    <!-- Preset seed banner — shown only when units list is empty -->
+    <div id="presetUnitsBanner" class="hidden mb-4 bg-blue-50 border border-blue-200 rounded-xl px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-3">
+      <div class="flex-1">
+        <p class="text-sm font-semibold text-blue-800">No units yet — start with cafe presets?</p>
+        <p class="text-xs text-blue-600 mt-0.5">
+          Seeds: g, kg, mg, ml, L, pcs, tsp, tbsp, cup, oz, lb, shot, sachet, bottle, pack, bag.
+          You can always add more custom units afterward.
+        </p>
+      </div>
+      <button onclick="seedPresetUnits()"
+        class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition whitespace-nowrap">
+        🌱 Seed Preset Units
+      </button>
+    </div>
+
     <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
       <table class="w-full text-sm">
         <thead class="bg-gray-50 border-b border-gray-100 text-gray-500 text-xs uppercase tracking-wide">
@@ -209,7 +224,6 @@
     <div class="flex items-center justify-between mb-4">
       <h2 class="text-lg font-semibold text-gray-700">Restock History</h2>
     </div>
-    <!-- Filters -->
     <div class="flex flex-col sm:flex-row gap-3 mb-4">
       <select id="restockFilterIngredient"
         class="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
@@ -239,7 +253,7 @@
           </tr>
         </thead>
         <tbody id="restockTableBody">
-          <tr><td colspan="7" class="text-center py-10 text-gray-400">Select an ingredient or click Refresh to load logs.</td></tr>
+          <tr><td colspan="7" class="text-center py-10 text-gray-400">Select an ingredient or click Refresh.</td></tr>
         </tbody>
       </table>
     </div>
@@ -252,7 +266,6 @@
       <p class="text-gray-400 text-sm mt-0.5">Define which ingredients are used per menu item or variant.</p>
     </div>
 
-    <!-- Item selector -->
     <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-4">
       <div class="flex flex-col sm:flex-row gap-3 items-start sm:items-end">
         <div class="flex-1">
@@ -278,7 +291,6 @@
       </div>
     </div>
 
-    <!-- Recipe table -->
     <div id="recipeSection" class="hidden">
       <div class="flex items-center justify-between mb-3">
         <h3 class="font-medium text-gray-700" id="recipeSectionTitle">Recipe ingredients</h3>
@@ -298,7 +310,6 @@
             </tr>
           </thead>
           <tbody id="recipeTableBody"></tbody>
-          <!-- Inline add row -->
           <tbody id="addRecipeRow" class="hidden">
             <tr class="bg-blue-50">
               <td class="px-4 py-2">
@@ -332,8 +343,6 @@
 <!-- ══════════════════════════════════════════════════════
      MODALS
 ══════════════════════════════════════════════════════ -->
-
-<!-- Generic modal backdrop -->
 <div id="modalBackdrop"
   class="fixed inset-0 bg-black/40 modal-backdrop z-50 hidden flex items-center justify-center p-4">
 
@@ -510,11 +519,31 @@
 
 
 <!-- ══════════════════════════════════════════════════════
-     SCRIPT
+     SCRIPTS
 ══════════════════════════════════════════════════════ -->
 <script src="config.js"></script>
 <script>
 'use strict';
+
+// ─── Preset units ─────────────────────────────────────────
+const PRESET_UNITS = [
+  { name: 'Gram',       abbreviation: 'g'    },
+  { name: 'Kilogram',   abbreviation: 'kg'   },
+  { name: 'Milligram',  abbreviation: 'mg'   },
+  { name: 'Milliliter', abbreviation: 'ml'   },
+  { name: 'Liter',      abbreviation: 'L'    },
+  { name: 'Piece',      abbreviation: 'pcs'  },
+  { name: 'Teaspoon',   abbreviation: 'tsp'  },
+  { name: 'Tablespoon', abbreviation: 'tbsp' },
+  { name: 'Cup',        abbreviation: 'cup'  },
+  { name: 'Ounce',      abbreviation: 'oz'   },
+  { name: 'Pound',      abbreviation: 'lb'   },
+  { name: 'Shot',       abbreviation: 'shot' },
+  { name: 'Sachet',     abbreviation: 'sct'  },
+  { name: 'Bottle',     abbreviation: 'btl'  },
+  { name: 'Pack',       abbreviation: 'pk'   },
+  { name: 'Bag',        abbreviation: 'bag'  },
+];
 
 // ─── State ───────────────────────────────────────────────
 let ingredients = [];
@@ -523,94 +552,129 @@ let units       = [];
 let menuItems   = [];
 let currentUser = null;
 
-const tabsLoaded = { ingredients: false, suppliers: false, units: false, restock: false, recipes: false };
+// ─── apiFetch — wraps authenticatedFetch, always returns parsed JSON ──
+// authenticatedFetch (from config.js) returns a raw Response object,
+// so every call must .json() it. This helper centralises that.
+async function apiFetch(path, options) {
+  const url = path.startsWith('http') ? path : `${API_BASE}${path}`;
+  const response = await authenticatedFetch(url, options);
+  if (!response.ok) {
+    let msg = `HTTP ${response.status}`;
+    try { const e = await response.json(); msg = e.detail || e.error || JSON.stringify(e); } catch (_) {}
+    throw new Error(msg);
+  }
+  // 204 No Content (DELETE) returns empty body
+  if (response.status === 204) return null;
+  return response.json();
+}
 
 // ─── Auth & Init ─────────────────────────────────────────
 async function checkAuth() {
   const token = localStorage.getItem('access_token');
   if (!token) { window.location.href = 'login.html'; return; }
-
+  const role = getUserRole();
+  if (!role) { window.location.href = 'login.html'; return; }
+  if (role === 'cashier') { window.location.href = 'index.html'; return; }
+  const isManagerOrAdmin = role === 'admin' || role === 'manager';
+  ['navDashLink','navXLink','navZLink','navSettingsLink'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el && !isManagerOrAdmin) el.style.display = 'none';
+  });
   try {
-    const data = await authenticatedFetch('/api/auth/me/');
-    if (!data || data.error) { window.location.href = 'login.html'; return; }
-    currentUser = data;
-
-    // Role guard — cashiers redirected
-    if (data.role === 'cashier') { window.location.href = 'index.html'; return; }
-
-    // Nav: show/hide manager-only links
-    const isAdmin = data.role === 'admin';
-    ['navDashLink','navXLink','navZLink','navSettingsLink'].forEach(id => {
-      const el = document.getElementById(id);
-      if (el && !isAdmin && data.role !== 'manager') el.style.display = 'none';
-    });
-
-    // Nav user info
-    const initials = (data.username || 'U').slice(0,2).toUpperCase();
-    document.getElementById('navAvatar').textContent   = initials;
-    document.getElementById('navUsername').textContent = data.username || 'User';
-
-    // Business name
-    try {
-      const biz = await authenticatedFetch('/api/business-profile/');
-      if (biz && biz.name) document.getElementById('navBizName').textContent = biz.name;
-    } catch (_) {}
-
-    await loadInitialData();
-  } catch (e) {
-    window.location.href = 'login.html';
-  }
+    const p = JSON.parse(atob(token.split('.')[1]));
+    const uEl = document.getElementById('userName');
+    const rEl = document.getElementById('userRole');
+    if (uEl) uEl.textContent = p.username || 'User';
+    if (rEl) rEl.textContent = p.role || '';
+  } catch(_) {}
+  loadSiteName();
+  await loadInitialData();
 }
 
 async function loadInitialData() {
   try {
     const [ingData, supData, unitData] = await Promise.all([
-      authenticatedFetch('/api/ingredients/'),
-      authenticatedFetch('/api/suppliers/'),
-      authenticatedFetch('/api/ingredient-units/'),
+      apiFetch('/ingredients/'),
+      apiFetch('/suppliers/'),
+      apiFetch('/ingredient-units/'),
     ]);
-    ingredients = Array.isArray(ingData)      ? ingData      : (ingData?.results  || []);
-    suppliers   = Array.isArray(supData)      ? supData      : (supData?.results  || []);
-    units       = Array.isArray(unitData)     ? unitData     : (unitData?.results || []);
-
-    tabsLoaded.ingredients = true;
-    tabsLoaded.suppliers   = true;
-    tabsLoaded.units       = true;
+    ingredients = Array.isArray(ingData)  ? ingData  : (ingData?.results  || []);
+    suppliers   = Array.isArray(supData)  ? supData  : (supData?.results  || []);
+    units       = Array.isArray(unitData) ? unitData : (unitData?.results || []);
 
     renderIngredients();
     updateStats();
     populateSelectsGlobally();
+
+    // Show preset seed banner when the units table is completely empty
+    checkPresetBanner();
   } catch (e) {
     showToast('Failed to load data: ' + e.message, 'error');
   }
 }
 
-// ─── Clock ────────────────────────────────────────────────
-function updateClock() {
-  const now = new Date();
-  document.getElementById('navClock').textContent =
-    now.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', hour12: true });
+function checkPresetBanner() {
+  const banner = document.getElementById('presetUnitsBanner');
+  if (banner) banner.classList.toggle('hidden', units.length > 0);
 }
-updateClock();
-setInterval(updateClock, 1000);
 
-// ─── Nav dropdown ────────────────────────────────────────
-function toggleNavDropdown() {
-  document.getElementById('navDropdown').classList.toggle('hidden');
+// ─── Preset seed ─────────────────────────────────────────
+async function seedPresetUnits() {
+  const btn = document.querySelector('#presetUnitsBanner button');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Seeding…'; }
+  showToast('Seeding preset units…', 'info');
+
+  let added = 0;
+  for (const u of PRESET_UNITS) {
+    try {
+      await apiFetch('/ingredient-units/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(u),
+      });
+      added++;
+    } catch (_) {
+      // Skip duplicates or validation errors silently
+    }
+  }
+
+  await refreshUnits();
+  showToast(`${added} preset unit${added !== 1 ? 's' : ''} added!`, 'success');
+  checkPresetBanner();
+  if (btn) { btn.disabled = false; btn.textContent = '🌱 Seed Preset Units'; }
 }
-document.addEventListener('click', e => {
-  const wrapper = document.getElementById('navDropdownWrapper');
-  if (!wrapper.contains(e.target)) document.getElementById('navDropdown').classList.add('hidden');
+
+// ─── Nav: ☰ Menu toggle ──────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  const menuBtn  = document.getElementById('menu-button');
+  const dropdown = document.getElementById('dropdown-menu');
+  const arrow    = document.getElementById('menu-arrow');
+
+  menuBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    dropdown.classList.toggle('hidden');
+    arrow.textContent = dropdown.classList.contains('hidden') ? '▼' : '▲';
+  });
+  document.addEventListener('click', e => {
+    if (!dropdown.contains(e.target) && !menuBtn.contains(e.target)) {
+      dropdown.classList.add('hidden');
+      arrow.textContent = '▼';
+    }
+  });
 });
 
 function handleLogout() {
-  localStorage.removeItem('access_token');
-  localStorage.removeItem('refresh_token');
+  if (typeof clearTokens === 'function') clearTokens();
+  else {
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
+  }
   window.location.href = 'login.html';
 }
 
 // ─── Tabs ─────────────────────────────────────────────────
 const TAB_IDS = ['ingredients','suppliers','units','restock','recipes'];
+const tabsLoaded = { ingredients: true, suppliers: false, units: false, restock: false, recipes: false };
 
 function switchTab(tab) {
   TAB_IDS.forEach(t => {
@@ -629,39 +693,36 @@ function switchTab(tab) {
 function updateStats() {
   document.getElementById('statTotal').textContent = ingredients.length;
   const lowCount = ingredients.filter(i => i.is_low_stock).length;
-  const lowEl    = document.getElementById('statLow');
-  const card     = document.getElementById('statLowCard');
+  const lowEl = document.getElementById('statLow');
   lowEl.textContent = lowCount;
   lowEl.className   = 'text-3xl font-bold ' + (lowCount > 0 ? 'text-red-600' : 'text-gray-800');
-  card.classList.toggle('border-red-300', lowCount > 0);
+  document.getElementById('statLowCard').classList.toggle('border-red-300', lowCount > 0);
   document.getElementById('statSuppliers').textContent = suppliers.length;
 }
 
-// ─── Render: Ingredients ──────────────────────────────────
+// ─── Render: Ingredients ─────────────────────────────────
 function renderIngredients(list) {
-  const data = list || ingredients;
+  const data  = list || ingredients;
   const tbody = document.getElementById('ingredientsTableBody');
   if (!data.length) {
     tbody.innerHTML = `<tr><td colspan="8" class="text-center py-10 text-gray-400">No ingredients found.</td></tr>`;
     return;
   }
   tbody.innerHTML = data.map(i => {
-    const lowStock  = i.is_low_stock;
-    const statusBadge = lowStock
+    const low   = i.is_low_stock;
+    const badge = low
       ? `<span class="px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">Low Stock</span>`
       : `<span class="px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">OK</span>`;
-    const rowClass = lowStock ? 'low-stock-row' : '';
     const unitAbbr = i.unit_detail?.abbreviation || i.unit_detail?.name || '—';
-    const supplierName = i.supplier_detail?.name || '—';
-    const cost = i.cost_per_unit != null ? '₱' + parseFloat(i.cost_per_unit).toFixed(2) : '—';
+    const cost     = i.cost_per_unit != null ? '₱' + parseFloat(i.cost_per_unit).toFixed(2) : '—';
     return `
-      <tr class="${rowClass} border-b border-gray-50 hover:bg-gray-50 transition">
+      <tr class="${low ? 'low-stock-row' : ''} border-b border-gray-50 hover:bg-gray-50 transition">
         <td class="px-4 py-3 font-medium text-gray-800">${esc(i.name)}</td>
         <td class="px-4 py-3 text-gray-500">${esc(unitAbbr)}</td>
         <td class="px-4 py-3 text-right font-mono text-gray-700">${parseFloat(i.current_stock || 0).toFixed(3)}</td>
         <td class="px-4 py-3 text-right font-mono text-gray-500">${parseFloat(i.par_level || 0).toFixed(3)}</td>
-        <td class="px-4 py-3 text-center">${statusBadge}</td>
-        <td class="px-4 py-3 text-gray-500">${esc(supplierName)}</td>
+        <td class="px-4 py-3 text-center">${badge}</td>
+        <td class="px-4 py-3 text-gray-500">${esc(i.supplier_detail?.name || '—')}</td>
         <td class="px-4 py-3 text-right text-gray-700">${cost}</td>
         <td class="px-4 py-3 text-center">
           <div class="flex justify-center gap-1">
@@ -682,7 +743,7 @@ function filterIngredients() {
   renderIngredients(ingredients.filter(i => i.name.toLowerCase().includes(q)));
 }
 
-// ─── Render: Suppliers ────────────────────────────────────
+// ─── Render: Suppliers ───────────────────────────────────
 function renderSuppliers() {
   const tbody = document.getElementById('suppliersTableBody');
   if (!suppliers.length) {
@@ -736,26 +797,24 @@ function renderUnits() {
 
 // ─── Restock Log ─────────────────────────────────────────
 async function loadRestockLog() {
-  const ingId  = document.getElementById('restockFilterIngredient').value;
-  const tbody  = document.getElementById('restockTableBody');
+  const ingId = document.getElementById('restockFilterIngredient').value;
+  const tbody = document.getElementById('restockTableBody');
   tbody.innerHTML = `<tr><td colspan="7" class="text-center py-6"><div class="flex justify-center"><div class="spinner"></div></div></td></tr>`;
 
   try {
     let logs = [];
     if (ingId) {
-      const data = await authenticatedFetch(`/api/ingredients/${ingId}/restock_logs/`);
+      const data = await apiFetch(`/ingredients/${ingId}/restock_logs/`);
       logs = Array.isArray(data) ? data : (data?.results || []);
     } else {
-      // Load logs for all ingredients in parallel (first 20 to avoid overload)
-      const sample = ingredients.slice(0, 20);
+      const sample  = ingredients.slice(0, 20);
       const results = await Promise.all(
-        sample.map(i => authenticatedFetch(`/api/ingredients/${i.id}/restock_logs/`).catch(() => []))
+        sample.map(i => apiFetch(`/ingredients/${i.id}/restock_logs/`).catch(() => []))
       );
       results.forEach(r => { logs = logs.concat(Array.isArray(r) ? r : (r?.results || [])); });
       logs.sort((a, b) => new Date(b.date) - new Date(a.date));
     }
 
-    // Date filters
     const from = document.getElementById('restockFilterFrom').value;
     const to   = document.getElementById('restockFilterTo').value;
     if (from) logs = logs.filter(l => l.date >= from);
@@ -795,13 +854,11 @@ function populateRestockFilter() {
 // ─── Recipe Builder ───────────────────────────────────────
 async function loadMenuItems() {
   try {
-    const data = await authenticatedFetch('/api/items/');
+    const data = await apiFetch('/items/');
     menuItems = Array.isArray(data) ? data : (data?.results || []);
     const sel = document.getElementById('recipeItemSelect');
     sel.innerHTML = '<option value="">— Select a menu item —</option>' +
       menuItems.map(m => `<option value="${m.id}">${esc(m.name)}</option>`).join('');
-
-    // Populate new recipe ingredient dropdown
     populateNewRecipeIngredientSelect();
   } catch (e) {
     showToast('Failed to load menu items', 'error');
@@ -814,7 +871,7 @@ function populateNewRecipeIngredientSelect() {
     ingredients.map(i => `<option value="${i.id}" data-unit="${esc(i.unit_detail?.abbreviation || '')}">${esc(i.name)}</option>`).join('');
   sel.onchange = () => {
     const opt = sel.options[sel.selectedIndex];
-    document.getElementById('newRecipeUnit').textContent = opt.dataset.unit || '—';
+    document.getElementById('newRecipeUnit').textContent = opt?.dataset?.unit || '—';
   };
 }
 
@@ -825,15 +882,14 @@ async function onRecipeItemChange() {
   document.getElementById('addRecipeRow').classList.add('hidden');
   if (!itemId) return;
 
-  // Load variants for the selected item
   const item = menuItems.find(m => String(m.id) === String(itemId));
   document.getElementById('recipeSectionTitle').textContent =
     item ? `Recipe for: ${item.name}` : 'Recipe ingredients';
 
   try {
-    const data = await authenticatedFetch(`/api/items/${itemId}/variants/`).catch(() => null);
+    const data     = await apiFetch(`/items/${itemId}/variants/`).catch(() => null);
     const variants = data ? (Array.isArray(data) ? data : (data?.results || [])) : [];
-    const vSel = document.getElementById('recipeVariantSelect');
+    const vSel     = document.getElementById('recipeVariantSelect');
     vSel.innerHTML = '<option value="">All variants (base recipe)</option>' +
       variants.map(v => `<option value="${v.id}">${esc(v.name)}</option>`).join('');
   } catch (_) {}
@@ -850,10 +906,11 @@ async function loadRecipeIngredients() {
   tbody.innerHTML = `<tr><td colspan="4" class="text-center py-6"><div class="flex justify-center"><div class="spinner"></div></div></td></tr>`;
 
   try {
-    let url = `/api/recipe-ingredients/?item=${itemId}`;
+    let url = `/recipe-ingredients/?item=${itemId}`;
     if (variantId) url += `&variant=${variantId}`;
-    const data = await authenticatedFetch(url);
+    const data = await apiFetch(url);
     const list = Array.isArray(data) ? data : (data?.results || []);
+
     if (!list.length) {
       tbody.innerHTML = `<tr><td colspan="4" class="text-center py-6 text-gray-400">No ingredients in this recipe yet.</td></tr>`;
       return;
@@ -899,18 +956,17 @@ function cancelAddRecipeRow() {
 }
 
 async function saveRecipeIngredient() {
-  const itemId     = document.getElementById('recipeItemSelect').value;
-  const variantId  = document.getElementById('recipeVariantSelect').value;
-  const ingId      = document.getElementById('newRecipeIngredient').value;
-  const qty        = document.getElementById('newRecipeQty').value;
-
+  const itemId    = document.getElementById('recipeItemSelect').value;
+  const variantId = document.getElementById('recipeVariantSelect').value;
+  const ingId     = document.getElementById('newRecipeIngredient').value;
+  const qty       = document.getElementById('newRecipeQty').value;
   if (!ingId || !qty) { showToast('Select an ingredient and quantity', 'error'); return; }
 
   const payload = { item: itemId, ingredient: ingId, quantity_used: qty };
   if (variantId) payload.variant = variantId;
 
   try {
-    await authenticatedFetch('/api/recipe-ingredients/', {
+    await apiFetch('/recipe-ingredients/', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -926,7 +982,7 @@ async function saveRecipeIngredient() {
 async function deleteRecipeIngredient(id) {
   showConfirm('Remove Ingredient', 'Remove this ingredient from the recipe?', async () => {
     try {
-      await authenticatedFetch(`/api/recipe-ingredients/${id}/`, { method: 'DELETE' });
+      await apiFetch(`/recipe-ingredients/${id}/`, { method: 'DELETE' });
       showToast('Removed from recipe', 'success');
       await loadRecipeIngredients();
     } catch (e) {
@@ -952,10 +1008,10 @@ function openIngredientModal(id) {
   document.getElementById('ingredientCost').value  = '';
   document.getElementById('ingredientActive').checked = true;
 
-  // Populate unit and supplier selects
   const unitSel = document.getElementById('ingredientUnit');
   unitSel.innerHTML = '<option value="">Select unit…</option>' +
     units.filter(u => u.is_active).map(u => `<option value="${u.id}">${esc(u.name)} (${esc(u.abbreviation)})</option>`).join('');
+
   const supSel = document.getElementById('ingredientSupplier');
   supSel.innerHTML = '<option value="">None</option>' +
     suppliers.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('');
@@ -963,13 +1019,13 @@ function openIngredientModal(id) {
   if (id) {
     const ing = ingredients.find(i => i.id === id);
     if (ing) {
-      document.getElementById('ingredientName').value   = ing.name || '';
-      document.getElementById('ingredientUnit').value   = ing.unit || '';
-      document.getElementById('ingredientStock').value  = ing.current_stock || '';
-      document.getElementById('ingredientPar').value    = ing.par_level || '';
-      document.getElementById('ingredientCost').value   = ing.cost_per_unit || '';
-      document.getElementById('ingredientSupplier').value = ing.supplier || '';
-      document.getElementById('ingredientActive').checked = ing.is_active !== false;
+      document.getElementById('ingredientName').value      = ing.name || '';
+      document.getElementById('ingredientUnit').value      = ing.unit || '';
+      document.getElementById('ingredientStock').value     = ing.current_stock || '';
+      document.getElementById('ingredientPar').value       = ing.par_level || '';
+      document.getElementById('ingredientCost').value      = ing.cost_per_unit || '';
+      document.getElementById('ingredientSupplier').value  = ing.supplier || '';
+      document.getElementById('ingredientActive').checked  = ing.is_active !== false;
     }
   }
   showModal('ingredientModal');
@@ -994,14 +1050,14 @@ async function submitIngredientModal() {
 
   try {
     if (id) {
-      await authenticatedFetch(`/api/ingredients/${id}/`, {
+      await apiFetch(`/ingredients/${id}/`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
       showToast('Ingredient updated', 'success');
     } else {
-      await authenticatedFetch('/api/ingredients/', {
+      await apiFetch('/ingredients/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -1017,12 +1073,12 @@ async function submitIngredientModal() {
 
 function openSupplierModal(id) {
   document.getElementById('supplierModalTitle').textContent = id ? 'Edit Supplier' : 'Add Supplier';
-  document.getElementById('supplierId').value       = id || '';
-  document.getElementById('supplierName').value     = '';
-  document.getElementById('supplierContact').value  = '';
-  document.getElementById('supplierPhone').value    = '';
-  document.getElementById('supplierAddress').value  = '';
-  document.getElementById('supplierNotes').value    = '';
+  document.getElementById('supplierId').value      = id || '';
+  document.getElementById('supplierName').value    = '';
+  document.getElementById('supplierContact').value = '';
+  document.getElementById('supplierPhone').value   = '';
+  document.getElementById('supplierAddress').value = '';
+  document.getElementById('supplierNotes').value   = '';
 
   if (id) {
     const s = suppliers.find(x => x.id === id);
@@ -1052,13 +1108,13 @@ async function submitSupplierModal() {
 
   try {
     if (id) {
-      await authenticatedFetch(`/api/suppliers/${id}/`, {
+      await apiFetch(`/suppliers/${id}/`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
     } else {
-      await authenticatedFetch('/api/suppliers/', {
+      await apiFetch('/suppliers/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -1095,19 +1151,18 @@ async function submitUnitModal() {
   if (!name) { showToast('Name is required', 'error'); return; }
   if (!abbr) { showToast('Abbreviation is required', 'error'); return; }
 
-  const payload = { name, abbreviation: abbr };
   try {
     if (id) {
-      await authenticatedFetch(`/api/ingredient-units/${id}/`, {
+      await apiFetch(`/ingredient-units/${id}/`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ name, abbreviation: abbr }),
       });
     } else {
-      await authenticatedFetch('/api/ingredient-units/', {
+      await apiFetch('/ingredient-units/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ name, abbreviation: abbr }),
       });
     }
     showToast(id ? 'Unit updated' : 'Unit added', 'success');
@@ -1119,10 +1174,10 @@ async function submitUnitModal() {
 }
 
 function openRestockModal(id, name) {
-  document.getElementById('restockIngredientId').value = id;
+  document.getElementById('restockIngredientId').value       = id;
   document.getElementById('restockIngredientName').textContent = name;
-  document.getElementById('restockQty').value  = '';
-  document.getElementById('restockCost').value = '';
+  document.getElementById('restockQty').value   = '';
+  document.getElementById('restockCost').value  = '';
   document.getElementById('restockNotes').value = '';
   showModal('restockModal');
 }
@@ -1139,7 +1194,7 @@ async function submitRestockModal() {
   };
 
   try {
-    await authenticatedFetch(`/api/ingredients/${id}/restock/`, {
+    await apiFetch(`/ingredients/${id}/restock/`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -1167,10 +1222,10 @@ function confirmDeactivate(type, id, name) {
     `Deactivate "${name}"? It will no longer appear in active lists.`,
     async () => {
       try {
-        const url = type === 'ingredient' ? `/api/ingredients/${id}/`
-          : type === 'supplier' ? `/api/suppliers/${id}/`
-          : `/api/ingredient-units/${id}/`;
-        await authenticatedFetch(url, {
+        const url = type === 'ingredient' ? `/ingredients/${id}/`
+          : type === 'supplier' ? `/suppliers/${id}/`
+          : `/ingredient-units/${id}/`;
+        await apiFetch(url, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ is_active: false }),
@@ -1188,7 +1243,7 @@ function confirmDeactivate(type, id, name) {
 
 async function toggleUnitActive(id, currentlyActive) {
   try {
-    await authenticatedFetch(`/api/ingredient-units/${id}/`, {
+    await apiFetch(`/ingredient-units/${id}/`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ is_active: !currentlyActive }),
@@ -1200,30 +1255,26 @@ async function toggleUnitActive(id, currentlyActive) {
   }
 }
 
-// ─── Modal helpers ───────────────────────────────────────
+// ─── Modal helpers ────────────────────────────────────────
 function showModal(id) {
   document.getElementById('modalBackdrop').classList.remove('hidden');
   document.getElementById(id).classList.remove('hidden');
 }
-
 function closeAllModals() {
   document.querySelectorAll('.modal-panel').forEach(el => el.classList.add('hidden'));
 }
-
 function closeModal() {
   closeAllModals();
   document.getElementById('modalBackdrop').classList.add('hidden');
 }
-
-// Close on backdrop click
 document.getElementById('modalBackdrop').addEventListener('click', e => {
   if (e.target === e.currentTarget) closeModal();
 });
 
-// ─── Refresh helpers ─────────────────────────────────────
+// ─── Refresh helpers ──────────────────────────────────────
 async function refreshIngredients() {
   try {
-    const data = await authenticatedFetch('/api/ingredients/');
+    const data = await apiFetch('/ingredients/');
     ingredients = Array.isArray(data) ? data : (data?.results || []);
     renderIngredients();
     updateStats();
@@ -1233,7 +1284,7 @@ async function refreshIngredients() {
 
 async function refreshSuppliers() {
   try {
-    const data = await authenticatedFetch('/api/suppliers/');
+    const data = await apiFetch('/suppliers/');
     suppliers = Array.isArray(data) ? data : (data?.results || []);
     renderSuppliers();
     updateStats();
@@ -1242,9 +1293,10 @@ async function refreshSuppliers() {
 
 async function refreshUnits() {
   try {
-    const data = await authenticatedFetch('/api/ingredient-units/');
+    const data = await apiFetch('/ingredient-units/');
     units = Array.isArray(data) ? data : (data?.results || []);
     renderUnits();
+    checkPresetBanner();
   } catch (e) { showToast('Refresh failed', 'error'); }
 }
 
@@ -1254,11 +1306,7 @@ function populateSelectsGlobally() {
 
 // ─── Toast ────────────────────────────────────────────────
 function showToast(message, type = 'info') {
-  const colors = {
-    success : 'bg-green-600 text-white',
-    error   : 'bg-red-600 text-white',
-    info    : 'bg-gray-800 text-white',
-  };
+  const colors = { success: 'bg-green-600 text-white', error: 'bg-red-600 text-white', info: 'bg-gray-800 text-white' };
   const el = document.createElement('div');
   el.className = `toast pointer-events-auto px-4 py-3 rounded-xl shadow-lg text-sm font-medium max-w-xs ${colors[type] || colors.info}`;
   el.textContent = message;
@@ -1266,7 +1314,7 @@ function showToast(message, type = 'info') {
   setTimeout(() => el.remove(), 3200);
 }
 
-// ─── Escape helper ───────────────────────────────────────
+// ─── Escape helper ────────────────────────────────────────
 function esc(str) {
   if (str == null) return '';
   return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -1274,6 +1322,40 @@ function esc(str) {
 
 // ─── Boot ─────────────────────────────────────────────────
 checkAuth();
+</script>
+
+<!-- Live clock + username/role (mirrors dashboard.html bottom script) -->
+<script>
+(function () {
+  try {
+    const tok = localStorage.getItem('access_token');
+    if (tok) {
+      const p = JSON.parse(atob(tok.split('.')[1]));
+      const uEl = document.getElementById('userName');
+      const rEl = document.getElementById('userRole');
+      if (uEl) uEl.textContent = p.username || 'User';
+      if (rEl) rEl.textContent = p.role || '';
+    }
+  } catch (e) {}
+
+  function tick() {
+    const prefs  = (() => { try { return JSON.parse(localStorage.getItem('clock_prefs') || '{}'); } catch (e) { return {}; } })();
+    const use12  = prefs.format !== '24h';
+    const tz     = prefs.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const el     = document.getElementById('live-clock');
+    if (el) el.textContent = new Date().toLocaleTimeString('en-PH', {
+      hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: use12, timeZone: tz
+    });
+  }
+  tick();
+  setInterval(tick, 1000);
+})();
+</script>
+
+<script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js').catch(err => console.warn('SW registration failed:', err));
+  }
 </script>
 </body>
 </html>

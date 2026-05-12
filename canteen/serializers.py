@@ -456,7 +456,7 @@ class IngredientRestockLogSerializer(serializers.ModelSerializer):
             'id', 'ingredient', 'ingredient_name', 'quantity_added',
             'cost_per_unit', 'date', 'notes', 'recorded_by', 'recorded_by_name'
         ]
-        read_only_fields = ['recorded_by', 'date']
+        read_only_fields = ['ingredient', 'recorded_by', 'date']
 
 
 class RecipeIngredientSerializer(serializers.ModelSerializer):
