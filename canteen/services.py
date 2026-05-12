@@ -188,6 +188,7 @@ def create_pos_transaction(items_data, payment_method, cashier=None, **kwargs):
                         'group': group,
                         'option': option,
                         'group_id': group.id,
+                        'option_id': option.id,   # required by _deplete_ingredients
                     })
 
             final_unit_price = base_price + modifier_total
