@@ -1,0 +1,1279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ingredients — TarsierPOS</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" href="icon-192.png" />
+  <style>
+    [x-cloak] { display: none !important; }
+    .tab-active { background: #1d4ed8; color: #fff; }
+    .tab-inactive { background: #e5e7eb; color: #374151; }
+    .tab-inactive:hover { background: #d1d5db; }
+    .toast { animation: slideIn 0.3s ease, fadeOut 0.5s ease 2.5s forwards; }
+    @keyframes slideIn { from { transform: translateX(120%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; pointer-events: none; } }
+    .modal-backdrop { backdrop-filter: blur(2px); }
+    .low-stock-row { background-color: #fef2f2; }
+    .spinner { border: 3px solid #e5e7eb; border-top-color: #2563eb; border-radius: 50%; width: 28px; height: 28px; animation: spin 0.7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .tab-bar { scrollbar-width: none; -ms-overflow-style: none; }
+    .tab-bar::-webkit-scrollbar { display: none; }
+  </style>
+</head>
+<body class="bg-gray-100 min-h-screen font-sans">
+
+<!-- ───────────── NAV ───────────── -->
+<nav class="bg-gradient-to-r from-blue-800 to-blue-600 text-white shadow-lg sticky top-0 z-40">
+  <div class="max-w-full px-4 py-3 flex items-center justify-between">
+
+    <!-- Left: Logo + title -->
+    <div class="flex items-center gap-3">
+      <img src="icon-192.png" alt="Logo" class="w-8 h-8 rounded-full shadow" />
+      <div>
+        <div class="font-bold text-base leading-none" id="navBizName">TarsierPOS</div>
+        <div class="text-blue-200 text-xs" id="navClock">--:-- --</div>
+      </div>
+    </div>
+
+    <!-- Right: User info + dropdown -->
+    <div class="relative" id="navDropdownWrapper">
+      <button id="navMenuBtn"
+        class="flex items-center gap-2 bg-blue-700 hover:bg-blue-900 px-3 py-1.5 rounded-lg transition text-sm"
+        onclick="toggleNavDropdown()">
+        <div id="navAvatar"
+          class="w-7 h-7 rounded-full bg-white text-blue-700 font-bold text-xs flex items-center justify-center">--</div>
+        <span id="navUsername" class="hidden sm:inline">Loading...</span>
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+        </svg>
+      </button>
+
+      <!-- Dropdown -->
+      <div id="navDropdown"
+        class="hidden absolute right-0 mt-2 w-52 bg-white rounded-xl shadow-xl border border-gray-100 py-1 z-50 text-gray-700">
+        <div class="px-4 py-2 border-b border-gray-100 text-xs text-gray-400 uppercase tracking-wide">Navigation</div>
+        <a href="index.html"   class="block px-4 py-2 text-sm hover:bg-gray-100">🛒 POS</a>
+        <a href="dashboard.html" class="block px-4 py-2 text-sm hover:bg-gray-100" id="navDashLink">📊 Dashboard</a>
+        <a href="inventory.html" class="block px-4 py-2 text-sm hover:bg-gray-100">📦 Inventory</a>
+        <a href="ingredients.html" class="block px-4 py-2 text-sm bg-blue-50 text-blue-700 font-semibold">🧪 Ingredients</a>
+        <a href="xreport.html"  class="block px-4 py-2 text-sm hover:bg-gray-100" id="navXLink">📈 X-Report</a>
+        <a href="zreport.html"  class="block px-4 py-2 text-sm hover:bg-gray-100" id="navZLink">📉 Z-Report</a>
+        <a href="settings.html" class="block px-4 py-2 text-sm hover:bg-gray-100" id="navSettingsLink">⚙️ Settings</a>
+        <div class="border-t border-gray-100 mt-1 pt-1">
+          <button onclick="handleLogout()"
+            class="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50">🚪 Logout</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</nav>
+
+<!-- ───────────── TOAST ───────────── -->
+<div id="toastContainer" class="fixed bottom-5 right-5 z-[100] flex flex-col gap-2 pointer-events-none"></div>
+
+<!-- ───────────── MAIN CONTENT ───────────── -->
+<div class="max-w-7xl mx-auto px-4 py-6">
+
+  <!-- Page header -->
+  <div class="mb-5">
+    <h1 class="text-2xl font-bold text-gray-800">🧪 Ingredient Inventory</h1>
+    <p class="text-gray-500 text-sm mt-0.5">Manage ingredients, suppliers, units, restock history, and recipes.</p>
+  </div>
+
+  <!-- Tab bar -->
+  <div class="tab-bar flex gap-2 overflow-x-auto mb-5 pb-1">
+    <button onclick="switchTab('ingredients')" id="tab-btn-ingredients" class="tab-active whitespace-nowrap px-4 py-2 rounded-full text-sm font-medium transition">🧪 Ingredients</button>
+    <button onclick="switchTab('suppliers')"   id="tab-btn-suppliers"   class="tab-inactive whitespace-nowrap px-4 py-2 rounded-full text-sm font-medium transition">🏭 Suppliers</button>
+    <button onclick="switchTab('units')"       id="tab-btn-units"       class="tab-inactive whitespace-nowrap px-4 py-2 rounded-full text-sm font-medium transition">📏 Units</button>
+    <button onclick="switchTab('restock')"     id="tab-btn-restock"     class="tab-inactive whitespace-nowrap px-4 py-2 rounded-full text-sm font-medium transition">📋 Restock Log</button>
+    <button onclick="switchTab('recipes')"     id="tab-btn-recipes"     class="tab-inactive whitespace-nowrap px-4 py-2 rounded-full text-sm font-medium transition">📖 Recipe Builder</button>
+  </div>
+
+  <!-- ══════════════ TAB 1: INGREDIENTS ══════════════ -->
+  <div id="tab-ingredients" class="tab-content">
+
+    <!-- Summary cards -->
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-5">
+      <div class="bg-white rounded-xl shadow-sm p-4 border border-gray-100">
+        <div class="text-xs text-gray-400 uppercase tracking-wide mb-1">Total Ingredients</div>
+        <div class="text-3xl font-bold text-gray-800" id="statTotal">—</div>
+      </div>
+      <div class="bg-white rounded-xl shadow-sm p-4 border border-gray-100" id="statLowCard">
+        <div class="text-xs text-gray-400 uppercase tracking-wide mb-1">Low Stock Alerts</div>
+        <div class="text-3xl font-bold" id="statLow">—</div>
+      </div>
+      <div class="bg-white rounded-xl shadow-sm p-4 border border-gray-100">
+        <div class="text-xs text-gray-400 uppercase tracking-wide mb-1">Total Suppliers</div>
+        <div class="text-3xl font-bold text-gray-800" id="statSuppliers">—</div>
+      </div>
+    </div>
+
+    <!-- Toolbar -->
+    <div class="flex flex-col sm:flex-row gap-3 mb-4 items-start sm:items-center justify-between">
+      <input id="ingredientSearch" type="text" placeholder="Search ingredients…"
+        class="w-full sm:w-72 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+        oninput="filterIngredients()" />
+      <button onclick="openModal('ingredient', null)"
+        class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition whitespace-nowrap">
+        + Add Ingredient
+      </button>
+    </div>
+
+    <!-- Table -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead class="bg-gray-50 border-b border-gray-100 text-gray-500 text-xs uppercase tracking-wide">
+          <tr>
+            <th class="px-4 py-3 text-left">Name</th>
+            <th class="px-4 py-3 text-left">Unit</th>
+            <th class="px-4 py-3 text-right">Stock</th>
+            <th class="px-4 py-3 text-right">Par Level</th>
+            <th class="px-4 py-3 text-center">Status</th>
+            <th class="px-4 py-3 text-left">Supplier</th>
+            <th class="px-4 py-3 text-right">Cost/Unit</th>
+            <th class="px-4 py-3 text-center">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="ingredientsTableBody">
+          <tr><td colspan="8" class="text-center py-10 text-gray-400">
+            <div class="flex justify-center"><div class="spinner"></div></div>
+          </td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ══════════════ TAB 2: SUPPLIERS ══════════════ -->
+  <div id="tab-suppliers" class="tab-content hidden">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-lg font-semibold text-gray-700">Suppliers</h2>
+      <button onclick="openModal('supplier', null)"
+        class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition">
+        + Add Supplier
+      </button>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead class="bg-gray-50 border-b border-gray-100 text-gray-500 text-xs uppercase tracking-wide">
+          <tr>
+            <th class="px-4 py-3 text-left">Name</th>
+            <th class="px-4 py-3 text-left">Contact Person</th>
+            <th class="px-4 py-3 text-left">Phone</th>
+            <th class="px-4 py-3 text-left">Address</th>
+            <th class="px-4 py-3 text-center">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="suppliersTableBody">
+          <tr><td colspan="5" class="text-center py-10 text-gray-400">
+            <div class="flex justify-center"><div class="spinner"></div></div>
+          </td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ══════════════ TAB 3: UNITS ══════════════ -->
+  <div id="tab-units" class="tab-content hidden">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-lg font-semibold text-gray-700">Measurement Units</h2>
+      <button onclick="openModal('unit', null)"
+        class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition">
+        + Add Unit
+      </button>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead class="bg-gray-50 border-b border-gray-100 text-gray-500 text-xs uppercase tracking-wide">
+          <tr>
+            <th class="px-4 py-3 text-left">Name</th>
+            <th class="px-4 py-3 text-left">Abbreviation</th>
+            <th class="px-4 py-3 text-center">Status</th>
+            <th class="px-4 py-3 text-center">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="unitsTableBody">
+          <tr><td colspan="4" class="text-center py-10 text-gray-400">
+            <div class="flex justify-center"><div class="spinner"></div></div>
+          </td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ══════════════ TAB 4: RESTOCK LOG ══════════════ -->
+  <div id="tab-restock" class="tab-content hidden">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-lg font-semibold text-gray-700">Restock History</h2>
+    </div>
+    <!-- Filters -->
+    <div class="flex flex-col sm:flex-row gap-3 mb-4">
+      <select id="restockFilterIngredient"
+        class="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+        onchange="loadRestockLog()">
+        <option value="">All Ingredients</option>
+      </select>
+      <input type="date" id="restockFilterFrom"
+        class="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+        onchange="loadRestockLog()" />
+      <input type="date" id="restockFilterTo"
+        class="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+        onchange="loadRestockLog()" />
+      <button onclick="loadRestockLog()"
+        class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm transition">Refresh</button>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead class="bg-gray-50 border-b border-gray-100 text-gray-500 text-xs uppercase tracking-wide">
+          <tr>
+            <th class="px-4 py-3 text-left">Date</th>
+            <th class="px-4 py-3 text-left">Ingredient</th>
+            <th class="px-4 py-3 text-right">Qty Added</th>
+            <th class="px-4 py-3 text-left">Unit</th>
+            <th class="px-4 py-3 text-right">Cost/Unit</th>
+            <th class="px-4 py-3 text-left">Recorded By</th>
+            <th class="px-4 py-3 text-left">Notes</th>
+          </tr>
+        </thead>
+        <tbody id="restockTableBody">
+          <tr><td colspan="7" class="text-center py-10 text-gray-400">Select an ingredient or click Refresh to load logs.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ══════════════ TAB 5: RECIPE BUILDER ══════════════ -->
+  <div id="tab-recipes" class="tab-content hidden">
+    <div class="mb-4">
+      <h2 class="text-lg font-semibold text-gray-700">Recipe Builder</h2>
+      <p class="text-gray-400 text-sm mt-0.5">Define which ingredients are used per menu item or variant.</p>
+    </div>
+
+    <!-- Item selector -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-4">
+      <div class="flex flex-col sm:flex-row gap-3 items-start sm:items-end">
+        <div class="flex-1">
+          <label class="block text-xs font-medium text-gray-500 mb-1">Menu Item</label>
+          <select id="recipeItemSelect"
+            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+            onchange="onRecipeItemChange()">
+            <option value="">— Select a menu item —</option>
+          </select>
+        </div>
+        <div id="recipeVariantWrapper" class="hidden flex-1">
+          <label class="block text-xs font-medium text-gray-500 mb-1">Variant (optional)</label>
+          <select id="recipeVariantSelect"
+            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+            onchange="loadRecipeIngredients()">
+            <option value="">All variants (base recipe)</option>
+          </select>
+        </div>
+        <label class="flex items-center gap-2 text-sm text-gray-600 whitespace-nowrap pt-5">
+          <input type="checkbox" id="recipeVariantToggle" onchange="toggleVariantSelector()" class="rounded" />
+          Set for specific variant
+        </label>
+      </div>
+    </div>
+
+    <!-- Recipe table -->
+    <div id="recipeSection" class="hidden">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="font-medium text-gray-700" id="recipeSectionTitle">Recipe ingredients</h3>
+        <button onclick="showAddRecipeRow()"
+          class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-sm transition">
+          + Add Ingredient
+        </button>
+      </div>
+      <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="bg-gray-50 border-b border-gray-100 text-gray-500 text-xs uppercase tracking-wide">
+            <tr>
+              <th class="px-4 py-3 text-left">Ingredient</th>
+              <th class="px-4 py-3 text-right">Quantity</th>
+              <th class="px-4 py-3 text-left">Unit</th>
+              <th class="px-4 py-3 text-center">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="recipeTableBody"></tbody>
+          <!-- Inline add row -->
+          <tbody id="addRecipeRow" class="hidden">
+            <tr class="bg-blue-50">
+              <td class="px-4 py-2">
+                <select id="newRecipeIngredient"
+                  class="w-full border border-gray-200 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300">
+                  <option value="">Select ingredient…</option>
+                </select>
+              </td>
+              <td class="px-4 py-2 text-right">
+                <input type="number" id="newRecipeQty" min="0" step="0.001" placeholder="0.000"
+                  class="w-24 border border-gray-200 rounded px-2 py-1 text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-300" />
+              </td>
+              <td class="px-4 py-2 text-gray-400 text-xs" id="newRecipeUnit">—</td>
+              <td class="px-4 py-2 text-center">
+                <button onclick="saveRecipeIngredient()"
+                  class="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-xs mr-1 transition">Save</button>
+                <button onclick="cancelAddRecipeRow()"
+                  class="bg-gray-200 hover:bg-gray-300 text-gray-600 px-3 py-1 rounded text-xs transition">Cancel</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div id="recipeEmpty" class="text-center text-gray-400 py-16">Select a menu item above to view its recipe.</div>
+  </div>
+
+</div><!-- /main -->
+
+
+<!-- ══════════════════════════════════════════════════════
+     MODALS
+══════════════════════════════════════════════════════ -->
+
+<!-- Generic modal backdrop -->
+<div id="modalBackdrop"
+  class="fixed inset-0 bg-black/40 modal-backdrop z-50 hidden flex items-center justify-center p-4">
+
+  <!-- ── INGREDIENT MODAL ── -->
+  <div id="ingredientModal" class="modal-panel hidden bg-white rounded-2xl shadow-2xl w-full max-w-lg">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+      <h2 class="font-semibold text-gray-800" id="ingredientModalTitle">Add Ingredient</h2>
+      <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+    </div>
+    <div class="px-6 py-4 space-y-3 max-h-[70vh] overflow-y-auto">
+      <input type="hidden" id="ingredientId" />
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">Name <span class="text-red-500">*</span></label>
+        <input type="text" id="ingredientName"
+          class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">Unit <span class="text-red-500">*</span></label>
+          <select id="ingredientUnit"
+            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300">
+            <option value="">Select unit…</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">Supplier</label>
+          <select id="ingredientSupplier"
+            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300">
+            <option value="">None</option>
+          </select>
+        </div>
+      </div>
+      <div class="grid grid-cols-3 gap-3">
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">Current Stock</label>
+          <input type="number" id="ingredientStock" min="0" step="0.001"
+            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">Par Level</label>
+          <input type="number" id="ingredientPar" min="0" step="0.001"
+            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">Cost / Unit (₱)</label>
+          <input type="number" id="ingredientCost" min="0" step="0.01"
+            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+        </div>
+      </div>
+      <div class="flex items-center gap-2 pt-1">
+        <input type="checkbox" id="ingredientActive" class="rounded" checked />
+        <label for="ingredientActive" class="text-sm text-gray-600">Active</label>
+      </div>
+    </div>
+    <div class="flex justify-end gap-2 px-6 py-4 border-t border-gray-100">
+      <button onclick="closeModal()" class="px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600 text-sm transition">Cancel</button>
+      <button onclick="submitIngredientModal()" class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition">Save</button>
+    </div>
+  </div>
+
+  <!-- ── SUPPLIER MODAL ── -->
+  <div id="supplierModal" class="modal-panel hidden bg-white rounded-2xl shadow-2xl w-full max-w-lg">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+      <h2 class="font-semibold text-gray-800" id="supplierModalTitle">Add Supplier</h2>
+      <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+    </div>
+    <div class="px-6 py-4 space-y-3">
+      <input type="hidden" id="supplierId" />
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">Name <span class="text-red-500">*</span></label>
+        <input type="text" id="supplierName"
+          class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">Contact Person</label>
+          <input type="text" id="supplierContact"
+            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">Phone</label>
+          <input type="text" id="supplierPhone"
+            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+        </div>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">Address</label>
+        <textarea id="supplierAddress" rows="2"
+          class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none"></textarea>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">Notes</label>
+        <textarea id="supplierNotes" rows="2"
+          class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none"></textarea>
+      </div>
+    </div>
+    <div class="flex justify-end gap-2 px-6 py-4 border-t border-gray-100">
+      <button onclick="closeModal()" class="px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600 text-sm transition">Cancel</button>
+      <button onclick="submitSupplierModal()" class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition">Save</button>
+    </div>
+  </div>
+
+  <!-- ── UNIT MODAL ── -->
+  <div id="unitModal" class="modal-panel hidden bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+      <h2 class="font-semibold text-gray-800" id="unitModalTitle">Add Unit</h2>
+      <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+    </div>
+    <div class="px-6 py-4 space-y-3">
+      <input type="hidden" id="unitId" />
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">Name <span class="text-red-500">*</span></label>
+        <input type="text" id="unitName"
+          class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">Abbreviation <span class="text-red-500">*</span></label>
+        <input type="text" id="unitAbbr" maxlength="10"
+          class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+      </div>
+    </div>
+    <div class="flex justify-end gap-2 px-6 py-4 border-t border-gray-100">
+      <button onclick="closeModal()" class="px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600 text-sm transition">Cancel</button>
+      <button onclick="submitUnitModal()" class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition">Save</button>
+    </div>
+  </div>
+
+  <!-- ── RESTOCK MODAL ── -->
+  <div id="restockModal" class="modal-panel hidden bg-white rounded-2xl shadow-2xl w-full max-w-md">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+      <h2 class="font-semibold text-gray-800">Restock Ingredient</h2>
+      <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+    </div>
+    <div class="px-6 py-4 space-y-3">
+      <input type="hidden" id="restockIngredientId" />
+      <div class="bg-gray-50 rounded-lg px-3 py-2 text-sm text-gray-600">
+        Ingredient: <span class="font-semibold text-gray-800" id="restockIngredientName">—</span>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">Quantity Added <span class="text-red-500">*</span></label>
+        <input type="number" id="restockQty" min="0" step="0.001"
+          class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">Cost per Unit (₱)</label>
+        <input type="number" id="restockCost" min="0" step="0.01"
+          class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">Notes</label>
+        <textarea id="restockNotes" rows="2"
+          class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none"></textarea>
+      </div>
+    </div>
+    <div class="flex justify-end gap-2 px-6 py-4 border-t border-gray-100">
+      <button onclick="closeModal()" class="px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600 text-sm transition">Cancel</button>
+      <button onclick="submitRestockModal()" class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition">Confirm Restock</button>
+    </div>
+  </div>
+
+  <!-- ── CONFIRM MODAL ── -->
+  <div id="confirmModal" class="modal-panel hidden bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+    <div class="px-6 py-5">
+      <h2 class="font-semibold text-gray-800 mb-2" id="confirmTitle">Confirm</h2>
+      <p class="text-sm text-gray-500" id="confirmMessage"></p>
+    </div>
+    <div class="flex justify-end gap-2 px-6 py-4 border-t border-gray-100">
+      <button onclick="closeModal()" class="px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600 text-sm transition">Cancel</button>
+      <button id="confirmOkBtn" class="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-medium transition">Confirm</button>
+    </div>
+  </div>
+
+</div><!-- /backdrop -->
+
+
+<!-- ══════════════════════════════════════════════════════
+     SCRIPT
+══════════════════════════════════════════════════════ -->
+<script src="config.js"></script>
+<script>
+'use strict';
+
+// ─── State ───────────────────────────────────────────────
+let ingredients = [];
+let suppliers   = [];
+let units       = [];
+let menuItems   = [];
+let currentUser = null;
+
+const tabsLoaded = { ingredients: false, suppliers: false, units: false, restock: false, recipes: false };
+
+// ─── Auth & Init ─────────────────────────────────────────
+async function checkAuth() {
+  const token = localStorage.getItem('access_token');
+  if (!token) { window.location.href = 'login.html'; return; }
+
+  try {
+    const data = await authenticatedFetch('/api/auth/me/');
+    if (!data || data.error) { window.location.href = 'login.html'; return; }
+    currentUser = data;
+
+    // Role guard — cashiers redirected
+    if (data.role === 'cashier') { window.location.href = 'index.html'; return; }
+
+    // Nav: show/hide manager-only links
+    const isAdmin = data.role === 'admin';
+    ['navDashLink','navXLink','navZLink','navSettingsLink'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el && !isAdmin && data.role !== 'manager') el.style.display = 'none';
+    });
+
+    // Nav user info
+    const initials = (data.username || 'U').slice(0,2).toUpperCase();
+    document.getElementById('navAvatar').textContent   = initials;
+    document.getElementById('navUsername').textContent = data.username || 'User';
+
+    // Business name
+    try {
+      const biz = await authenticatedFetch('/api/business-profile/');
+      if (biz && biz.name) document.getElementById('navBizName').textContent = biz.name;
+    } catch (_) {}
+
+    await loadInitialData();
+  } catch (e) {
+    window.location.href = 'login.html';
+  }
+}
+
+async function loadInitialData() {
+  try {
+    const [ingData, supData, unitData] = await Promise.all([
+      authenticatedFetch('/api/ingredients/'),
+      authenticatedFetch('/api/suppliers/'),
+      authenticatedFetch('/api/ingredient-units/'),
+    ]);
+    ingredients = Array.isArray(ingData)      ? ingData      : (ingData?.results  || []);
+    suppliers   = Array.isArray(supData)      ? supData      : (supData?.results  || []);
+    units       = Array.isArray(unitData)     ? unitData     : (unitData?.results || []);
+
+    tabsLoaded.ingredients = true;
+    tabsLoaded.suppliers   = true;
+    tabsLoaded.units       = true;
+
+    renderIngredients();
+    updateStats();
+    populateSelectsGlobally();
+  } catch (e) {
+    showToast('Failed to load data: ' + e.message, 'error');
+  }
+}
+
+// ─── Clock ────────────────────────────────────────────────
+function updateClock() {
+  const now = new Date();
+  document.getElementById('navClock').textContent =
+    now.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', hour12: true });
+}
+updateClock();
+setInterval(updateClock, 1000);
+
+// ─── Nav dropdown ────────────────────────────────────────
+function toggleNavDropdown() {
+  document.getElementById('navDropdown').classList.toggle('hidden');
+}
+document.addEventListener('click', e => {
+  const wrapper = document.getElementById('navDropdownWrapper');
+  if (!wrapper.contains(e.target)) document.getElementById('navDropdown').classList.add('hidden');
+});
+
+function handleLogout() {
+  localStorage.removeItem('access_token');
+  localStorage.removeItem('refresh_token');
+  window.location.href = 'login.html';
+}
+
+// ─── Tabs ─────────────────────────────────────────────────
+const TAB_IDS = ['ingredients','suppliers','units','restock','recipes'];
+
+function switchTab(tab) {
+  TAB_IDS.forEach(t => {
+    document.getElementById('tab-' + t).classList.toggle('hidden', t !== tab);
+    const btn = document.getElementById('tab-btn-' + t);
+    btn.classList.toggle('tab-active',   t === tab);
+    btn.classList.toggle('tab-inactive', t !== tab);
+  });
+  if (tab === 'suppliers' && !tabsLoaded.suppliers) { renderSuppliers(); tabsLoaded.suppliers = true; }
+  if (tab === 'units'     && !tabsLoaded.units)     { renderUnits();     tabsLoaded.units     = true; }
+  if (tab === 'restock'   && !tabsLoaded.restock)   { loadRestockLog();  tabsLoaded.restock   = true; }
+  if (tab === 'recipes'   && !tabsLoaded.recipes)   { loadMenuItems();   tabsLoaded.recipes   = true; }
+}
+
+// ─── Stats ────────────────────────────────────────────────
+function updateStats() {
+  document.getElementById('statTotal').textContent = ingredients.length;
+  const lowCount = ingredients.filter(i => i.is_low_stock).length;
+  const lowEl    = document.getElementById('statLow');
+  const card     = document.getElementById('statLowCard');
+  lowEl.textContent = lowCount;
+  lowEl.className   = 'text-3xl font-bold ' + (lowCount > 0 ? 'text-red-600' : 'text-gray-800');
+  card.classList.toggle('border-red-300', lowCount > 0);
+  document.getElementById('statSuppliers').textContent = suppliers.length;
+}
+
+// ─── Render: Ingredients ──────────────────────────────────
+function renderIngredients(list) {
+  const data = list || ingredients;
+  const tbody = document.getElementById('ingredientsTableBody');
+  if (!data.length) {
+    tbody.innerHTML = `<tr><td colspan="8" class="text-center py-10 text-gray-400">No ingredients found.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = data.map(i => {
+    const lowStock  = i.is_low_stock;
+    const statusBadge = lowStock
+      ? `<span class="px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">Low Stock</span>`
+      : `<span class="px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">OK</span>`;
+    const rowClass = lowStock ? 'low-stock-row' : '';
+    const unitAbbr = i.unit_detail?.abbreviation || i.unit_detail?.name || '—';
+    const supplierName = i.supplier_detail?.name || '—';
+    const cost = i.cost_per_unit != null ? '₱' + parseFloat(i.cost_per_unit).toFixed(2) : '—';
+    return `
+      <tr class="${rowClass} border-b border-gray-50 hover:bg-gray-50 transition">
+        <td class="px-4 py-3 font-medium text-gray-800">${esc(i.name)}</td>
+        <td class="px-4 py-3 text-gray-500">${esc(unitAbbr)}</td>
+        <td class="px-4 py-3 text-right font-mono text-gray-700">${parseFloat(i.current_stock || 0).toFixed(3)}</td>
+        <td class="px-4 py-3 text-right font-mono text-gray-500">${parseFloat(i.par_level || 0).toFixed(3)}</td>
+        <td class="px-4 py-3 text-center">${statusBadge}</td>
+        <td class="px-4 py-3 text-gray-500">${esc(supplierName)}</td>
+        <td class="px-4 py-3 text-right text-gray-700">${cost}</td>
+        <td class="px-4 py-3 text-center">
+          <div class="flex justify-center gap-1">
+            <button onclick="openRestockModal(${i.id}, '${esc(i.name)}')"
+              class="bg-blue-100 hover:bg-blue-200 text-blue-700 px-2 py-1 rounded text-xs transition">Restock</button>
+            <button onclick="openModal('ingredient', ${i.id})"
+              class="bg-yellow-100 hover:bg-yellow-200 text-yellow-700 px-2 py-1 rounded text-xs transition">Edit</button>
+            <button onclick="confirmDeactivate('ingredient', ${i.id}, '${esc(i.name)}')"
+              class="bg-red-100 hover:bg-red-200 text-red-700 px-2 py-1 rounded text-xs transition">Deactivate</button>
+          </div>
+        </td>
+      </tr>`;
+  }).join('');
+}
+
+function filterIngredients() {
+  const q = document.getElementById('ingredientSearch').value.toLowerCase();
+  renderIngredients(ingredients.filter(i => i.name.toLowerCase().includes(q)));
+}
+
+// ─── Render: Suppliers ────────────────────────────────────
+function renderSuppliers() {
+  const tbody = document.getElementById('suppliersTableBody');
+  if (!suppliers.length) {
+    tbody.innerHTML = `<tr><td colspan="5" class="text-center py-10 text-gray-400">No suppliers found.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = suppliers.map(s => `
+    <tr class="border-b border-gray-50 hover:bg-gray-50 transition">
+      <td class="px-4 py-3 font-medium text-gray-800">${esc(s.name)}</td>
+      <td class="px-4 py-3 text-gray-500">${esc(s.contact_person || '—')}</td>
+      <td class="px-4 py-3 text-gray-500">${esc(s.phone || '—')}</td>
+      <td class="px-4 py-3 text-gray-500 max-w-xs truncate">${esc(s.address || '—')}</td>
+      <td class="px-4 py-3 text-center">
+        <div class="flex justify-center gap-1">
+          <button onclick="openModal('supplier', ${s.id})"
+            class="bg-yellow-100 hover:bg-yellow-200 text-yellow-700 px-2 py-1 rounded text-xs transition">Edit</button>
+          <button onclick="confirmDeactivate('supplier', ${s.id}, '${esc(s.name)}')"
+            class="bg-red-100 hover:bg-red-200 text-red-700 px-2 py-1 rounded text-xs transition">Deactivate</button>
+        </div>
+      </td>
+    </tr>`).join('');
+}
+
+// ─── Render: Units ───────────────────────────────────────
+function renderUnits() {
+  const tbody = document.getElementById('unitsTableBody');
+  if (!units.length) {
+    tbody.innerHTML = `<tr><td colspan="4" class="text-center py-10 text-gray-400">No units found.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = units.map(u => `
+    <tr class="border-b border-gray-50 hover:bg-gray-50 transition">
+      <td class="px-4 py-3 font-medium text-gray-800">${esc(u.name)}</td>
+      <td class="px-4 py-3 text-gray-500">${esc(u.abbreviation)}</td>
+      <td class="px-4 py-3 text-center">
+        ${u.is_active
+          ? `<span class="px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">Active</span>`
+          : `<span class="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">Inactive</span>`}
+      </td>
+      <td class="px-4 py-3 text-center">
+        <div class="flex justify-center gap-1">
+          <button onclick="openModal('unit', ${u.id})"
+            class="bg-yellow-100 hover:bg-yellow-200 text-yellow-700 px-2 py-1 rounded text-xs transition">Edit</button>
+          <button onclick="toggleUnitActive(${u.id}, ${u.is_active})"
+            class="${u.is_active ? 'bg-red-100 hover:bg-red-200 text-red-700' : 'bg-green-100 hover:bg-green-200 text-green-700'} px-2 py-1 rounded text-xs transition">
+            ${u.is_active ? 'Deactivate' : 'Activate'}</button>
+        </div>
+      </td>
+    </tr>`).join('');
+}
+
+// ─── Restock Log ─────────────────────────────────────────
+async function loadRestockLog() {
+  const ingId  = document.getElementById('restockFilterIngredient').value;
+  const tbody  = document.getElementById('restockTableBody');
+  tbody.innerHTML = `<tr><td colspan="7" class="text-center py-6"><div class="flex justify-center"><div class="spinner"></div></div></td></tr>`;
+
+  try {
+    let logs = [];
+    if (ingId) {
+      const data = await authenticatedFetch(`/api/ingredients/${ingId}/restock_logs/`);
+      logs = Array.isArray(data) ? data : (data?.results || []);
+    } else {
+      // Load logs for all ingredients in parallel (first 20 to avoid overload)
+      const sample = ingredients.slice(0, 20);
+      const results = await Promise.all(
+        sample.map(i => authenticatedFetch(`/api/ingredients/${i.id}/restock_logs/`).catch(() => []))
+      );
+      results.forEach(r => { logs = logs.concat(Array.isArray(r) ? r : (r?.results || [])); });
+      logs.sort((a, b) => new Date(b.date) - new Date(a.date));
+    }
+
+    // Date filters
+    const from = document.getElementById('restockFilterFrom').value;
+    const to   = document.getElementById('restockFilterTo').value;
+    if (from) logs = logs.filter(l => l.date >= from);
+    if (to)   logs = logs.filter(l => l.date <= to + 'T23:59:59');
+
+    if (!logs.length) {
+      tbody.innerHTML = `<tr><td colspan="7" class="text-center py-10 text-gray-400">No restock logs found.</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = logs.map(l => {
+      const ing  = ingredients.find(i => i.id === l.ingredient) || {};
+      const unit = ing.unit_detail?.abbreviation || '—';
+      const date = l.date ? new Date(l.date).toLocaleDateString('en-PH', { year:'numeric', month:'short', day:'numeric' }) : '—';
+      const cost = l.cost_per_unit != null ? '₱' + parseFloat(l.cost_per_unit).toFixed(2) : '—';
+      return `
+        <tr class="border-b border-gray-50 hover:bg-gray-50">
+          <td class="px-4 py-3 text-gray-500 whitespace-nowrap">${date}</td>
+          <td class="px-4 py-3 font-medium text-gray-800">${esc(l.ingredient_name || ing.name || '—')}</td>
+          <td class="px-4 py-3 text-right font-mono">${parseFloat(l.quantity_added || 0).toFixed(3)}</td>
+          <td class="px-4 py-3 text-gray-500">${esc(unit)}</td>
+          <td class="px-4 py-3 text-right">${cost}</td>
+          <td class="px-4 py-3 text-gray-500">${esc(l.recorded_by_name || '—')}</td>
+          <td class="px-4 py-3 text-gray-400 text-xs">${esc(l.notes || '')}</td>
+        </tr>`;
+    }).join('');
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="7" class="text-center py-6 text-red-400">Failed to load: ${esc(e.message)}</td></tr>`;
+  }
+}
+
+function populateRestockFilter() {
+  const sel = document.getElementById('restockFilterIngredient');
+  sel.innerHTML = '<option value="">All Ingredients</option>' +
+    ingredients.map(i => `<option value="${i.id}">${esc(i.name)}</option>`).join('');
+}
+
+// ─── Recipe Builder ───────────────────────────────────────
+async function loadMenuItems() {
+  try {
+    const data = await authenticatedFetch('/api/items/');
+    menuItems = Array.isArray(data) ? data : (data?.results || []);
+    const sel = document.getElementById('recipeItemSelect');
+    sel.innerHTML = '<option value="">— Select a menu item —</option>' +
+      menuItems.map(m => `<option value="${m.id}">${esc(m.name)}</option>`).join('');
+
+    // Populate new recipe ingredient dropdown
+    populateNewRecipeIngredientSelect();
+  } catch (e) {
+    showToast('Failed to load menu items', 'error');
+  }
+}
+
+function populateNewRecipeIngredientSelect() {
+  const sel = document.getElementById('newRecipeIngredient');
+  sel.innerHTML = '<option value="">Select ingredient…</option>' +
+    ingredients.map(i => `<option value="${i.id}" data-unit="${esc(i.unit_detail?.abbreviation || '')}">${esc(i.name)}</option>`).join('');
+  sel.onchange = () => {
+    const opt = sel.options[sel.selectedIndex];
+    document.getElementById('newRecipeUnit').textContent = opt.dataset.unit || '—';
+  };
+}
+
+async function onRecipeItemChange() {
+  const itemId = document.getElementById('recipeItemSelect').value;
+  document.getElementById('recipeSection').classList.toggle('hidden', !itemId);
+  document.getElementById('recipeEmpty').classList.toggle('hidden', !!itemId);
+  document.getElementById('addRecipeRow').classList.add('hidden');
+  if (!itemId) return;
+
+  // Load variants for the selected item
+  const item = menuItems.find(m => String(m.id) === String(itemId));
+  document.getElementById('recipeSectionTitle').textContent =
+    item ? `Recipe for: ${item.name}` : 'Recipe ingredients';
+
+  try {
+    const data = await authenticatedFetch(`/api/items/${itemId}/variants/`).catch(() => null);
+    const variants = data ? (Array.isArray(data) ? data : (data?.results || [])) : [];
+    const vSel = document.getElementById('recipeVariantSelect');
+    vSel.innerHTML = '<option value="">All variants (base recipe)</option>' +
+      variants.map(v => `<option value="${v.id}">${esc(v.name)}</option>`).join('');
+  } catch (_) {}
+
+  await loadRecipeIngredients();
+}
+
+async function loadRecipeIngredients() {
+  const itemId    = document.getElementById('recipeItemSelect').value;
+  const variantId = document.getElementById('recipeVariantSelect').value;
+  if (!itemId) return;
+
+  const tbody = document.getElementById('recipeTableBody');
+  tbody.innerHTML = `<tr><td colspan="4" class="text-center py-6"><div class="flex justify-center"><div class="spinner"></div></div></td></tr>`;
+
+  try {
+    let url = `/api/recipe-ingredients/?item=${itemId}`;
+    if (variantId) url += `&variant=${variantId}`;
+    const data = await authenticatedFetch(url);
+    const list = Array.isArray(data) ? data : (data?.results || []);
+    if (!list.length) {
+      tbody.innerHTML = `<tr><td colspan="4" class="text-center py-6 text-gray-400">No ingredients in this recipe yet.</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = list.map(r => {
+      const ing  = r.ingredient_detail || {};
+      const unit = ing.unit_detail?.abbreviation || '—';
+      return `
+        <tr class="border-b border-gray-50 hover:bg-gray-50">
+          <td class="px-4 py-3 font-medium text-gray-800">${esc(ing.name || '—')}</td>
+          <td class="px-4 py-3 text-right font-mono">${parseFloat(r.quantity_used || 0).toFixed(3)}</td>
+          <td class="px-4 py-3 text-gray-500">${esc(unit)}</td>
+          <td class="px-4 py-3 text-center">
+            <button onclick="deleteRecipeIngredient(${r.id})"
+              class="bg-red-100 hover:bg-red-200 text-red-700 px-2 py-1 rounded text-xs transition">Delete</button>
+          </td>
+        </tr>`;
+    }).join('');
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="4" class="text-center py-6 text-red-400">Failed to load</td></tr>`;
+  }
+}
+
+function toggleVariantSelector() {
+  const checked = document.getElementById('recipeVariantToggle').checked;
+  document.getElementById('recipeVariantWrapper').classList.toggle('hidden', !checked);
+  if (!checked) {
+    document.getElementById('recipeVariantSelect').value = '';
+    loadRecipeIngredients();
+  }
+}
+
+function showAddRecipeRow() {
+  document.getElementById('addRecipeRow').classList.remove('hidden');
+  document.getElementById('newRecipeQty').focus();
+}
+
+function cancelAddRecipeRow() {
+  document.getElementById('addRecipeRow').classList.add('hidden');
+  document.getElementById('newRecipeIngredient').value = '';
+  document.getElementById('newRecipeQty').value = '';
+  document.getElementById('newRecipeUnit').textContent = '—';
+}
+
+async function saveRecipeIngredient() {
+  const itemId     = document.getElementById('recipeItemSelect').value;
+  const variantId  = document.getElementById('recipeVariantSelect').value;
+  const ingId      = document.getElementById('newRecipeIngredient').value;
+  const qty        = document.getElementById('newRecipeQty').value;
+
+  if (!ingId || !qty) { showToast('Select an ingredient and quantity', 'error'); return; }
+
+  const payload = { item: itemId, ingredient: ingId, quantity_used: qty };
+  if (variantId) payload.variant = variantId;
+
+  try {
+    await authenticatedFetch('/api/recipe-ingredients/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    cancelAddRecipeRow();
+    showToast('Ingredient added to recipe', 'success');
+    await loadRecipeIngredients();
+  } catch (e) {
+    showToast('Failed: ' + e.message, 'error');
+  }
+}
+
+async function deleteRecipeIngredient(id) {
+  showConfirm('Remove Ingredient', 'Remove this ingredient from the recipe?', async () => {
+    try {
+      await authenticatedFetch(`/api/recipe-ingredients/${id}/`, { method: 'DELETE' });
+      showToast('Removed from recipe', 'success');
+      await loadRecipeIngredients();
+    } catch (e) {
+      showToast('Failed: ' + e.message, 'error');
+    }
+  });
+}
+
+// ─── Modals ───────────────────────────────────────────────
+function openModal(type, id) {
+  closeAllModals();
+  if (type === 'ingredient') openIngredientModal(id);
+  else if (type === 'supplier') openSupplierModal(id);
+  else if (type === 'unit') openUnitModal(id);
+}
+
+function openIngredientModal(id) {
+  document.getElementById('ingredientModalTitle').textContent = id ? 'Edit Ingredient' : 'Add Ingredient';
+  document.getElementById('ingredientId').value    = id || '';
+  document.getElementById('ingredientName').value  = '';
+  document.getElementById('ingredientStock').value = '';
+  document.getElementById('ingredientPar').value   = '';
+  document.getElementById('ingredientCost').value  = '';
+  document.getElementById('ingredientActive').checked = true;
+
+  // Populate unit and supplier selects
+  const unitSel = document.getElementById('ingredientUnit');
+  unitSel.innerHTML = '<option value="">Select unit…</option>' +
+    units.filter(u => u.is_active).map(u => `<option value="${u.id}">${esc(u.name)} (${esc(u.abbreviation)})</option>`).join('');
+  const supSel = document.getElementById('ingredientSupplier');
+  supSel.innerHTML = '<option value="">None</option>' +
+    suppliers.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('');
+
+  if (id) {
+    const ing = ingredients.find(i => i.id === id);
+    if (ing) {
+      document.getElementById('ingredientName').value   = ing.name || '';
+      document.getElementById('ingredientUnit').value   = ing.unit || '';
+      document.getElementById('ingredientStock').value  = ing.current_stock || '';
+      document.getElementById('ingredientPar').value    = ing.par_level || '';
+      document.getElementById('ingredientCost').value   = ing.cost_per_unit || '';
+      document.getElementById('ingredientSupplier').value = ing.supplier || '';
+      document.getElementById('ingredientActive').checked = ing.is_active !== false;
+    }
+  }
+  showModal('ingredientModal');
+}
+
+async function submitIngredientModal() {
+  const id   = document.getElementById('ingredientId').value;
+  const name = document.getElementById('ingredientName').value.trim();
+  const unit = document.getElementById('ingredientUnit').value;
+  if (!name) { showToast('Name is required', 'error'); return; }
+  if (!unit) { showToast('Unit is required', 'error'); return; }
+
+  const payload = {
+    name,
+    unit,
+    current_stock : document.getElementById('ingredientStock').value || 0,
+    par_level     : document.getElementById('ingredientPar').value || 0,
+    cost_per_unit : document.getElementById('ingredientCost').value || 0,
+    supplier      : document.getElementById('ingredientSupplier').value || null,
+    is_active     : document.getElementById('ingredientActive').checked,
+  };
+
+  try {
+    if (id) {
+      await authenticatedFetch(`/api/ingredients/${id}/`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      showToast('Ingredient updated', 'success');
+    } else {
+      await authenticatedFetch('/api/ingredients/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      showToast('Ingredient added', 'success');
+    }
+    closeModal();
+    await refreshIngredients();
+  } catch (e) {
+    showToast('Failed: ' + e.message, 'error');
+  }
+}
+
+function openSupplierModal(id) {
+  document.getElementById('supplierModalTitle').textContent = id ? 'Edit Supplier' : 'Add Supplier';
+  document.getElementById('supplierId').value       = id || '';
+  document.getElementById('supplierName').value     = '';
+  document.getElementById('supplierContact').value  = '';
+  document.getElementById('supplierPhone').value    = '';
+  document.getElementById('supplierAddress').value  = '';
+  document.getElementById('supplierNotes').value    = '';
+
+  if (id) {
+    const s = suppliers.find(x => x.id === id);
+    if (s) {
+      document.getElementById('supplierName').value    = s.name || '';
+      document.getElementById('supplierContact').value = s.contact_person || '';
+      document.getElementById('supplierPhone').value   = s.phone || '';
+      document.getElementById('supplierAddress').value = s.address || '';
+      document.getElementById('supplierNotes').value   = s.notes || '';
+    }
+  }
+  showModal('supplierModal');
+}
+
+async function submitSupplierModal() {
+  const id   = document.getElementById('supplierId').value;
+  const name = document.getElementById('supplierName').value.trim();
+  if (!name) { showToast('Name is required', 'error'); return; }
+
+  const payload = {
+    name,
+    contact_person : document.getElementById('supplierContact').value.trim(),
+    phone          : document.getElementById('supplierPhone').value.trim(),
+    address        : document.getElementById('supplierAddress').value.trim(),
+    notes          : document.getElementById('supplierNotes').value.trim(),
+  };
+
+  try {
+    if (id) {
+      await authenticatedFetch(`/api/suppliers/${id}/`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+    } else {
+      await authenticatedFetch('/api/suppliers/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+    }
+    showToast(id ? 'Supplier updated' : 'Supplier added', 'success');
+    closeModal();
+    await refreshSuppliers();
+  } catch (e) {
+    showToast('Failed: ' + e.message, 'error');
+  }
+}
+
+function openUnitModal(id) {
+  document.getElementById('unitModalTitle').textContent = id ? 'Edit Unit' : 'Add Unit';
+  document.getElementById('unitId').value   = id || '';
+  document.getElementById('unitName').value = '';
+  document.getElementById('unitAbbr').value = '';
+
+  if (id) {
+    const u = units.find(x => x.id === id);
+    if (u) {
+      document.getElementById('unitName').value = u.name || '';
+      document.getElementById('unitAbbr').value = u.abbreviation || '';
+    }
+  }
+  showModal('unitModal');
+}
+
+async function submitUnitModal() {
+  const id   = document.getElementById('unitId').value;
+  const name = document.getElementById('unitName').value.trim();
+  const abbr = document.getElementById('unitAbbr').value.trim();
+  if (!name) { showToast('Name is required', 'error'); return; }
+  if (!abbr) { showToast('Abbreviation is required', 'error'); return; }
+
+  const payload = { name, abbreviation: abbr };
+  try {
+    if (id) {
+      await authenticatedFetch(`/api/ingredient-units/${id}/`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+    } else {
+      await authenticatedFetch('/api/ingredient-units/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+    }
+    showToast(id ? 'Unit updated' : 'Unit added', 'success');
+    closeModal();
+    await refreshUnits();
+  } catch (e) {
+    showToast('Failed: ' + e.message, 'error');
+  }
+}
+
+function openRestockModal(id, name) {
+  document.getElementById('restockIngredientId').value = id;
+  document.getElementById('restockIngredientName').textContent = name;
+  document.getElementById('restockQty').value  = '';
+  document.getElementById('restockCost').value = '';
+  document.getElementById('restockNotes').value = '';
+  showModal('restockModal');
+}
+
+async function submitRestockModal() {
+  const id  = document.getElementById('restockIngredientId').value;
+  const qty = document.getElementById('restockQty').value;
+  if (!qty || parseFloat(qty) <= 0) { showToast('Enter a valid quantity', 'error'); return; }
+
+  const payload = {
+    quantity_added : parseFloat(qty),
+    cost_per_unit  : document.getElementById('restockCost').value || null,
+    notes          : document.getElementById('restockNotes').value.trim(),
+  };
+
+  try {
+    await authenticatedFetch(`/api/ingredients/${id}/restock/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    showToast('Restock recorded', 'success');
+    closeModal();
+    await refreshIngredients();
+  } catch (e) {
+    showToast('Failed: ' + e.message, 'error');
+  }
+}
+
+// ─── Confirm modal ───────────────────────────────────────
+function showConfirm(title, message, onOk) {
+  document.getElementById('confirmTitle').textContent   = title;
+  document.getElementById('confirmMessage').textContent = message;
+  const btn = document.getElementById('confirmOkBtn');
+  btn.onclick = () => { closeModal(); onOk(); };
+  showModal('confirmModal');
+}
+
+function confirmDeactivate(type, id, name) {
+  showConfirm(
+    'Confirm Deactivate',
+    `Deactivate "${name}"? It will no longer appear in active lists.`,
+    async () => {
+      try {
+        const url = type === 'ingredient' ? `/api/ingredients/${id}/`
+          : type === 'supplier' ? `/api/suppliers/${id}/`
+          : `/api/ingredient-units/${id}/`;
+        await authenticatedFetch(url, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ is_active: false }),
+        });
+        showToast(`${name} deactivated`, 'success');
+        if (type === 'ingredient') await refreshIngredients();
+        else if (type === 'supplier') await refreshSuppliers();
+        else await refreshUnits();
+      } catch (e) {
+        showToast('Failed: ' + e.message, 'error');
+      }
+    }
+  );
+}
+
+async function toggleUnitActive(id, currentlyActive) {
+  try {
+    await authenticatedFetch(`/api/ingredient-units/${id}/`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ is_active: !currentlyActive }),
+    });
+    showToast(currentlyActive ? 'Unit deactivated' : 'Unit activated', 'success');
+    await refreshUnits();
+  } catch (e) {
+    showToast('Failed: ' + e.message, 'error');
+  }
+}
+
+// ─── Modal helpers ───────────────────────────────────────
+function showModal(id) {
+  document.getElementById('modalBackdrop').classList.remove('hidden');
+  document.getElementById(id).classList.remove('hidden');
+}
+
+function closeAllModals() {
+  document.querySelectorAll('.modal-panel').forEach(el => el.classList.add('hidden'));
+}
+
+function closeModal() {
+  closeAllModals();
+  document.getElementById('modalBackdrop').classList.add('hidden');
+}
+
+// Close on backdrop click
+document.getElementById('modalBackdrop').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeModal();
+});
+
+// ─── Refresh helpers ─────────────────────────────────────
+async function refreshIngredients() {
+  try {
+    const data = await authenticatedFetch('/api/ingredients/');
+    ingredients = Array.isArray(data) ? data : (data?.results || []);
+    renderIngredients();
+    updateStats();
+    populateSelectsGlobally();
+  } catch (e) { showToast('Refresh failed', 'error'); }
+}
+
+async function refreshSuppliers() {
+  try {
+    const data = await authenticatedFetch('/api/suppliers/');
+    suppliers = Array.isArray(data) ? data : (data?.results || []);
+    renderSuppliers();
+    updateStats();
+  } catch (e) { showToast('Refresh failed', 'error'); }
+}
+
+async function refreshUnits() {
+  try {
+    const data = await authenticatedFetch('/api/ingredient-units/');
+    units = Array.isArray(data) ? data : (data?.results || []);
+    renderUnits();
+  } catch (e) { showToast('Refresh failed', 'error'); }
+}
+
+function populateSelectsGlobally() {
+  populateRestockFilter();
+}
+
+// ─── Toast ────────────────────────────────────────────────
+function showToast(message, type = 'info') {
+  const colors = {
+    success : 'bg-green-600 text-white',
+    error   : 'bg-red-600 text-white',
+    info    : 'bg-gray-800 text-white',
+  };
+  const el = document.createElement('div');
+  el.className = `toast pointer-events-auto px-4 py-3 rounded-xl shadow-lg text-sm font-medium max-w-xs ${colors[type] || colors.info}`;
+  el.textContent = message;
+  document.getElementById('toastContainer').appendChild(el);
+  setTimeout(() => el.remove(), 3200);
+}
+
+// ─── Escape helper ───────────────────────────────────────
+function esc(str) {
+  if (str == null) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ─── Boot ─────────────────────────────────────────────────
+checkAuth();
+</script>
+</body>
+</html>
