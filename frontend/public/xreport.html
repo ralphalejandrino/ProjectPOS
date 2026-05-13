@@ -47,7 +47,7 @@
                     <div id="dropdown-menu" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl z-50">
                         <a href="index.html" class="block px-4 py-3 text-gray-700 hover:bg-gray-100 rounded-t-lg">🏪 POS</a>
                         <a href="inventory.html" class="block px-4 py-3 text-gray-700 hover:bg-gray-100">📦 Inventory</a>
-        <a href="ingredients.html" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">🧪 Ingredients</a>
+                                <a href="ingredients.html" class="block px-4 py-3 text-gray-700 hover:bg-gray-100">🧪 Ingredients</a>
                         <a href="dashboard.html" class="block px-4 py-3 text-gray-700 hover:bg-gray-100">📊 Dashboard</a>
                         <a href="xreport.html" class="block px-4 py-3 text-blue-600 bg-blue-50 font-bold">📊 X-Report</a>
                         <a href="zreport.html" class="block px-4 py-3 text-gray-700 hover:bg-gray-100">📋 Z-Report</a>
@@ -188,6 +188,7 @@
         }
 
         function fmt(n) {
+            if (n === null || n === undefined || isNaN(parseFloat(n))) return '₱0.00';
             return '₱' + parseFloat(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
         }
 
