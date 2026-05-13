@@ -399,7 +399,7 @@ class PosTransactionViewSet(viewsets.ViewSet):
 
         # --- Void list with employee info ---
         void_list = []
-        for txn in voided.select_related('voided_by').order_by('updated_at'):
+        for txn in voided.select_related('voided_by').order_by('voided_at'):
             amount = float(txn.total_amount.amount if hasattr(txn.total_amount, 'amount') else txn.total_amount)
             void_list.append({
                 'transaction_no': txn.transaction_no,
