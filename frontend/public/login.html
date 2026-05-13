@@ -182,10 +182,14 @@
                         : user.username.slice(0, 2).toUpperCase();
                     const displayName = (user.first_name || user.username);
 
-                    btn.innerHTML = `
-                        <div class="w-12 h-12 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-lg mx-auto mb-1">${initials}</div>
-                        <span class="text-sm text-gray-700 truncate max-w-full">${displayName}</span>
-                    `;
+                    const avatar = document.createElement('div');
+                    avatar.className = 'w-12 h-12 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-lg mx-auto mb-1';
+                    avatar.textContent = initials;
+                    const label = document.createElement('span');
+                    label.className = 'text-sm text-gray-700 truncate max-w-full';
+                    label.textContent = displayName;
+                    btn.appendChild(avatar);
+                    btn.appendChild(label);
                     btn.className = 'flex flex-col items-center p-2 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer w-20';
                     btn.onclick = () => {
                         document.getElementById('username').value = user.username;
