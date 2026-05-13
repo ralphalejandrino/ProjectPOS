@@ -384,8 +384,22 @@ RESTOCK_LOGS = [
 ]
 
 
+BUSINESS_PROFILE_OVERWRITTEN_FIELDS = [
+    'business_name', 'tagline', 'address', 'contact_number',
+    'email', 'tin', 'receipt_header', 'receipt_footer',
+]
+
+
 class Command(BaseCommand):
     help = 'Seed demo data for Tarsier Demo Cafe (idempotent)'
+
+    def add_arguments(self, parser):
+        parser.add_argument(
+            '--confirm',
+            action='store_true',
+            help='Required to actually run the seed. Without this flag the '
+                 'command prints what would be overwritten and aborts.',
+        )
 
     def handle(self, *args, **options):
         from canteen.models import (
@@ -395,6 +409,23 @@ class Command(BaseCommand):
             IngredientUnit, Supplier, Ingredient,
             IngredientRestockLog, RecipeIngredient,
         )
+
+        if not options.get('confirm'):
+            self.stdout.write(self.style.WARNING(
+                'seed_demo will OVERWRITE BusinessProfile fields: '
+                + ', '.join(BUSINESS_PROFILE_OVERWRITTEN_FIELDS)
+            ))
+            existing = BusinessProfile.objects.filter(id=1).first()
+            if existing and existing.business_name and \
+                    existing.business_name != 'Tarsier Demo Cafe':
+                self.stdout.write(self.style.WARNING(
+                    f'  Existing BusinessProfile.business_name='
+                    f'{existing.business_name!r} — real data will be overwritten.'
+                ))
+            self.stdout.write(self.style.WARNING(
+                'Aborting. Re-run with --confirm to proceed.'
+            ))
+            return
 
         self.stdout.write('── Business profile ─────────────────')
         self._seed_business_profile(BusinessProfile)

@@ -54,3 +54,6 @@
 {"type":"edit","file":"/home/ralph/TarsierPOS/frontend/public/payments.js","timestamp":1778674598775,"sessionId":null}
 {"type":"edit","file":"/home/ralph/TarsierPOS/requirements.txt","timestamp":1778674641066,"sessionId":null}
 {"type":"edit","file":"/home/ralph/TarsierPOS/frontend/public/settings.html","timestamp":1778674649647,"sessionId":null}
+{"type":"edit","file":"/home/ralph/TarsierPOS/canteen/migrations/0018_add_non_negative_validators.py","timestamp":1778715395623,"sessionId":null}
+{"type":"edit","file":"/home/ralph/TarsierPOS/canteen/migrations/0018_add_non_negative_validators.py","timestamp":1778715400951,"sessionId":null}
+{"type":"edit","file":"/home/ralph/TarsierPOS/canteen/migrations/0018_add_non_negative_validators.py","timestamp":1778715407892,"sessionId":null}

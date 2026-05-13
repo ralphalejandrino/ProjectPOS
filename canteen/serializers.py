@@ -294,8 +294,45 @@ class PosTransactionCreateSerializer(serializers.ModelSerializer):
         if transaction.payment_method == 'cash' and transaction.cash_received:
             transaction.change_given = Decimal(str(transaction.cash_received)) - calculated_total
             transaction.save()
-        
+
         return transaction
+
+    def update(self, instance, validated_data):
+        from djmoney.money import Money
+        from decimal import Decimal
+
+        items_data = validated_data.pop('items', None)
+
+        # Update parent transaction fields
+        if items_data is not None:
+            calculated_total = Decimal('0.00')
+            for item in items_data:
+                qty = item.get('quantity', 0)
+                price = item.get('unit_price', 0)
+                calculated_total += Decimal(str(price)) * Decimal(str(qty))
+            validated_data['total_amount'] = Money(calculated_total, 'PHP')
+
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+
+        # Full replace of nested line items (and their variant rows via cascade).
+        # Acceptable in this offline-first, single-cashier POS context.
+        if items_data is not None:
+            instance.items.all().delete()
+            for item_data in items_data:
+                PosTransactionItem.objects.create(
+                    pos_transaction=instance,
+                    **item_data
+                )
+
+            if instance.payment_method == 'cash' and instance.cash_received:
+                instance.change_given = (
+                    Decimal(str(instance.cash_received)) - calculated_total
+                )
+                instance.save()
+
+        return instance
 
 
 # ============================================================================
@@ -364,6 +401,7 @@ class AttendanceSerializer(serializers.ModelSerializer):
             'id', 'employee', 'employee_name', 'date', 'time_in',
             'time_out', 'hours_worked'
         ]
+        read_only_fields = ['date', 'time_in']
 
 
 # ============================================================================

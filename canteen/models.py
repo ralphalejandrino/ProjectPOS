@@ -10,6 +10,11 @@ from django.conf import settings
 from django.utils import timezone as dj_tz
 from djmoney.models.fields import MoneyField
 
+from .validators import (
+    validate_non_negative_price,
+    validate_non_negative_quantity,
+)
+
 
 # ============================================================================
 # BASE MODELS & UTILITIES
@@ -136,7 +141,10 @@ class Item(BaseModelWithUUID):
         upload_to=upload_to_item_barcode,
         verbose_name="Item Barcode"
     )
-    price = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="Selling Price")
+    price = models.DecimalField(
+        max_digits=10, decimal_places=2, default=0, verbose_name="Selling Price",
+        validators=[validate_non_negative_price],
+    )
     purchase_price = models.DecimalField(
         decimal_places=2,
         max_digits=10,
@@ -475,7 +483,10 @@ class PosTransactionItem(BaseModelWithUUID):
         related_name="items"
     )
     item = models.ForeignKey(to=Item, on_delete=models.PROTECT, verbose_name="Item")
-    quantity = models.PositiveIntegerField(default=1, verbose_name="Quantity")
+    quantity = models.PositiveIntegerField(
+        default=1, verbose_name="Quantity",
+        validators=[validate_non_negative_quantity],
+    )
     unit_price = models.DecimalField(
         max_digits=10,
         decimal_places=2,
@@ -828,10 +839,13 @@ class IngredientRestockLog(models.Model):
         ordering = ['-date']
 
     def save(self, *args, **kwargs):
-        # Update ingredient stock when saving restock log
+        # Only increment ingredient stock on initial insert; editing an
+        # existing log must not double-count stock.
+        is_new = self._state.adding
         super().save(*args, **kwargs)
-        self.ingredient.current_stock += self.quantity_added
-        self.ingredient.save(update_fields=['current_stock'])
+        if is_new:
+            self.ingredient.current_stock += self.quantity_added
+            self.ingredient.save(update_fields=['current_stock'])
 
     def __str__(self):
         return f"+{self.quantity_added} {self.ingredient.unit.abbreviation} of {self.ingredient.name}"
