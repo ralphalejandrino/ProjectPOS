@@ -405,7 +405,7 @@ class PosTransactionViewSet(viewsets.ViewSet):
                 'transaction_no': txn.transaction_no,
                 'amount': amount,
                 'voided_by': txn.voided_by.get_full_name() or txn.voided_by.username if txn.voided_by else 'Unknown',
-                'voided_at': txn.voided_at.strftime('%I:%M %p') if txn.voided_at else '',
+                'voided_at': txn.voided_at.isoformat() if txn.voided_at else '',
             })
 
         # --- Discount breakdown ---

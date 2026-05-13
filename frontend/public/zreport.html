@@ -48,7 +48,7 @@
                     <div id="dropdown-menu" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl z-50">
                         <a href="index.html" class="block px-4 py-3 text-gray-700 hover:bg-gray-100 rounded-t-lg">🏪 POS</a>
                         <a href="inventory.html" class="block px-4 py-3 text-gray-700 hover:bg-gray-100">📦 Inventory</a>
-        <a href="ingredients.html" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">🧪 Ingredients</a>
+                                <a href="ingredients.html" class="block px-4 py-3 text-gray-700 hover:bg-gray-100">🧪 Ingredients</a>
                         <a href="dashboard.html" class="block px-4 py-3 text-gray-700 hover:bg-gray-100">📊 Dashboard</a>
                         <a href="xreport.html" class="block px-4 py-3 text-gray-700 hover:bg-gray-100">📊 X-Report</a>
                         <a href="zreport.html" class="block px-4 py-3 text-blue-600 bg-blue-50 font-bold">📋 Z-Report</a>
@@ -476,7 +476,7 @@
                         <td class="py-2 px-3 font-mono text-xs text-gray-700">${escapeHtml(row.transaction_no)}</td>
                         <td class="py-2 px-3 text-right text-red-600 font-medium">${fmt(row.amount)}</td>
                         <td class="py-2 px-3 text-gray-700">${escapeHtml(row.voided_by)}</td>
-                        <td class="py-2 px-3 text-right text-gray-500">${escapeHtml(row.voided_at)}</td>
+                        <td class="py-2 px-3 text-right text-gray-500">${fmtTime(row.voided_at)}</td>
                     </tr>`).join('');
                 voidWrap.innerHTML = `
                     <table class="w-full text-sm">
