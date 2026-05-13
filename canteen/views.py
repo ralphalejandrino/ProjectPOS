@@ -1180,7 +1180,7 @@ class ItemViewSet(viewsets.ModelViewSet):
             'average_profit_margin': round(avg_margin, 2),
         })
     
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=['post'], permission_classes=[IsManagerOrAbove])
     def adjust_stock(self, request, pk=None):
         """Adjust stock levels — Audit Verified"""
         MAX_ADJUSTMENT = 10000
@@ -1492,13 +1492,13 @@ class IngredientUnitViewSet(viewsets.ModelViewSet):
 class SupplierViewSet(viewsets.ModelViewSet):
     queryset = Supplier.objects.filter(is_active=True).order_by('name')
     serializer_class = SupplierSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsManagerOrAbove]
 
 
 class IngredientViewSet(viewsets.ModelViewSet):
     queryset = Ingredient.objects.filter(is_active=True).select_related('unit','supplier').order_by('name')
     serializer_class = IngredientSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsManagerOrAbove]
 
     @action(detail=True, methods=['post'])
     def restock(self, request, pk=None):
@@ -1526,7 +1526,7 @@ class IngredientViewSet(viewsets.ModelViewSet):
 class RecipeIngredientViewSet(viewsets.ModelViewSet):
     queryset = RecipeIngredient.objects.select_related('ingredient','item','variant').all()
     serializer_class = RecipeIngredientSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsManagerOrAbove]
 
     def get_queryset(self):
         qs = super().get_queryset()

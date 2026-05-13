@@ -107,6 +107,282 @@ SHIFTS = [
 SC_ID_POOL  = [f'SC-{10000000 + i * 1234567 % 90000000:08d}' for i in range(20)]
 PWD_ID_POOL = [f'PWD-{20000000 + i * 7654321 % 80000000:08d}' for i in range(20)]
 
+UNITS = [
+    # (name, abbreviation)
+    ('Grams',       'g'),
+    ('Kilograms',   'kg'),
+    ('Milliliters', 'ml'),
+    ('Liters',      'L'),
+    ('Pieces',      'pcs'),
+    ('Tablespoon',  'tbsp'),
+    ('Teaspoon',    'tsp'),
+]
+
+SUPPLIERS = [
+    # (name, contact_person, phone, address, notes)
+    ('Manila Bean Co.',      'Carlo Bautista', '0917-234-5678',
+     'Pasig City, Metro Manila',
+     'Specialty coffee beans and nitro cold brew concentrate'),
+    ('Benguet Fresh Farms',  'Nora Castillo',  '0918-345-6789',
+     'La Trinidad, Benguet',
+     'Fresh dairy, eggs, and produce'),
+    ('SM Supermarket (Bulk)', 'Procurement',   '0919-456-7890',
+     'SM City Marilao, Bulacan',
+     'Dry goods, pantry staples, and packaged ingredients'),
+]
+
+# (name, unit_abbr, cost_per_unit, par_level, supplier_name)
+INGREDIENTS = [
+    # ── Coffee base ────────────────────────────────────────────────────────────
+    ('Espresso Beans',             'g',   1.20,  500, 'Manila Bean Co.'),
+    ('Matcha Powder',              'g',   2.50,  100, 'SM Supermarket (Bulk)'),
+    ('Chamomile Tea Bags',         'pcs', 3.00,   20, 'SM Supermarket (Bulk)'),
+    ('Cocoa Powder',               'g',   1.50,  150, 'SM Supermarket (Bulk)'),
+    ('Chocolate Syrup',            'ml',  0.80,  300, 'SM Supermarket (Bulk)'),
+    ('Caramel Syrup',              'ml',  0.70,  300, 'SM Supermarket (Bulk)'),
+    ('Vanilla Syrup',              'ml',  0.60,  200, 'SM Supermarket (Bulk)'),
+    ('Nitro Cold Brew Concentrate','ml',  1.00,  500, 'Manila Bean Co.'),
+    # ── Dairy ──────────────────────────────────────────────────────────────────
+    ('Whole Milk',                 'ml',  0.06, 3000, 'Benguet Fresh Farms'),
+    ('Oat Milk',                   'ml',  0.12, 1000, 'SM Supermarket (Bulk)'),
+    ('Heavy Cream',                'ml',  0.20,  500, 'Benguet Fresh Farms'),
+    ('Whipped Cream',              'ml',  0.15,  300, 'Benguet Fresh Farms'),
+    # ── Sweeteners ─────────────────────────────────────────────────────────────
+    ('White Sugar',                'g',   0.05,  500, 'SM Supermarket (Bulk)'),
+    ('Brown Sugar',                'g',   0.07,  300, 'SM Supermarket (Bulk)'),
+    # ── Produce / Fruits ───────────────────────────────────────────────────────
+    ('Mango Chunks',               'g',   0.40,  300, 'Benguet Fresh Farms'),
+    ('Strawberries',               'g',   0.60,  300, 'Benguet Fresh Farms'),
+    ('Lemon',                      'pcs', 5.00,   10, 'Benguet Fresh Farms'),
+    ('Mint Leaves',                'g',   2.00,   30, 'Benguet Fresh Farms'),
+    # ── Bakery ─────────────────────────────────────────────────────────────────
+    ('All-Purpose Flour',          'g',   0.04,  500, 'SM Supermarket (Bulk)'),
+    ('Unsalted Butter',            'g',   0.30,  300, 'Benguet Fresh Farms'),
+    ('Eggs',                       'pcs', 7.00,   24, 'Benguet Fresh Farms'),
+    ('Cream Cheese',               'g',   0.60,  200, 'Benguet Fresh Farms'),
+    ('Blueberries',                'g',   1.20,  150, 'Benguet Fresh Farms'),
+    ('Banana',                     'pcs', 4.00,   10, 'Benguet Fresh Farms'),
+    # ── Meals ──────────────────────────────────────────────────────────────────
+    ('Chicken Breast',             'g',   0.38,  500, 'Benguet Fresh Farms'),
+    ('Bacon Strips',               'g',   0.55,  300, 'SM Supermarket (Bulk)'),
+    ('Ham',                        'g',   0.45,  200, 'SM Supermarket (Bulk)'),
+    ('Sandwich Bread',             'pcs', 5.00,   15, 'SM Supermarket (Bulk)'),
+    ('Lettuce',                    'g',   0.12,  200, 'Benguet Fresh Farms'),
+    ('Tomato',                     'pcs', 8.00,   10, 'Benguet Fresh Farms'),
+    ('Spaghetti Pasta',            'g',   0.08,  400, 'SM Supermarket (Bulk)'),
+    ('Parmesan Cheese',            'g',   1.20,  150, 'SM Supermarket (Bulk)'),
+    ('Caesar Dressing',            'ml',  0.50,  200, 'SM Supermarket (Bulk)'),
+    ('Hollandaise Sauce',          'ml',  0.60,  150, 'SM Supermarket (Bulk)'),
+    ('Pesto Sauce',                'ml',  0.55,  150, 'SM Supermarket (Bulk)'),
+    # ── Desserts ───────────────────────────────────────────────────────────────
+    ('Dark Chocolate',             'g',   0.80,  200, 'SM Supermarket (Bulk)'),
+    ('Mascarpone Cheese',          'g',   1.00,  200, 'SM Supermarket (Bulk)'),
+    ('Condensed Milk',             'ml',  0.12,  200, 'SM Supermarket (Bulk)'),
+    ('Lady Fingers',               'pcs', 3.00,   20, 'SM Supermarket (Bulk)'),
+    ('Waffle Mix',                 'g',   0.20,  300, 'SM Supermarket (Bulk)'),
+    ('Crepe Batter Mix',           'g',   0.18,  200, 'SM Supermarket (Bulk)'),
+]
+
+# (sku, ingredient_name, quantity_used)
+RECIPES = [
+    # ── Hot Coffee ─────────────────────────────────────────────────────────────
+    ('DEMO-HC-001', 'Espresso Beans',  18),     # Espresso
+    ('DEMO-HC-002', 'Espresso Beans',  18),     # Cappuccino
+    ('DEMO-HC-002', 'Whole Milk',     120),
+    ('DEMO-HC-003', 'Espresso Beans',  18),     # Cafe Latte
+    ('DEMO-HC-003', 'Whole Milk',     150),
+    ('DEMO-HC-004', 'Espresso Beans',  18),     # Caramel Macchiato
+    ('DEMO-HC-004', 'Whole Milk',     150),
+    ('DEMO-HC-004', 'Caramel Syrup',   30),
+    ('DEMO-HC-004', 'Vanilla Syrup',   15),
+    ('DEMO-HC-005', 'Cocoa Powder',    20),     # Hot Chocolate
+    ('DEMO-HC-005', 'Whole Milk',     200),
+    ('DEMO-HC-005', 'White Sugar',     15),
+    ('DEMO-HC-006', 'Espresso Beans',  18),     # Hot Mocha
+    ('DEMO-HC-006', 'Chocolate Syrup', 30),
+    ('DEMO-HC-006', 'Whole Milk',     150),
+    ('DEMO-HC-007', 'Matcha Powder',    5),     # Matcha Latte
+    ('DEMO-HC-007', 'Whole Milk',     150),
+    ('DEMO-HC-007', 'White Sugar',     10),
+    ('DEMO-HC-008', 'Chamomile Tea Bags', 2),   # Chamomile Tea
+    # ── Iced Coffee ────────────────────────────────────────────────────────────
+    ('DEMO-IC-001', 'Espresso Beans',  18),     # Iced Latte
+    ('DEMO-IC-001', 'Whole Milk',     150),
+    ('DEMO-IC-002', 'Espresso Beans',  18),     # Iced Americano
+    ('DEMO-IC-003', 'Espresso Beans',  18),     # Iced Mocha
+    ('DEMO-IC-003', 'Chocolate Syrup', 30),
+    ('DEMO-IC-003', 'Whole Milk',     100),
+    ('DEMO-IC-004', 'Nitro Cold Brew Concentrate', 200),  # Nitro Cold Brew
+    ('DEMO-IC-005', 'Caramel Syrup',   30),     # Caramel Milk Tea
+    ('DEMO-IC-005', 'Whole Milk',     200),
+    ('DEMO-IC-005', 'Brown Sugar',     15),
+    ('DEMO-IC-006', 'Espresso Beans',  18),     # Caramel Frappe
+    ('DEMO-IC-006', 'Caramel Syrup',   30),
+    ('DEMO-IC-006', 'Whole Milk',     150),
+    ('DEMO-IC-006', 'Whipped Cream',   30),
+    # ── Non-Coffee ─────────────────────────────────────────────────────────────
+    ('DEMO-NC-001', 'Mango Chunks',   150),     # Mango Smoothie
+    ('DEMO-NC-001', 'Whole Milk',     100),
+    ('DEMO-NC-001', 'White Sugar',     15),
+    ('DEMO-NC-002', 'Strawberries',   150),     # Strawberry Smoothie
+    ('DEMO-NC-002', 'Whole Milk',     100),
+    ('DEMO-NC-002', 'White Sugar',     15),
+    ('DEMO-NC-003', 'Lemon',            2),     # Mint Lemonade
+    ('DEMO-NC-003', 'Mint Leaves',      5),
+    ('DEMO-NC-003', 'White Sugar',     30),
+    # ── Pastries ───────────────────────────────────────────────────────────────
+    ('DEMO-PA-001', 'All-Purpose Flour', 80),   # Butter Croissant
+    ('DEMO-PA-001', 'Unsalted Butter',   40),
+    ('DEMO-PA-002', 'All-Purpose Flour', 60),   # Blueberry Muffin
+    ('DEMO-PA-002', 'Eggs',               1),
+    ('DEMO-PA-002', 'Blueberries',       40),
+    ('DEMO-PA-002', 'Unsalted Butter',   20),
+    ('DEMO-PA-003', 'All-Purpose Flour', 70),   # Cream Cheese Danish
+    ('DEMO-PA-003', 'Cream Cheese',      50),
+    ('DEMO-PA-003', 'Unsalted Butter',   25),
+    ('DEMO-PA-004', 'All-Purpose Flour', 80),   # Banana Bread
+    ('DEMO-PA-004', 'Banana',             2),
+    ('DEMO-PA-004', 'Eggs',               1),
+    ('DEMO-PA-004', 'Unsalted Butter',   30),
+    ('DEMO-PA-005', 'All-Purpose Flour', 60),   # Dinner Rolls
+    ('DEMO-PA-005', 'Unsalted Butter',   15),
+    ('DEMO-PA-005', 'Eggs',               1),
+    # ── All-Day Meals ──────────────────────────────────────────────────────────
+    ('DEMO-AD-001', 'Eggs',               2),   # Eggs Benedict
+    ('DEMO-AD-001', 'Bacon Strips',      60),
+    ('DEMO-AD-001', 'Hollandaise Sauce', 60),
+    ('DEMO-AD-002', 'Chicken Breast',   120),   # Chicken Club Sandwich
+    ('DEMO-AD-002', 'Sandwich Bread',     3),
+    ('DEMO-AD-002', 'Lettuce',           20),
+    ('DEMO-AD-002', 'Tomato',             1),
+    ('DEMO-AD-002', 'Bacon Strips',      30),
+    ('DEMO-AD-003', 'Bacon Strips',      60),   # BLT Sandwich
+    ('DEMO-AD-003', 'Lettuce',           20),
+    ('DEMO-AD-003', 'Tomato',             1),
+    ('DEMO-AD-003', 'Sandwich Bread',     2),
+    ('DEMO-AD-004', 'Sandwich Bread',     2),   # Croque Monsieur
+    ('DEMO-AD-004', 'Ham',               60),
+    ('DEMO-AD-004', 'Heavy Cream',       30),
+    ('DEMO-AD-005', 'Spaghetti Pasta',  120),   # Spaghetti Carbonara
+    ('DEMO-AD-005', 'Bacon Strips',      40),
+    ('DEMO-AD-005', 'Eggs',               2),
+    ('DEMO-AD-005', 'Parmesan Cheese',   30),
+    ('DEMO-AD-005', 'Heavy Cream',       60),
+    ('DEMO-AD-006', 'Spaghetti Pasta',  120),   # Chicken Pesto Pasta
+    ('DEMO-AD-006', 'Chicken Breast',   100),
+    ('DEMO-AD-006', 'Pesto Sauce',       45),
+    ('DEMO-AD-007', 'Lettuce',           80),   # Caesar Salad
+    ('DEMO-AD-007', 'Parmesan Cheese',   20),
+    ('DEMO-AD-007', 'Caesar Dressing',   40),
+    # ── Desserts ───────────────────────────────────────────────────────────────
+    ('DEMO-DE-001', 'Dark Chocolate',    60),   # Chocolate Lava Cake
+    ('DEMO-DE-001', 'Unsalted Butter',   40),
+    ('DEMO-DE-001', 'Eggs',               2),
+    ('DEMO-DE-001', 'All-Purpose Flour', 20),
+    ('DEMO-DE-002', 'Mascarpone Cheese',100),   # Tiramisu
+    ('DEMO-DE-002', 'Lady Fingers',       6),
+    ('DEMO-DE-002', 'Heavy Cream',       60),
+    ('DEMO-DE-002', 'Espresso Beans',    10),
+    ('DEMO-DE-003', 'Cream Cheese',     120),   # Strawberry Cheesecake
+    ('DEMO-DE-003', 'Strawberries',      60),
+    ('DEMO-DE-003', 'Heavy Cream',       60),
+    ('DEMO-DE-004', 'Eggs',               4),   # Leche Flan
+    ('DEMO-DE-004', 'Condensed Milk',   150),
+    ('DEMO-DE-005', 'Crepe Batter Mix',  80),   # Mango Crepe
+    ('DEMO-DE-005', 'Mango Chunks',      80),
+    ('DEMO-DE-005', 'Heavy Cream',       40),
+    ('DEMO-DE-006', 'Waffle Mix',       100),   # Belgian Waffle
+    ('DEMO-DE-006', 'Unsalted Butter',   20),
+]
+
+# (ingredient_name, quantity_added, cost_per_unit, days_ago, notes)
+RESTOCK_LOGS = [
+    ('Espresso Beans',              2000, 1.20, 14, 'Initial stock — 2kg'),
+    ('Espresso Beans',              2000, 1.20,  7, 'Weekly restock'),
+    ('Espresso Beans',              1000, 1.20,  2, 'Mid-week top-up'),
+    ('Matcha Powder',                300, 2.50, 14, 'Initial stock'),
+    ('Matcha Powder',                200, 2.50,  7, 'Restock'),
+    ('Chamomile Tea Bags',            50, 3.00, 14, 'Initial stock'),
+    ('Chamomile Tea Bags',            30, 3.00,  7, 'Restock'),
+    ('Cocoa Powder',                 400, 1.50, 14, 'Initial stock'),
+    ('Cocoa Powder',                 200, 1.50,  7, 'Restock'),
+    ('Chocolate Syrup',             1000, 0.80, 14, 'Initial stock'),
+    ('Chocolate Syrup',              500, 0.80,  5, 'Restock'),
+    ('Caramel Syrup',               1000, 0.70, 14, 'Initial stock'),
+    ('Caramel Syrup',                500, 0.70,  5, 'Restock'),
+    ('Vanilla Syrup',                750, 0.60, 14, 'Initial stock'),
+    ('Vanilla Syrup',                250, 0.60,  5, 'Restock'),
+    ('Nitro Cold Brew Concentrate', 2000, 1.00, 14, 'Initial stock'),
+    ('Nitro Cold Brew Concentrate', 1000, 1.00,  7, 'Restock'),
+    ('Whole Milk',                 10000, 0.06, 14, 'Initial stock — 10L'),
+    ('Whole Milk',                 10000, 0.06,  7, 'Weekly restock'),
+    ('Whole Milk',                  5000, 0.06,  3, 'Mid-week restock'),
+    ('Oat Milk',                    3000, 0.12, 14, 'Initial stock'),
+    ('Oat Milk',                    2000, 0.12,  7, 'Restock'),
+    ('Heavy Cream',                 1000, 0.20, 14, 'Initial stock'),
+    ('Heavy Cream',                  500, 0.20,  7, 'Restock'),
+    ('Whipped Cream',                500, 0.15, 14, 'Initial stock'),
+    ('Whipped Cream',                300, 0.15,  7, 'Restock'),
+    ('White Sugar',                 2000, 0.05, 14, 'Initial stock — 2kg'),
+    ('White Sugar',                 1000, 0.05,  7, 'Restock'),
+    ('Brown Sugar',                 1000, 0.07, 14, 'Initial stock'),
+    ('Brown Sugar',                  500, 0.07,  7, 'Restock'),
+    ('Mango Chunks',                1000, 0.40, 14, 'Initial stock — 1kg'),
+    ('Mango Chunks',                 800, 0.40,  7, 'Restock'),
+    ('Strawberries',                 800, 0.60, 14, 'Initial stock'),
+    ('Strawberries',                 600, 0.60,  7, 'Restock'),
+    ('Lemon',                         20, 5.00, 14, 'Initial stock'),
+    ('Lemon',                         15, 5.00,  7, 'Restock'),
+    ('Mint Leaves',                  100, 2.00, 14, 'Initial stock'),
+    ('Mint Leaves',                   80, 2.00,  7, 'Restock'),
+    ('All-Purpose Flour',           3000, 0.04, 14, 'Initial stock — 3kg'),
+    ('All-Purpose Flour',           2000, 0.04,  7, 'Restock'),
+    ('Unsalted Butter',             1000, 0.30, 14, 'Initial stock — 1kg'),
+    ('Unsalted Butter',              500, 0.30,  7, 'Restock'),
+    ('Eggs',                          30, 7.00, 14, 'Initial stock — 30 pcs'),
+    ('Eggs',                          24, 7.00,  7, 'Restock — 24 pcs'),
+    ('Cream Cheese',                 500, 0.60, 14, 'Initial stock'),
+    ('Cream Cheese',                 300, 0.60,  7, 'Restock'),
+    ('Blueberries',                  500, 1.20, 14, 'Initial stock'),
+    ('Blueberries',                  300, 1.20,  7, 'Restock'),
+    ('Banana',                        15, 4.00, 14, 'Initial stock'),
+    ('Banana',                        12, 4.00,  7, 'Restock'),
+    ('Chicken Breast',              1500, 0.38, 14, 'Initial stock — 1.5kg'),
+    ('Chicken Breast',              1000, 0.38,  7, 'Restock'),
+    ('Bacon Strips',                 800, 0.55, 14, 'Initial stock'),
+    ('Bacon Strips',                 500, 0.55,  7, 'Restock'),
+    ('Ham',                          600, 0.45, 14, 'Initial stock'),
+    ('Ham',                          400, 0.45,  7, 'Restock'),
+    ('Sandwich Bread',                20, 5.00, 14, 'Initial stock'),
+    ('Sandwich Bread',                15, 5.00,  7, 'Restock'),
+    ('Lettuce',                      500, 0.12, 14, 'Initial stock'),
+    ('Lettuce',                      400, 0.12,  7, 'Restock'),
+    ('Tomato',                        15, 8.00, 14, 'Initial stock'),
+    ('Tomato',                        12, 8.00,  7, 'Restock'),
+    ('Spaghetti Pasta',             1500, 0.08, 14, 'Initial stock'),
+    ('Spaghetti Pasta',             1000, 0.08,  7, 'Restock'),
+    ('Parmesan Cheese',              400, 1.20, 14, 'Initial stock'),
+    ('Parmesan Cheese',              200, 1.20,  7, 'Restock'),
+    ('Caesar Dressing',              500, 0.50, 14, 'Initial stock'),
+    ('Caesar Dressing',              300, 0.50,  7, 'Restock'),
+    ('Hollandaise Sauce',            400, 0.60, 14, 'Initial stock'),
+    ('Hollandaise Sauce',            200, 0.60,  7, 'Restock'),
+    ('Pesto Sauce',                  400, 0.55, 14, 'Initial stock'),
+    ('Pesto Sauce',                  200, 0.55,  7, 'Restock'),
+    ('Dark Chocolate',               600, 0.80, 14, 'Initial stock'),
+    ('Dark Chocolate',               400, 0.80,  7, 'Restock'),
+    ('Mascarpone Cheese',            600, 1.00, 14, 'Initial stock'),
+    ('Mascarpone Cheese',            300, 1.00,  7, 'Restock'),
+    ('Condensed Milk',               600, 0.12, 14, 'Initial stock'),
+    ('Condensed Milk',               400, 0.12,  7, 'Restock'),
+    ('Lady Fingers',                  50, 3.00, 14, 'Initial stock'),
+    ('Lady Fingers',                  30, 3.00,  7, 'Restock'),
+    ('Waffle Mix',                   800, 0.20, 14, 'Initial stock'),
+    ('Waffle Mix',                   500, 0.20,  7, 'Restock'),
+    ('Crepe Batter Mix',             600, 0.18, 14, 'Initial stock'),
+    ('Crepe Batter Mix',             400, 0.18,  7, 'Restock'),
+]
+
 
 class Command(BaseCommand):
     help = 'Seed demo data for Tarsier Demo Cafe (idempotent)'
@@ -116,6 +392,8 @@ class Command(BaseCommand):
             ItemCategory, Item, VariantGroup, CategoryVariantGroup,
             PosTransaction, PosTransactionItem, TransactionItemVariant,
             EmployeeProfile, BusinessProfile,
+            IngredientUnit, Supplier, Ingredient,
+            IngredientRestockLog, RecipeIngredient,
         )
 
         self.stdout.write('── Business profile ─────────────────')
@@ -133,6 +411,9 @@ class Command(BaseCommand):
         self.stdout.write('── Users ────────────────────────────')
         users = self._seed_users(EmployeeProfile)
 
+        self.stdout.write('── Ingredients ──────────────────────')
+        self._seed_ingredients(Item)
+
         self.stdout.write('── Transactions ─────────────────────')
         txn_count = self._seed_transactions(
             PosTransaction, PosTransactionItem, TransactionItemVariant,
@@ -142,6 +423,7 @@ class Command(BaseCommand):
         self.stdout.write('')
         self.stdout.write(self.style.SUCCESS(
             f'Done. Products created: {len(items)} | '
+            f'Ingredients: {Ingredient.objects.count()} | '
             f'Transactions created: {txn_count} | '
             f'Missing images: {len(missing_images)}'
         ))
@@ -250,6 +532,107 @@ class Command(BaseCommand):
             self.stdout.write(
                 f'  {"Created" if created else "Exists"}: {username} ({role})')
         return users
+
+    # ── Ingredients ───────────────────────────────────────────────────────────
+    def _seed_ingredients(self, Item):
+        from canteen.models import (
+            IngredientUnit, Supplier, Ingredient,
+            IngredientRestockLog, RecipeIngredient,
+        )
+
+        demo_names = [name for name, *_ in INGREDIENTS]
+        if Ingredient.objects.filter(name__in=demo_names).exists():
+            self.stdout.write('  Ingredients already seeded — skipping.')
+            return
+
+        # ── Units ──────────────────────────────────────────────────────────────
+        units = {}
+        for name, abbr in UNITS:
+            unit, created = IngredientUnit.objects.get_or_create(
+                abbreviation=abbr,
+                defaults={'name': name, 'is_active': True},
+            )
+            units[abbr] = unit
+            self.stdout.write(f'  {"Created" if created else "Exists"}: Unit — {name}')
+
+        # ── Suppliers ──────────────────────────────────────────────────────────
+        suppliers = {}
+        for name, contact, phone, address, notes in SUPPLIERS:
+            supplier, created = Supplier.objects.get_or_create(
+                name=name,
+                defaults={
+                    'contact_person': contact,
+                    'phone': phone,
+                    'address': address,
+                    'notes': notes,
+                    'is_active': True,
+                },
+            )
+            suppliers[name] = supplier
+            self.stdout.write(f'  {"Created" if created else "Exists"}: Supplier — {name}')
+
+        # ── Ingredients ────────────────────────────────────────────────────────
+        ingredients = {}
+        for name, unit_abbr, cost, par, supplier_name in INGREDIENTS:
+            ingredient, created = Ingredient.objects.get_or_create(
+                name=name,
+                defaults={
+                    'unit': units[unit_abbr],
+                    'cost_per_unit': Decimal(str(cost)),
+                    'current_stock': Decimal('0'),
+                    'par_level': Decimal(str(par)),
+                    'supplier': suppliers.get(supplier_name),
+                    'is_active': True,
+                },
+            )
+            ingredients[name] = ingredient
+            self.stdout.write(f'  {"Created" if created else "Exists"}: {name}')
+
+        # ── Restock logs (backdated) ───────────────────────────────────────────
+        admin_user = User.objects.filter(is_superuser=True).first()
+        now = dj_tz.now()
+        restock_count = 0
+        for ingredient_name, qty, cost, days_ago, notes in RESTOCK_LOGS:
+            ingredient = ingredients.get(ingredient_name)
+            if not ingredient:
+                continue
+            log = IngredientRestockLog(
+                ingredient=ingredient,
+                quantity_added=Decimal(str(qty)),
+                cost_per_unit=Decimal(str(cost)),
+                notes=notes,
+                recorded_by=admin_user,
+            )
+            log.save()  # auto-updates ingredient.current_stock
+            log_date = now - timedelta(days=days_ago)
+            IngredientRestockLog.objects.filter(pk=log.pk).update(date=log_date)
+            restock_count += 1
+        self.stdout.write(f'  Created {restock_count} restock log entries')
+
+        # ── Recipe ingredients ─────────────────────────────────────────────────
+        item_lookup = {
+            item.sku: item
+            for item in Item.objects.exclude(sku__isnull=True).exclude(sku='')
+        }
+        recipe_count = 0
+        skipped = []
+        for sku, ingredient_name, qty in RECIPES:
+            item = item_lookup.get(sku)
+            ingredient = ingredients.get(ingredient_name)
+            if not item or not ingredient:
+                skipped.append(f'{sku} / {ingredient_name}')
+                continue
+            _, created = RecipeIngredient.objects.get_or_create(
+                item=item,
+                ingredient=ingredient,
+                defaults={'quantity_used': Decimal(str(qty))},
+            )
+            if created:
+                recipe_count += 1
+        self.stdout.write(f'  Created {recipe_count} recipe ingredient entries')
+        if skipped:
+            for s in skipped:
+                self.stdout.write(self.style.WARNING(f'  Skipped: {s}'))
 
     # ── Transactions ───────────────────────────────────────────────────────────
     def _seed_transactions(

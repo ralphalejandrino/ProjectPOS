@@ -1,9 +1,10 @@
-const CACHE_NAME = 'tarsierpos-v43';
+const CACHE_NAME = 'tarsierpos-v44';
 const ASSETS = [
   'index.html',
   'login.html',
   'dashboard.html',
   'inventory.html',
+  'ingredients.html',
   'settings.html',
   'xreport.html',
   'zreport.html',

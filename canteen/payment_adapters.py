@@ -6,9 +6,55 @@ Toggle between modes in PaymentGatewayConfig settings
 
 import time
 import uuid
+import logging
 import requests
 from decimal import Decimal
 from django.conf import settings
+
+logger = logging.getLogger(__name__)
+
+
+# Maps gateway/payment_method to the PosTransaction reference field used for idempotency lookup.
+_REFERENCE_FIELDS = {
+    'gcash': 'gcash_reference',
+    'maya': 'maya_reference',
+    'card': 'card_reference',
+}
+
+
+def _find_completed_transaction(payment_method, reference):
+    """Return a completed PosTransaction matching the given reference, or None."""
+    if not reference:
+        return None
+    field = _REFERENCE_FIELDS.get(payment_method)
+    if not field:
+        return None
+    try:
+        from .models import PosTransaction
+        return PosTransaction.objects.filter(
+            **{field: reference},
+            status='completed',
+            void=False,
+        ).first()
+    except Exception as exc:  # pragma: no cover - defensive: never block payments on lookup errors
+        logger.warning("Idempotency lookup failed for %s/%s: %s", payment_method, reference, exc)
+        return None
+
+
+def _idempotent_result(payment_method, txn, amount):
+    """Build a process_payment-style result for an already-completed transaction."""
+    ref_field = _REFERENCE_FIELDS.get(payment_method, '')
+    return {
+        'success': True,
+        'transaction_id': getattr(txn, 'transaction_no', None) or str(getattr(txn, 'id', '')),
+        'reference': getattr(txn, ref_field, None) if ref_field else None,
+        'amount': float(amount),
+        'currency': 'PHP',
+        'status': 'success',
+        'payment_method': payment_method,
+        'idempotent': True,
+        'message': 'Payment already processed for this reference; returning existing result.',
+    }
 
 
 class PaymentAdapter:
@@ -36,6 +82,9 @@ class GCashMockAdapter(PaymentAdapter):
     
     def process_payment(self, amount, reference=None, metadata=None):
         """Simulate GCash payment processing"""
+        existing = _find_completed_transaction('gcash', reference)
+        if existing:
+            return _idempotent_result('gcash', existing, amount)
         # Simulate API delay
         time.sleep(1.5)
         
@@ -87,6 +136,9 @@ class GCashRealAdapter(PaymentAdapter):
     
     def process_payment(self, amount, reference=None, metadata=None):
         """Process real GCash payment"""
+        existing = _find_completed_transaction('gcash', reference)
+        if existing:
+            return _idempotent_result('gcash', existing, amount)
         try:
             url = f'{self.base_url}/payments'
             headers = {
@@ -188,6 +240,9 @@ class MayaMockAdapter(PaymentAdapter):
     
     def process_payment(self, amount, reference=None, metadata=None):
         """Simulate Maya QR payment"""
+        existing = _find_completed_transaction('maya', reference)
+        if existing:
+            return _idempotent_result('maya', existing, amount)
         time.sleep(1.5)
         
         transaction_id = f'MAYA-MOCK-{uuid.uuid4().hex[:8].upper()}'
@@ -238,6 +293,9 @@ class MayaRealAdapter(PaymentAdapter):
     
     def process_payment(self, amount, reference=None, metadata=None):
         """Process real Maya payment"""
+        existing = _find_completed_transaction('maya', reference)
+        if existing:
+            return _idempotent_result('maya', existing, amount)
         try:
             url = f'{self.base_url}/payments'
             headers = {
@@ -340,6 +398,9 @@ class MayaTerminalMockAdapter(PaymentAdapter):
     
     def process_payment(self, amount, reference=None, metadata=None):
         """Simulate card payment via terminal"""
+        existing = _find_completed_transaction('card', reference)
+        if existing:
+            return _idempotent_result('card', existing, amount)
         time.sleep(2)  # Simulate card read + PIN entry
         
         transaction_id = f'TERMINAL-{uuid.uuid4().hex[:8].upper()}'
@@ -409,35 +470,47 @@ class PaymentGatewayFactory:
         try:
             config = PaymentGatewayConfig.objects.get(gateway=gateway_type)
         except PaymentGatewayConfig.DoesNotExist:
-            # Default to mock mode if no config exists
-            print(f"Warning: No config found for {gateway_type}, using mock mode")
+            logger.warning(
+                "No PaymentGatewayConfig for %s; falling back to mock adapter.",
+                gateway_type,
+            )
             if gateway_type == 'gcash':
                 return GCashMockAdapter()
             elif gateway_type == 'maya' and terminal:
                 return MayaTerminalMockAdapter()
             else:
                 return MayaMockAdapter()
-        
+
         # Return appropriate adapter based on config
         if gateway_type == 'gcash':
             if config.use_mock_mode:
+                logger.warning("GCash configured in mock mode — real payments are NOT being charged.")
                 return GCashMockAdapter()
             else:
                 return GCashRealAdapter(config)
-        
+
         elif gateway_type == 'maya':
             if terminal and config.enable_terminal:
                 if config.use_mock_mode:
+                    logger.warning(
+                        "Maya terminal configured in mock mode — real card payments are NOT being charged."
+                    )
                     return MayaTerminalMockAdapter()
                 else:
-                    # Return real terminal adapter when implemented
-                    return MayaTerminalMockAdapter()  # Placeholder
+                    # No real Maya Terminal adapter is implemented yet. Refuse to silently
+                    # fall back to the mock when live card processing was requested.
+                    raise RuntimeError(
+                        "Maya Terminal live mode is enabled but no real terminal adapter "
+                        "is implemented. Refusing to fall back to mock adapter to avoid "
+                        "processing real card payments through a fake gateway."
+                    )
             else:
                 if config.use_mock_mode:
+                    logger.warning("Maya configured in mock mode — real payments are NOT being charged.")
                     return MayaMockAdapter()
                 else:
                     return MayaRealAdapter(config)
-        
+
         else:
             raise ValueError(f"Unknown gateway type: {gateway_type}")
 
