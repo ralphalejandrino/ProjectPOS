@@ -160,7 +160,7 @@
 
             <!-- SECTION D — VAT Breakdown card -->
             <div class="bg-white rounded-lg shadow-lg p-6 mb-4">
-                <h3 class="text-lg font-bold text-gray-800 mb-4 border-b pb-2">VAT Breakdown (12% Inclusive)</h3>
+                <h3 id="rpt-vat-header" class="text-lg font-bold text-gray-800 mb-4 border-b pb-2">VAT Breakdown</h3>
                 <div class="space-y-2 text-sm">
                     <div class="flex justify-between items-center">
                         <span class="text-gray-600">Net of VAT (VATable Sales)</span>
@@ -410,6 +410,10 @@
             document.getElementById('rpt-busiest-hour').textContent = fmtBusiestHour(data.busiest_hour);
 
             // Section D — VAT Breakdown
+            const vatLabel = data.vat_rate != null
+                ? `VAT Breakdown (${data.vat_rate}% Inclusive)`
+                : 'VAT Breakdown';
+            document.getElementById('rpt-vat-header').textContent = vatLabel;
             document.getElementById('rpt-net-of-vat').textContent = fmt(data.net_of_vat);
             document.getElementById('rpt-vat-amount').textContent = fmt(data.vat_amount);
             document.getElementById('rpt-gross-vat').textContent = fmt(data.gross_sales);
@@ -496,8 +500,9 @@
 
             // Section J — Discount Summary (only when discounts exist)
             const discSection = document.getElementById('rpt-discount-section');
-            if (data.total_discounts_given > 0) {
-                document.getElementById('rpt-discount-total-header').textContent = `-₱${data.total_discounts_given.toFixed(2)}`;
+            const totalDiscountsGiven = parseFloat(data.total_discounts_given) || 0;
+            if (totalDiscountsGiven > 0) {
+                document.getElementById('rpt-discount-total-header').textContent = `-₱${totalDiscountsGiven.toFixed(2)}`;
                 const discRows = (data.discount_breakdown || []).map(d => `
                     <tr class="border-b border-gray-100">
                         <td class="py-2 px-3 text-gray-800">${escapeHtml(d.label)}</td>
@@ -518,7 +523,7 @@
                             <tr class="border-t border-gray-200 font-semibold">
                                 <td class="pt-2 px-3 text-gray-800">Total</td>
                                 <td></td>
-                                <td class="pt-2 px-3 text-right text-red-600">-${fmt(data.total_discounts_given)}</td>
+                                <td class="pt-2 px-3 text-right text-red-600">-${fmt(totalDiscountsGiven)}</td>
                             </tr>
                         </tfoot>
                     </table>`;

@@ -531,6 +531,7 @@ class PosTransactionViewSet(viewsets.ViewSet):
             'void_count': void_count,
             'void_total': void_total,
             'net_sales': net_sales,
+            'vat_rate': float(_bp.vat_rate) if _bp.vat_enabled else None,
             'vat_amount': vat_amount,
             'net_of_vat': net_of_vat,
             'average_transaction': average_transaction,
