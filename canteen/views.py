@@ -248,6 +248,14 @@ class PosTransactionViewSet(viewsets.ViewSet):
                         )
                         # Ingredient stock restore
                         _restore_ingredients(item_entry.item, item_entry, item_entry.quantity)
+                        refreshed = Item.objects.get(pk=item_entry.item.pk)
+                        ItemLog.objects.create(
+                            item=refreshed,
+                            quantity=item_entry.quantity,
+                            current_stock=refreshed.stock,
+                            action='return',
+                            remarks=f"Void reversal — OR#{transaction.transaction_no} (ID: {transaction.pk})",
+                        )
 
                 transaction.void = True
                 transaction.voided_at = timezone.now()
