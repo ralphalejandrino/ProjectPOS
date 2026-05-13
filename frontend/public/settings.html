@@ -193,7 +193,7 @@
                 <div class="space-y-2 text-sm text-gray-600">
                     <p><strong>System Name:</strong> TarsierPOS — Point of Sale</p>
                     <p><strong>Version:</strong> 1.0.0 MVP</p>
-                    <p><strong>Backend:</strong> Django 4.2 + Django REST Framework</p>
+                    <p><strong>Backend:</strong> Django 5.2 + Django REST Framework</p>
                     <p><strong>Frontend:</strong> HTML5 + Tailwind CSS + Vanilla JS</p>
                     <p><strong>Database:</strong> SQLite (Development)</p>
                     <p class="pt-2 border-t">
@@ -829,8 +829,6 @@
         }
 
         async function saveSystemSettings() {
-            localStorage.setItem('currency', document.getElementById('currency').value);
-            localStorage.setItem('taxRate', document.getElementById('tax-rate').value);
             try {
                 const response = await authenticatedFetch(`${API_BASE}/business/update/`, {
                     method: 'PATCH',
@@ -840,12 +838,14 @@
                 });
                 const data = await response.json();
                 if (data.success) {
+                    localStorage.setItem('currency', document.getElementById('currency').value);
+                    localStorage.setItem('taxRate', document.getElementById('tax-rate').value);
                     showSuccessModal();
                 } else {
-                    console.error('Failed to save low stock threshold:', data);
+                    showAlert('Failed to save system settings: ' + (data.error || data.detail || 'Unknown error'));
                 }
             } catch (e) {
-                console.error('Failed to save system settings:', e);
+                showAlert('Error saving system settings: ' + e.message);
             }
         }
 
