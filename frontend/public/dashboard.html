@@ -340,7 +340,7 @@
                 const itemsResponse = await authenticatedFetch(`${API_BASE}/items/`);
                 const itemsRaw = await itemsResponse.json();
                 const items = itemsRaw.results !== undefined ? itemsRaw.results : itemsRaw;
-                const lowStock = items.filter(i => i.stock < 10).length;
+                const lowStock = items.filter(i => i.stock < lowStockThreshold).length;
                 document.getElementById('low-stock-count').textContent = lowStock;
 
             } catch (error) {
