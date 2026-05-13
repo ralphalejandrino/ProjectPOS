@@ -119,7 +119,7 @@ class PosTransactionViewSet(viewsets.ViewSet):
                 'gcash_reference': t.gcash_reference,
                 'items_count': t.items_count,
                 'discount_amount': float(t.discount_amount) if t.discount_amount else 0.0,
-                'discount_type': t.discount_type or '',
+                'discount_type': t.discount_type or 'none',
                 'discount_id_number': t.discount_id_number or '',
             }
 
@@ -178,7 +178,7 @@ class PosTransactionViewSet(viewsets.ViewSet):
                 'voided_at': transaction.voided_at.isoformat() if transaction.voided_at else None,
                 'void_reason': transaction.purpose_of_void or '',
                 'discount_amount':    float(transaction.discount_amount) if transaction.discount_amount else 0.0,
-                'discount_type':      transaction.discount_type or '',
+                'discount_type':      transaction.discount_type or 'none',
                 'discount_id_number': transaction.discount_id_number or '',
             }
             return Response(data)
@@ -201,7 +201,7 @@ class PosTransactionViewSet(viewsets.ViewSet):
                 card_reference=request.data.get('card_reference', ''),
                 customer_phone=request.data.get('customer_phone', ''),
                 discount_amount=request.data.get('discount_amount', 0),
-                discount_type=request.data.get('discount_type', ''),
+                discount_type=request.data.get('discount_type', 'none'),
                 discount_id_number=request.data.get('discount_id_number', ''),
             )
             
@@ -323,7 +323,7 @@ class PosTransactionViewSet(viewsets.ViewSet):
             created_at = timezone.now()
             cashier = None
             discount_amount = Decimal('0.00')
-            discount_type = ''
+            discount_type = 'none'
             discount_id_number = ''
             class _total:
                 amount = 200
@@ -423,8 +423,8 @@ class PosTransactionViewSet(viewsets.ViewSet):
         _label_map = {'sc': 'Senior Citizen', 'pwd': 'PWD', 'promo': 'Promo'}
         discount_breakdown = [
             {
-                'type': d['discount_type'] or 'other',
-                'label': _label_map.get(d['discount_type'], d['discount_type'] or 'Other'),
+                'type': d['discount_type'] if d['discount_type'] not in ('', 'none') else 'other',
+                'label': _label_map.get(d['discount_type'], 'Other') if d['discount_type'] not in ('', 'none') else 'Other',
                 'count': d['count'],
                 'total_discount': float(d['total_discount'] or 0),
             }

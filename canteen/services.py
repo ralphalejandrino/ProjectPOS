@@ -209,7 +209,7 @@ def create_pos_transaction(items_data, payment_method, cashier=None, **kwargs):
         # Apply discount — server-side validation
         discount_amount = kwargs.get('discount_amount', 0)
         discount_decimal = Decimal(str(discount_amount)) if discount_amount else Decimal('0.00')
-        discount_type = kwargs.get('discount_type', '')
+        discount_type = kwargs.get('discount_type', 'none')
         _sc_pwd_vat_amount = Decimal('0.00')
         _is_vat_exempt = False
 
@@ -219,7 +219,7 @@ def create_pos_transaction(items_data, payment_method, cashier=None, **kwargs):
             )
 
         # Re-derive expected discount from BusinessProfile rates
-        if discount_decimal > Decimal('0.00') and discount_type:
+        if discount_decimal > Decimal('0.00') and discount_type not in ('', 'none'):
             _bp_check = _bp
             if discount_type == 'sc':
                 rate = Decimal(str(_bp_check.sc_discount_rate if _bp_check else 20)) / Decimal('100')
@@ -281,7 +281,7 @@ def create_pos_transaction(items_data, payment_method, cashier=None, **kwargs):
         transaction = PosTransaction.objects.create(
             total_amount=Money(final_total, 'PHP'),
             discount_amount=discount_decimal,
-            discount_type=kwargs.get('discount_type', ''),
+            discount_type=kwargs.get('discount_type', 'none'),
             discount_id_number=kwargs.get('discount_id_number', ''),
             vat_exempt=_is_vat_exempt,
             vat_amount=_sc_pwd_vat_amount,

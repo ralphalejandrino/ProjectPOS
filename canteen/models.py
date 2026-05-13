@@ -395,14 +395,14 @@ class PosTransaction(Transaction):
     discount_type = models.CharField(
         blank=True,
         choices=[
-            ('', 'None'),
+            ('none', 'None'),
             ('fixed', 'Fixed Amount'),
             ('percentage', 'Percentage'),
             ('sc', 'Senior Citizen (20%)'),
             ('pwd', 'PWD (20%)'),
             ('promo', 'Promo'),
         ],
-        default='',
+        default='none',
         help_text='Type of discount applied',
         max_length=20,
     )
