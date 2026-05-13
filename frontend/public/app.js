@@ -146,13 +146,13 @@ function displayProducts(products) {
         card.innerHTML = `
             <div class="relative w-full h-40">
                 ${product.photo
-                    ? `<img src="${product.photo}" alt="${product.name}" class="w-full h-full object-cover" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                    ? `<img src="${escapeHtml(product.photo)}" alt="${escapeHtml(product.name)}" class="w-full h-full object-cover" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
                        <div class="w-full h-full bg-gray-100 items-center justify-center text-5xl" style="display:none">📦</div>`
                     : `<div class="w-full h-full bg-gray-100 flex items-center justify-center text-5xl">📦</div>`
                 }
                 <div class="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent"></div>
                 <div class="absolute bottom-0 left-0 right-0 px-2 pb-2 flex justify-between items-end">
-                    <span class="text-white font-bold text-base leading-tight drop-shadow">${product.name}</span>
+                    <span class="text-white font-bold text-base leading-tight drop-shadow">${escapeHtml(product.name)}</span>
                     <div class="text-right">
                         <div class="text-white font-bold text-base drop-shadow">₱${parseFloat(product.price).toFixed(2)}</div>
                         ${stockText ? `<div class="text-xs ${stockClass} font-medium drop-shadow">${stockText}</div>` : ''}
@@ -425,7 +425,7 @@ function updateCart() {
             <div class="cart-item bg-gray-50 p-3 rounded-lg">
                 <div class="flex justify-between items-start mb-2">
                     <div class="flex-1">
-                        <div class="font-bold text-gray-800">${item.emoji} ${item.baseName || item.name}</div>
+                        <div class="font-bold text-gray-800">${escapeHtml(item.emoji)} ${escapeHtml(item.baseName || item.name)}</div>
                         ${variantSubtitle}
                         <div class="text-sm text-gray-600">₱${parseFloat(item.price || 0).toFixed(2)} each</div>
                     </div>
