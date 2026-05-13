@@ -726,11 +726,11 @@ function renderIngredients(list) {
         <td class="px-4 py-3 text-right text-gray-700">${cost}</td>
         <td class="px-4 py-3 text-center">
           <div class="flex justify-center gap-1">
-            <button onclick="openRestockModal(${i.id}, '${esc(i.name)}')"
+            <button onclick="openRestockModal(${i.id})"
               class="bg-blue-100 hover:bg-blue-200 text-blue-700 px-2 py-1 rounded text-xs transition">Restock</button>
             <button onclick="openModal('ingredient', ${i.id})"
               class="bg-yellow-100 hover:bg-yellow-200 text-yellow-700 px-2 py-1 rounded text-xs transition">Edit</button>
-            <button onclick="confirmDeactivate('ingredient', ${i.id}, '${esc(i.name)}')"
+            <button onclick="confirmDeactivate('ingredient', ${i.id})"
               class="bg-red-100 hover:bg-red-200 text-red-700 px-2 py-1 rounded text-xs transition">Deactivate</button>
           </div>
         </td>
@@ -760,7 +760,7 @@ function renderSuppliers() {
         <div class="flex justify-center gap-1">
           <button onclick="openModal('supplier', ${s.id})"
             class="bg-yellow-100 hover:bg-yellow-200 text-yellow-700 px-2 py-1 rounded text-xs transition">Edit</button>
-          <button onclick="confirmDeactivate('supplier', ${s.id}, '${esc(s.name)}')"
+          <button onclick="confirmDeactivate('supplier', ${s.id})"
             class="bg-red-100 hover:bg-red-200 text-red-700 px-2 py-1 rounded text-xs transition">Deactivate</button>
         </div>
       </td>
@@ -1173,9 +1173,10 @@ async function submitUnitModal() {
   }
 }
 
-function openRestockModal(id, name) {
+function openRestockModal(id) {
+  const ing = ingredients.find(i => i.id === id);
   document.getElementById('restockIngredientId').value       = id;
-  document.getElementById('restockIngredientName').textContent = name;
+  document.getElementById('restockIngredientName').textContent = ing ? ing.name : '';
   document.getElementById('restockQty').value   = '';
   document.getElementById('restockCost').value  = '';
   document.getElementById('restockNotes').value = '';
@@ -1216,7 +1217,11 @@ function showConfirm(title, message, onOk) {
   showModal('confirmModal');
 }
 
-function confirmDeactivate(type, id, name) {
+function confirmDeactivate(type, id) {
+  const item = type === 'ingredient' ? ingredients.find(i => i.id === id)
+    : type === 'supplier' ? suppliers.find(s => s.id === id)
+    : null;
+  const name = item ? item.name : String(id);
   showConfirm(
     'Confirm Deactivate',
     `Deactivate "${name}"? It will no longer appear in active lists.`,
@@ -1317,7 +1322,7 @@ function showToast(message, type = 'info') {
 // ─── Escape helper ────────────────────────────────────────
 function esc(str) {
   if (str == null) return '';
-  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
 // ─── Boot ─────────────────────────────────────────────────
