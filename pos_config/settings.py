@@ -63,7 +63,6 @@ INSTALLED_APPS = [
     'djmoney',
     'rest_framework_simplejwt',
     'rest_framework_simplejwt.token_blacklist',
-    'oauth2_provider',
     'canteen',
 ]
 
