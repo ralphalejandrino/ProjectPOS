@@ -27,7 +27,7 @@ const clearTokens = async () => {
     const refresh = localStorage.getItem('refresh_token');
     if (refresh) {
         try {
-            await fetch(`${API_BASE}/auth/logout/`, {
+            await fetch(`${AUTH_API}/logout/`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
