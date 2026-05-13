@@ -240,7 +240,7 @@ class PosTransactionViewSet(viewsets.ViewSet):
                                     status=status.HTTP_400_BAD_REQUEST)
 
                 # Reverse stock for each item in the transaction (only if inventory tracking is enabled)
-                _bp = BusinessProfile.objects.first()
+                _bp = BusinessProfile.get_instance()
                 if not _bp or _bp.track_inventory:
                     for item_entry in transaction.items.all():
                         Item.objects.filter(pk=item_entry.item.pk).update(
