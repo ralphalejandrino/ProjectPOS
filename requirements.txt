@@ -5,6 +5,12 @@ charset-normalizer==3.4.4
 cryptography==46.0.4
 Django==5.2.14
 django-cors-headers==4.9.0
+# FLAG-009: django-fernet-fields==0.6 is unmaintained since 2019. Still required
+# because canteen/migrations/0001_initial.py imports fernet_fields.fields (used for
+# original EncryptedCharFields on PaymentGatewayConfig). Those fields were replaced
+# with plain CharField in migration 0008, but the migration dependency cannot be
+# removed without squashing. Planned: squash migrations and drop this package in
+# Variants 2.0 / next major migration consolidation.
 django-fernet-fields==0.6
 django-money==3.6.0
 djangorestframework==3.14.0
