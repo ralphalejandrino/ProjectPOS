@@ -261,7 +261,10 @@
             const handleDateChange = async () => {
                 const newDateFrom = dateFromInput.value;
                 const newDateTo = dateToInput.value;
-                await loadRecentTransactions(newDateFrom, newDateTo);
+                await Promise.all([
+                    loadRecentTransactions(newDateFrom, newDateTo),
+                    loadPaymentMethods(newDateFrom, newDateTo)
+                ]);
             };
 
             dateFromInput.addEventListener('change', handleDateChange);
@@ -312,7 +315,7 @@
                     loadQuickStats(),
                     loadRecentTransactions(dateFrom, dateTo),
                     loadTopProducts(),
-                    loadPaymentMethods(),
+                    loadPaymentMethods(dateFrom, dateTo),
                     loadLowStockAlerts()
                 ]);
             } catch (error) {
@@ -632,9 +635,14 @@
             openVoidModal(id);
         }
 
-                async function loadPaymentMethods() {
+                async function loadPaymentMethods(dateFrom = null, dateTo = null) {
             try {
-                const response = await authenticatedFetch(`${API_BASE}/transactions/`);
+                let url = `${API_BASE}/transactions/`;
+                const params = new URLSearchParams();
+                if (dateFrom) params.append('date_from', dateFrom);
+                if (dateTo) params.append('date_to', dateTo);
+                if (params.toString()) url += `?${params.toString()}`;
+                const response = await authenticatedFetch(url);
                 const raw = await response.json();
                 const transactions = raw.results !== undefined ? raw.results : raw;
                 

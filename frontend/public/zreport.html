@@ -533,6 +533,27 @@
             }
         }
 
+        async function voidTransaction(transactionId) {
+            try {
+                const res = await authenticatedFetch(`${API_BASE}/transactions/${transactionId}/void/`, {
+                    method: 'POST'
+                });
+                if (!res.ok) {
+                    const data = await res.json().catch(() => ({}));
+                    const msg = data.error || data.detail || `Error ${res.status}`;
+                    const errEl = document.getElementById('report-error');
+                    errEl.textContent = 'Void failed: ' + msg;
+                    errEl.classList.remove('hidden');
+                    return;
+                }
+                await fetchReport();
+            } catch (e) {
+                const errEl = document.getElementById('report-error');
+                errEl.textContent = 'Void failed: ' + e.message;
+                errEl.classList.remove('hidden');
+            }
+        }
+
         async function closeShift() {
             const input = document.getElementById('closing-cash-input');
             const errEl = document.getElementById('close-shift-error');

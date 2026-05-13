@@ -37,11 +37,15 @@ const PaymentSystem = {
     attachEventListeners() {
         const gcashBtn = document.getElementById('gcash-payment-btn');
         const mayaBtn = document.getElementById('maya-payment-btn');
+        const cardBtn = document.getElementById('card-payment-btn');
         if (gcashBtn) {
             gcashBtn.addEventListener('click', () => this.processGCashPayment());
         }
         if (mayaBtn) {
             mayaBtn.addEventListener('click', () => this.processMayaPayment());
+        }
+        if (cardBtn) {
+            cardBtn.addEventListener('click', () => this.processCardPayment());
         }
     },
 

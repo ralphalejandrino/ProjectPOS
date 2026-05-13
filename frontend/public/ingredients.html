@@ -1188,6 +1188,12 @@ async function submitRestockModal() {
   const qty = document.getElementById('restockQty').value;
   if (!qty || parseFloat(qty) <= 0) { showToast('Enter a valid quantity', 'error'); return; }
 
+  const item = ingredients.find(i => String(i.id) === String(id));
+  if (item && item.track_inventory === false) {
+    showToast('Inventory tracking is disabled for this item.', 'error');
+    return;
+  }
+
   const payload = {
     quantity_added : parseFloat(qty),
     cost_per_unit  : document.getElementById('restockCost').value || null,

@@ -32,21 +32,24 @@ function showTab(tabName) {
     document.querySelectorAll('.tab-content').forEach(tab => {
         tab.classList.add('hidden');
     });
-    
+
     // Remove active state from all tab buttons
     document.querySelectorAll('[id^="tab-"]').forEach(btn => {
         btn.classList.remove('text-blue-600', 'border-b-2', 'border-blue-600');
         btn.classList.add('text-gray-500');
     });
-    
+
     // Show selected tab
-    document.getElementById(`content-${tabName}`).classList.remove('hidden');
-    
+    const contentEl = document.getElementById(`content-${tabName}`);
+    if (!contentEl) { console.warn(`showTab: element #content-${tabName} not found`); return; }
+    contentEl.classList.remove('hidden');
+
     // Activate selected tab button
     const activeBtn = document.getElementById(`tab-${tabName}`);
+    if (!activeBtn) { console.warn(`showTab: element #tab-${tabName} not found`); return; }
     activeBtn.classList.add('text-blue-600', 'border-b-2', 'border-blue-600');
     activeBtn.classList.remove('text-gray-500');
-    
+
     // Load data for the tab
     if (tabName === 'history') {
         loadTransactionHistory();
@@ -86,8 +89,10 @@ async function loadDashboard() {
         }
 
         // Revenue chart
-        if (revenueChart) revenueChart.destroy();
-        const revenueCtx = document.getElementById('revenueChart').getContext('2d');
+        if (revenueChart) { revenueChart.destroy(); revenueChart = null; }
+        const revenueCanvas = document.getElementById('revenueChart');
+        if (!revenueCanvas) { console.warn('revenueChart canvas not found'); return; }
+        const revenueCtx = revenueCanvas.getContext('2d');
         revenueChart = new Chart(revenueCtx, {
             type: 'line',
             data: {
@@ -129,8 +134,26 @@ async function loadDashboard() {
         const dashData = await dashResponse.json();
         const topItems = dashData.top_items || [];
 
-        if (topItemsChart) topItemsChart.destroy();
-        const itemsCtx = document.getElementById('topItemsChart').getContext('2d');
+        if (topItemsChart) { topItemsChart.destroy(); topItemsChart = null; }
+        const topItemsCanvas = document.getElementById('topItemsChart');
+        if (!topItemsCanvas) { console.warn('topItemsChart canvas not found'); return; }
+        if (!topItems || topItems.length === 0) {
+            topItemsCanvas.classList.add('hidden');
+            let noDataMsg = topItemsCanvas.parentElement.querySelector('.no-sales-msg');
+            if (!noDataMsg) {
+                noDataMsg = document.createElement('div');
+                noDataMsg.className = 'no-sales-msg flex items-center justify-center text-gray-400 text-sm py-8';
+                noDataMsg.textContent = 'No sales data';
+                topItemsCanvas.parentElement.appendChild(noDataMsg);
+            }
+            noDataMsg.classList.remove('hidden');
+            return;
+        }
+        // Hide any previous "No sales data" message and restore canvas
+        topItemsCanvas.classList.remove('hidden');
+        const existingMsg = topItemsCanvas.parentElement.querySelector('.no-sales-msg');
+        if (existingMsg) existingMsg.classList.add('hidden');
+        const itemsCtx = topItemsCanvas.getContext('2d');
         topItemsChart = new Chart(itemsCtx, {
             type: 'doughnut',
             data: {
@@ -171,6 +194,7 @@ async function loadTransactionHistory() {
 
 function renderTransactionHistory(transactions) {
     const tbody = document.getElementById('history-table-body');
+    if (!tbody) { console.warn('renderTransactionHistory: #history-table-body not found'); return; }
     
     if (transactions.length === 0) {
         tbody.innerHTML = '<tr><td colspan="5" class="text-center py-8 text-gray-500">No transactions found</td></tr>';
@@ -201,6 +225,7 @@ function renderTransactionHistory(transactions) {
 
 function filterHistory() {
     const dateInput = document.getElementById('history-date-filter');
+    if (!dateInput) { console.warn('filterHistory: #history-date-filter not found'); return; }
     const selectedDate = dateInput.value;
     
     if (!selectedDate) {
@@ -282,6 +307,7 @@ async function viewReceipt(transactionId) {
 
 async function loadDailyReport() {
     const dateInput = document.getElementById('report-date');
+    if (!dateInput) { console.warn('loadDailyReport: #report-date not found'); return; }
     const selectedDate = dateInput.value;
     
     if (!selectedDate) {
@@ -299,6 +325,7 @@ async function loadDailyReport() {
     const gcash = filtered.filter(t => t.payment_method === 'gcash').reduce((sum, t) => sum + parseFloat(t.total_amount), 0);
     
     const content = document.getElementById('daily-report-content');
+    if (!content) { console.warn('loadDailyReport: #daily-report-content not found'); return; }
     content.innerHTML = `
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
             <div class="bg-blue-50 rounded-lg p-6">
@@ -326,7 +353,7 @@ async function loadDailyReport() {
                 </div>
                 <div class="flex justify-between">
                     <span class="text-gray-600">Average Transaction:</span>
-                    <span class="font-bold">₱${(total / filtered.length || 0).toFixed(2)}</span>
+                    <span class="font-bold">₱${(isFinite(total / filtered.length) ? total / filtered.length : 0).toFixed(2)}</span>
                 </div>
                 <div class="flex justify-between">
                     <span class="text-gray-600">Cash vs GCash Ratio:</span>

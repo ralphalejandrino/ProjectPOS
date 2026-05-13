@@ -1,4 +1,4 @@
-const CACHE_NAME = 'tarsierpos-v44';
+const CACHE_NAME = 'tarsierpos-v44'; // canonical cache version
 const ASSETS = [
   'index.html',
   'login.html',

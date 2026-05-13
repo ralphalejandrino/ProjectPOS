@@ -220,7 +220,14 @@ function addToCart(product) {
         if (window.showCustomError) {
             window.showCustomError('Out of Stock', `${product.name} is currently out of stock`);
         } else {
-            alert('This item is out of stock!');
+            console.error('Out of stock:', product.name);
+            (function() {
+                const el = document.createElement('div');
+                el.style.cssText = 'position:fixed;top:16px;left:50%;transform:translateX(-50%);background:#dc2626;color:#fff;padding:10px 20px;border-radius:8px;z-index:99999;font-weight:600;';
+                el.textContent = product.name + ' is out of stock!';
+                document.body.appendChild(el);
+                setTimeout(() => el.remove(), 3000);
+            })();
         }
         return;
     }
@@ -255,7 +262,14 @@ function addProductToCart(item, variantSelections, finalPrice) {
             if (window.showCustomError) {
                 window.showCustomError('Stock Limit', 'Cannot add more than available stock!');
             } else {
-                alert('Cannot add more than available stock!');
+                console.error('Stock limit reached for:', item.name);
+                (function() {
+                    const el = document.createElement('div');
+                    el.style.cssText = 'position:fixed;top:16px;left:50%;transform:translateX(-50%);background:#dc2626;color:#fff;padding:10px 20px;border-radius:8px;z-index:99999;font-weight:600;';
+                    el.textContent = 'Cannot add more than available stock!';
+                    document.body.appendChild(el);
+                    setTimeout(() => el.remove(), 3000);
+                })();
             }
             return;
         }
@@ -473,12 +487,37 @@ function attachEventListeners() {
                         updateCart();
                     }
                 );
-            } else if (confirm('Clear all items from cart?')) {
-                // i.id is the item UUID (unchanged — stock tracking uses item.id not cartKey)
-                window.cart.items.forEach(i => updateProductStock(i.id, i.quantity));
-                window.cart.items = [];
-                window.cart.total = 0;
-                updateCart();
+            } else {
+                // Inline confirmation — no native confirm() dialog
+                (function() {
+                    const overlay = document.createElement('div');
+                    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:99999;';
+                    const box = document.createElement('div');
+                    box.style.cssText = 'background:#fff;border-radius:12px;padding:24px;max-width:320px;width:90%;text-align:center;box-shadow:0 4px 24px rgba(0,0,0,0.2);';
+                    box.innerHTML = '<p style="font-weight:700;font-size:1.1rem;margin-bottom:8px;">Clear Cart?</p><p style="color:#555;margin-bottom:20px;">Are you sure you want to remove all items from the cart?</p>';
+                    const btnRow = document.createElement('div');
+                    btnRow.style.cssText = 'display:flex;gap:12px;justify-content:center;';
+                    const cancelBtn = document.createElement('button');
+                    cancelBtn.textContent = 'No';
+                    cancelBtn.style.cssText = 'flex:1;padding:10px;border-radius:8px;border:1px solid #ccc;background:#f3f4f6;font-weight:600;cursor:pointer;';
+                    const confirmBtn = document.createElement('button');
+                    confirmBtn.textContent = 'Yes, Clear';
+                    confirmBtn.style.cssText = 'flex:1;padding:10px;border-radius:8px;border:none;background:#dc2626;color:#fff;font-weight:600;cursor:pointer;';
+                    cancelBtn.onclick = () => document.body.removeChild(overlay);
+                    confirmBtn.onclick = () => {
+                        document.body.removeChild(overlay);
+                        // i.id is the item UUID (unchanged — stock tracking uses item.id not cartKey)
+                        window.cart.items.forEach(i => updateProductStock(i.id, i.quantity));
+                        window.cart.items = [];
+                        window.cart.total = 0;
+                        updateCart();
+                    };
+                    btnRow.appendChild(cancelBtn);
+                    btnRow.appendChild(confirmBtn);
+                    box.appendChild(btnRow);
+                    overlay.appendChild(box);
+                    document.body.appendChild(overlay);
+                })();
             }
         });
     }

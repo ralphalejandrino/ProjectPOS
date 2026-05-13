@@ -1165,14 +1165,6 @@ async function logout() {
     </div>
 
 <script>
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('sw.js')
-        .catch(err => console.error('SW registration failed:', err));
-    });
-  }
-</script>
-<script>
 (function(){
     try {
         const tok = localStorage.getItem('access_token');
