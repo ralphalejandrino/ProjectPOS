@@ -1,0 +1,58 @@
+# TarsierPOS — HTTPS via Tailscale cert
+# Cert renewed with: sudo tailscale cert ralph-optiplex-3060.example-tailnet.ts.net
+#   then move to /home/ralph/TarsierPOS/certs/ (see FIX-047)
+
+# Redirect plain HTTP to HTTPS
+server {
+    listen 80;
+    server_name ralph-optiplex-3060.example-tailnet.ts.net;
+    return 301 https://$host$request_uri;
+}
+
+# HTTPS server
+server {
+    listen 443 ssl;
+    server_name ralph-optiplex-3060.example-tailnet.ts.net;
+
+    ssl_certificate     /home/ralph/TarsierPOS/certs/ralph-optiplex-3060.example-tailnet.ts.net.crt;
+    ssl_certificate_key /home/ralph/TarsierPOS/certs/ralph-optiplex-3060.example-tailnet.ts.net.key;
+
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_ciphers         HIGH:!aNULL:!MD5;
+
+    client_max_body_size 10M;
+
+    # Frontend static files (TarsierPOS)
+    location / {
+        root /home/ralph/TarsierPOS/frontend/public;
+        index index.html;
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Auth endpoints — rate-limited to 5 req/min, burst 3
+    location /api/auth/ {
+        limit_req zone=auth_limit burst=3 nodelay;
+        limit_req_status 429;
+        proxy_pass http://127.0.0.1:9000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Django API — proxy to gunicorn on loopback:9000
+    location /api/ {
+        proxy_pass http://127.0.0.1:9000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Django media uploads — served directly by nginx
+    location /media/ {
+        alias /home/ralph/TarsierPOS/media/;
+        expires 7d;
+        add_header Cache-Control "public, max-age=604800";
+    }
+}
