@@ -220,7 +220,7 @@ def create_pos_transaction(items_data, payment_method, cashier=None, **kwargs):
 
         # Re-derive expected discount from BusinessProfile rates
         if discount_decimal > Decimal('0.00') and discount_type:
-            _bp_check = BusinessProfile.objects.first()
+            _bp_check = _bp
             if discount_type == 'sc':
                 rate = Decimal(str(_bp_check.sc_discount_rate if _bp_check else 20)) / Decimal('100')
                 if _bp_check and _bp_check.vat_enabled:
