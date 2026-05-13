@@ -6,19 +6,31 @@ const PaymentSystem = {
     },
 
     async init() {
-        await this.loadConfig();
+        try {
+            await this.loadConfig();
+        } catch (error) {
+            console.error('PaymentSystem: loadConfig failed —', error.message);
+            const msg = 'Payment configuration could not be loaded. Digital payments are disabled until the page reloads successfully.';
+            if (window.showCustomError) {
+                window.showCustomError('Payment Config Error', msg);
+            } else {
+                console.warn(msg);
+            }
+            this.configLoadFailed = true;
+        }
         this.attachEventListeners();
     },
 
     async loadConfig() {
-        try {
-            const response = await authenticatedFetch(`${PAYMENTS_API}/config/`);
-            const data = await response.json();
-            if (data.success) {
-                this.config = data.configs;
-            }
-        } catch (error) {
-            console.error('Failed to load payment config:', error);
+        const response = await authenticatedFetch(`${PAYMENTS_API}/config/`);
+        if (!response.ok) {
+            throw new Error(`Payment config unavailable (HTTP ${response.status})`);
+        }
+        const data = await response.json();
+        if (data.success) {
+            this.config = data.configs;
+        } else {
+            throw new Error('Payment config load failed: ' + (data.message || 'Unknown error'));
         }
     },
 
@@ -57,7 +69,10 @@ const PaymentSystem = {
                         quantity: item.quantity,
                         price: item.price
                     })),
-                    reference: `GCASH-${Date.now()}`
+                    reference: `GCASH-${Date.now()}`,
+                    discount_amount: cart.discountAmount || 0,
+                    discount_type: cart.discountType || '',
+                    discount_id_number: cart.discountIdNumber || '',
                 })
             });
 
@@ -98,7 +113,10 @@ const PaymentSystem = {
                         quantity: item.quantity,
                         price: item.price
                     })),
-                    reference: `MAYA-${Date.now()}`
+                    reference: `MAYA-${Date.now()}`,
+                    discount_amount: cart.discountAmount || 0,
+                    discount_type: cart.discountType || '',
+                    discount_id_number: cart.discountIdNumber || '',
                 })
             });
 
@@ -292,6 +310,12 @@ const PaymentSystem = {
     clearCart() {
         window.cart.items = [];
         window.cart.total = 0;
+        window.cart.discountAmount = 0;
+        window.cart.discountType = '';
+        window.cart.discountIdNumber = '';
+        window.cart.discountLabel = '';
+        window.cart.selectedDiscountType = null;
+        window.cart.pendingDiscountType = null;
         if (window.updateCart) {
             window.updateCart();
         }
