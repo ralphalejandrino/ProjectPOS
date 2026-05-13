@@ -701,16 +701,16 @@
                 const vatRateEl = document.getElementById('vat-rate');
                 const vatRateRow = document.getElementById('vat-rate-row');
                 if (vatEl) vatEl.checked = !!data.vat_enabled;
-                if (vatRateEl) vatRateEl.value = data.vat_rate || 12;
+                if (vatRateEl) vatRateEl.value = (data.vat_rate !== undefined && data.vat_rate !== null && !isNaN(parseFloat(data.vat_rate))) ? parseFloat(data.vat_rate) : 12;
                 if (vatRateRow) vatRateRow.classList.toggle('hidden', !data.vat_enabled);
                 const scEl = document.getElementById('sc-discount-enabled');
                 if (scEl) scEl.checked = data.sc_discount_enabled !== false;
                 const scRateEl = document.getElementById('sc-discount-rate');
-                if (scRateEl) scRateEl.value = data.sc_discount_rate || 20;
+                if (scRateEl) scRateEl.value = (data.sc_discount_rate !== undefined && data.sc_discount_rate !== null && !isNaN(parseFloat(data.sc_discount_rate))) ? parseFloat(data.sc_discount_rate) : 20;
                 const pwdEl = document.getElementById('pwd-discount-enabled');
                 if (pwdEl) pwdEl.checked = data.pwd_discount_enabled !== false;
                 const pwdRateEl = document.getElementById('pwd-discount-rate');
-                if (pwdRateEl) pwdRateEl.value = data.pwd_discount_rate || 20;
+                if (pwdRateEl) pwdRateEl.value = (data.pwd_discount_rate !== undefined && data.pwd_discount_rate !== null && !isNaN(parseFloat(data.pwd_discount_rate))) ? parseFloat(data.pwd_discount_rate) : 20;
                 const promoEl = document.getElementById('promo-discount-enabled');
                 if (promoEl) promoEl.checked = !!data.promo_discount_enabled;
                 // Appearance tab — Inventory Tracking
@@ -722,13 +722,16 @@
         }
 
         async function saveOrderSettings() {
+            const vatRateVal = parseFloat(document.getElementById('vat-rate').value);
+            const scRateVal = parseFloat(document.getElementById('sc-discount-rate').value);
+            const pwdRateVal = parseFloat(document.getElementById('pwd-discount-rate').value);
             const payload = {
                 vat_enabled: document.getElementById('vat-enabled').checked,
-                vat_rate: parseFloat(document.getElementById('vat-rate').value) || 12,
+                vat_rate: !isNaN(vatRateVal) ? vatRateVal : 12,
                 sc_discount_enabled: document.getElementById('sc-discount-enabled').checked,
-                sc_discount_rate: parseFloat(document.getElementById('sc-discount-rate').value) || 20,
+                sc_discount_rate: !isNaN(scRateVal) ? scRateVal : 20,
                 pwd_discount_enabled: document.getElementById('pwd-discount-enabled').checked,
-                pwd_discount_rate: parseFloat(document.getElementById('pwd-discount-rate').value) || 20,
+                pwd_discount_rate: !isNaN(pwdRateVal) ? pwdRateVal : 20,
                 promo_discount_enabled: document.getElementById('promo-discount-enabled').checked,
             };
             try {
@@ -784,7 +787,7 @@
                 tin: document.getElementById('tin').value.trim(),
                 receipt_header: document.getElementById('receipt-header').value.trim(),
                 receipt_footer: document.getElementById('receipt-footer').value.trim(),
-                low_stock_threshold: parseInt(document.getElementById('low-stock-threshold').value) || 10,
+                low_stock_threshold: (() => { const v = parseInt(document.getElementById('low-stock-threshold').value); return !isNaN(v) ? v : 10; })(),
             };
             try {
                 const response = await authenticatedFetch(`${API_BASE}/business/update/`, {
@@ -833,7 +836,7 @@
                 const response = await authenticatedFetch(`${API_BASE}/business/update/`, {
                     method: 'PATCH',
                     body: JSON.stringify({
-                        low_stock_threshold: parseInt(document.getElementById('low-stock-threshold').value) || 10,
+                        low_stock_threshold: (() => { const v = parseInt(document.getElementById('low-stock-threshold').value); return !isNaN(v) ? v : 10; })(),
                     })
                 });
                 const data = await response.json();
