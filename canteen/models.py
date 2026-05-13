@@ -508,6 +508,9 @@ class PosTransactionItem(BaseModelWithUUID):
 
 
 class TransactionItemVariant(models.Model):
+    # FLAG-003: group_name/option_name are denormalized strings, not FKs.
+    # Risk: if VariantOption is renamed/deleted, historical data diverges.
+    # Fix planned in Variants 2.0: add FK to VariantOption.
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     transaction_item = models.ForeignKey(
         'PosTransactionItem', on_delete=models.CASCADE, related_name='variant_selections'
