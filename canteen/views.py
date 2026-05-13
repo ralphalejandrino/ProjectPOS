@@ -655,7 +655,7 @@ class ProductVariantGroupViewSet(viewsets.ModelViewSet):
     permission_classes = [IsManagerOrAbove]
 
     def get_queryset(self):
-        return ProductVariantGroup.objects.filter(product_id=self.kwargs['product_pk']).select_related('group')
+        return ProductVariantGroup.objects.filter(product_id=self.kwargs['product_pk']).select_related('group').order_by('id')
 
     def perform_create(self, serializer):
         product = get_object_or_404(Item, pk=self.kwargs['product_pk'])
