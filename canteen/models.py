@@ -10,6 +10,8 @@ from django.conf import settings
 from django.utils import timezone as dj_tz
 from djmoney.models.fields import MoneyField
 
+from .fields import FernetEncryptedField
+
 from .validators import (
     validate_non_negative_price,
     validate_non_negative_quantity,
@@ -600,10 +602,12 @@ class PaymentGatewayConfig(models.Model):
     is_active = models.BooleanField(default=True)
     use_mock_mode = models.BooleanField(default=True)  # Toggle between mock and real API
 
-    # API Credentials
-    merchant_id = models.CharField(max_length=255, blank=True, null=True)
-    api_key = models.CharField(max_length=255, blank=True, null=True)
-    api_secret = models.CharField(max_length=255, blank=True, null=True)
+    # API Credentials — FLAG-009 Option B: encrypted at rest via custom Fernet field
+    # (canteen.fields.FernetEncryptedField). max_length=500 to accommodate Fernet
+    # token overhead (~100 bytes base64 on top of the plaintext).
+    merchant_id = FernetEncryptedField(max_length=500, blank=True, null=True)
+    api_key = FernetEncryptedField(max_length=500, blank=True, null=True)
+    api_secret = FernetEncryptedField(max_length=500, blank=True, null=True)
     webhook_url = models.CharField(max_length=500, blank=True, null=True)
 
     # Maya Terminal specific

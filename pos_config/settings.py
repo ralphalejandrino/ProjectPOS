@@ -29,12 +29,13 @@ SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY')
 if not SECRET_KEY:
     raise ValueError('DJANGO_SECRET_KEY environment variable not set')
 
-FERNET_KEYS = [os.environ.get('FERNET_KEY')]
-if not FERNET_KEYS[0]:
-    raise ValueError('FERNET_KEY environment variable not set')
-
-# SECURITY WARNING: don't run with debug turned on in production!
+FERNET_KEY = os.environ.get('FERNET_KEY', '')
+# Generate with:
+#   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 DEBUG = os.getenv('DEBUG', 'False') == 'True'
+if not FERNET_KEY and not DEBUG:
+    from django.core.exceptions import ImproperlyConfigured
+    raise ImproperlyConfigured('FERNET_KEY must be set in production')
 
 ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')

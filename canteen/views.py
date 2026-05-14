@@ -1091,6 +1091,34 @@ def update_payment_config(request):
         }, status=500)
 
 
+@api_view(['GET'])
+@permission_classes([IsManagerOrAbove])
+def get_terminal_credential_status(request, gateway):
+    """Return whether each terminal credential is set, never the value itself."""
+    from .models import PaymentGatewayConfig
+    if gateway not in ('gcash', 'maya'):
+        return Response({'error': 'Invalid gateway'}, status=400)
+    cfg = PaymentGatewayConfig.objects.filter(gateway=gateway).first()
+    if not cfg:
+        return Response({
+            'gateway': gateway,
+            'merchant_id_is_set': False,
+            'api_key_is_set': False,
+            'api_secret_is_set': False,
+            'configured': False,
+        })
+    flags = {
+        'merchant_id_is_set': bool(cfg.merchant_id),
+        'api_key_is_set': bool(cfg.api_key),
+        'api_secret_is_set': bool(cfg.api_secret),
+    }
+    return Response({
+        'gateway': gateway,
+        **flags,
+        'configured': all(flags.values()),
+    })
+
+
 @api_view(['POST'])
 @permission_classes([IsManagerOrAbove])
 def upload_payment_qr(request, gateway):

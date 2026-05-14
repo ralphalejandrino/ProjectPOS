@@ -356,6 +356,60 @@
                 </div>
             </div>
 
+            <!-- CARD TERMINAL (Maya Business) -->
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-xl font-bold text-gray-800">🖥️ Card Terminal Integration (Maya Business)</h3>
+                    <span id="terminal-status-badge"
+                          class="px-2 py-1 text-xs font-semibold rounded-full bg-gray-200 text-gray-700">Not configured</span>
+                </div>
+                <p class="text-sm text-gray-600 mb-4">
+                    Encrypted at rest. Existing values are masked — leave a field blank to keep its current value.
+                </p>
+
+                <div class="space-y-3">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Merchant ID</label>
+                        <input type="text" id="terminal-merchant-id" autocomplete="off"
+                               class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                               placeholder="Enter Merchant ID">
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">API Key</label>
+                        <div class="relative">
+                            <input type="password" id="terminal-api-key" autocomplete="off"
+                                   class="w-full border border-gray-300 rounded-lg px-3 py-2 pr-16 text-sm"
+                                   placeholder="Enter API Key">
+                            <button type="button" onclick="toggleTerminalSecret('terminal-api-key', this)"
+                                    class="absolute inset-y-0 right-2 my-1 px-2 text-xs text-gray-600 hover:text-gray-900">
+                                Show
+                            </button>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">API Secret</label>
+                        <div class="relative">
+                            <input type="password" id="terminal-api-secret" autocomplete="off"
+                                   class="w-full border border-gray-300 rounded-lg px-3 py-2 pr-16 text-sm"
+                                   placeholder="Enter API Secret">
+                            <button type="button" onclick="toggleTerminalSecret('terminal-api-secret', this)"
+                                    class="absolute inset-y-0 right-2 my-1 px-2 text-xs text-gray-600 hover:text-gray-900">
+                                Show
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="flex justify-end pt-2">
+                        <button onclick="saveTerminalCredentials()"
+                                class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700">
+                            Save Card Terminal Credentials
+                        </button>
+                    </div>
+                </div>
+            </div>
+
             <!-- ORDER SETTINGS -->
             <div class="bg-white rounded-xl border border-gray-200 p-6">
                 <h3 class="text-base font-semibold text-gray-800 mb-4">🧾 Order Settings</h3>
@@ -617,6 +671,7 @@
             loadBusinessProfile();
             loadSettings();
             loadQRPreviews();
+            loadTerminalCredentialStatus();
             loadPaymentMethodStates();
             loadUsers();
             loadSiteName();
@@ -938,6 +993,64 @@
             } catch (e) {
                 showAlert('Upload error: ' + e.message);
             }
+        }
+
+        function toggleTerminalSecret(inputId, btn) {
+            const el = document.getElementById(inputId);
+            if (!el) return;
+            if (el.type === 'password') { el.type = 'text'; btn.textContent = 'Hide'; }
+            else { el.type = 'password'; btn.textContent = 'Show'; }
+        }
+
+        async function loadTerminalCredentialStatus() {
+            try {
+                const response = await authenticatedFetch(`${PAYMENTS_API}/config/maya/terminal-status/`);
+                if (!response.ok) return;
+                const data = await response.json();
+                const badge = document.getElementById('terminal-status-badge');
+                if (data.configured) {
+                    badge.textContent = 'Configured';
+                    badge.className = 'px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800';
+                } else {
+                    badge.textContent = 'Not configured';
+                    badge.className = 'px-2 py-1 text-xs font-semibold rounded-full bg-gray-200 text-gray-700';
+                }
+                const mid = document.getElementById('terminal-merchant-id');
+                if (data.merchant_id_is_set) mid.placeholder = '•••••••• (set — leave blank to keep)';
+                if (data.api_key_is_set) document.getElementById('terminal-api-key').placeholder = '•••••••• (set — leave blank to keep)';
+                if (data.api_secret_is_set) document.getElementById('terminal-api-secret').placeholder = '•••••••• (set — leave blank to keep)';
+            } catch (e) { console.error('Failed to load terminal credential status:', e); }
+        }
+
+        async function saveTerminalCredentials() {
+            const config = {};
+            const mid = document.getElementById('terminal-merchant-id').value.trim();
+            const key = document.getElementById('terminal-api-key').value;
+            const sec = document.getElementById('terminal-api-secret').value;
+            if (mid) config.merchant_id = mid;
+            if (key) config.api_key = key;
+            if (sec) config.api_secret = sec;
+            if (Object.keys(config).length === 0) {
+                showAlert('Nothing to save — all fields are blank.');
+                return;
+            }
+            try {
+                const response = await authenticatedFetch(`${PAYMENTS_API}/config/update/`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ gateway: 'maya', config })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    showAlert('Card terminal credentials saved.');
+                    document.getElementById('terminal-merchant-id').value = '';
+                    document.getElementById('terminal-api-key').value = '';
+                    document.getElementById('terminal-api-secret').value = '';
+                    await loadTerminalCredentialStatus();
+                } else {
+                    showAlert('Save failed: ' + (data.message || 'Unknown error'));
+                }
+            } catch (e) { showAlert('Save error: ' + e.message); }
         }
 
         async function loadQRPreviews() {

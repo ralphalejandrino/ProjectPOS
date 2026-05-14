@@ -9,7 +9,6 @@ import django.db.models.deletion
 import django.utils.timezone
 import djmoney.models.fields
 import djmoney.money
-import fernet_fields.fields
 import uuid
 
 
@@ -130,9 +129,9 @@ class Migration(migrations.Migration):
                 ('gateway', models.CharField(choices=[('gcash', 'GCash'), ('maya', 'Maya')], max_length=20, unique=True)),
                 ('is_active', models.BooleanField(default=True)),
                 ('use_mock_mode', models.BooleanField(default=True)),
-                ('merchant_id', fernet_fields.fields.EncryptedCharField(blank=True, max_length=255, null=True)),
-                ('api_key', fernet_fields.fields.EncryptedCharField(blank=True, max_length=255, null=True)),
-                ('api_secret', fernet_fields.fields.EncryptedCharField(blank=True, max_length=255, null=True)),
+                ('merchant_id', models.CharField(blank=True, max_length=255, null=True)),
+                ('api_key', models.CharField(blank=True, max_length=255, null=True)),
+                ('api_secret', models.CharField(blank=True, max_length=255, null=True)),
                 ('webhook_url', models.CharField(blank=True, max_length=500, null=True)),
                 ('qr_image', models.ImageField(blank=True, null=True, upload_to='payment_qr/')),
                 ('enable_terminal', models.BooleanField(default=False)),

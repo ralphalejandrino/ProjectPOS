@@ -430,13 +430,33 @@ class UserCreateSerializer(serializers.ModelSerializer):
         return user
 
 class PaymentGatewayConfigSerializer(serializers.ModelSerializer):
+    """Read-side serializer — never echoes the raw decrypted credentials.
+
+    The three secret fields are reported only as `*_is_set` booleans so the UI
+    can render a status badge without ever transporting the plaintext back to
+    the browser.
+    """
+    merchant_id_is_set = serializers.SerializerMethodField()
+    api_key_is_set = serializers.SerializerMethodField()
+    api_secret_is_set = serializers.SerializerMethodField()
+
     class Meta:
         model = PaymentGatewayConfig
         fields = [
             'id', 'gateway', 'is_active', 'use_mock_mode',
-            'merchant_id', 'webhook_url', 'enable_terminal', 'terminal_id',
+            'webhook_url', 'enable_terminal', 'terminal_id',
+            'merchant_id_is_set', 'api_key_is_set', 'api_secret_is_set',
             'created_at', 'updated_at',
         ]
+
+    def get_merchant_id_is_set(self, obj):
+        return bool(obj.merchant_id)
+
+    def get_api_key_is_set(self, obj):
+        return bool(obj.api_key)
+
+    def get_api_secret_is_set(self, obj):
+        return bool(obj.api_secret)
 
 # ============================================================================
 # SHIFT SERIALIZERS
