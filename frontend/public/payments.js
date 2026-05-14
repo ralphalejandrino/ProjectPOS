@@ -1,8 +1,8 @@
 // Payment Gateway Integration
 const PaymentSystem = {
     config: {
-        gcash: { is_active: true, use_mock_mode: true },
-        maya: { is_active: true, use_mock_mode: true, enable_terminal: false }
+        gcash: { is_active: false, use_mock_mode: false },
+        maya: { is_active: false, use_mock_mode: false, enable_terminal: false }
     },
 
     async init() {

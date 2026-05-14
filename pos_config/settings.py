@@ -39,8 +39,7 @@ DEBUG = os.getenv('DEBUG', 'False') == 'True'
 ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
-# Build CSRF and CORS origins dynamically from ALLOWED_HOSTS
-DEBUG_OR_LAN = os.getenv('ALLOWED_HOSTS', '') == '*'
+# Build CSRF origins dynamically from ALLOWED_HOSTS
 _origins = []
 for _host in ALLOWED_HOSTS:
     _host = _host.strip()
@@ -193,7 +192,7 @@ SIMPLE_JWT = {
 }
 
 # ── CORS Configuration ────────────────────────────────────────────────
-CORS_ALLOW_ALL_ORIGINS = DEBUG_OR_LAN
+CORS_ALLOW_ALL_ORIGINS = os.getenv('CORS_ALLOW_ALL_ORIGINS', 'True' if DEBUG else 'False') == 'True'
 CORS_ALLOWED_ORIGINS = _origins
 CORS_ALLOW_CREDENTIALS = True
 

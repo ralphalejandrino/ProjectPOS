@@ -106,7 +106,18 @@ class UserViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'], permission_classes=[AllowAny], url_path='quick-login')
     def quick_login(self, request):
-        """Return usernames for quick-login buttons. No passwords or roles exposed."""
+        """Return usernames for quick-login kiosk buttons. Restricted to private/loopback IPs
+        to prevent external username enumeration. Returns 404 to non-private callers so the
+        endpoint's existence isn't telegraphed."""
+        import ipaddress
+        remote = (request.META.get('HTTP_X_FORWARDED_FOR', '').split(',')[0].strip()
+                  or request.META.get('REMOTE_ADDR', ''))
+        try:
+            ip = ipaddress.ip_address(remote)
+            if not (ip.is_private or ip.is_loopback or ip.is_link_local):
+                return Response(status=status.HTTP_404_NOT_FOUND)
+        except ValueError:
+            return Response(status=status.HTTP_404_NOT_FOUND)
         users = (User.objects
                  .filter(is_active=True, role__in=['cashier', 'manager'])
                  .values('username', 'first_name', 'last_name')

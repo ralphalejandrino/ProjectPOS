@@ -76,3 +76,7 @@
 {"type":"edit","file":"/home/ralph/TarsierPOS/frontend/public/settings.html","timestamp":1778720236384,"sessionId":null}
 {"type":"edit","file":"/home/ralph/TarsierPOS/frontend/public/settings.html","timestamp":1778720248950,"sessionId":null}
 {"type":"edit","file":"/home/ralph/TarsierPOS/frontend/public/settings.html","timestamp":1778720253068,"sessionId":null}
+{"type":"edit","file":"/home/ralph/TarsierPOS/frontend/public/payments.js","timestamp":1778720970027,"sessionId":null}
+{"type":"edit","file":"/home/ralph/TarsierPOS/pos_config/settings.py","timestamp":1778720979528,"sessionId":null}
+{"type":"edit","file":"/home/ralph/TarsierPOS/pos_config/settings.py","timestamp":1778720983928,"sessionId":null}
+{"type":"edit","file":"/home/ralph/TarsierPOS/canteen/auth_views.py","timestamp":1778720998704,"sessionId":null}

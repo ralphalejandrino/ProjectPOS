@@ -818,7 +818,7 @@ from .payment_adapters import PaymentGatewayFactory
 import json
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsCashierOrAbove])
 def process_gcash_payment(request):
     """Process GCash payment (mock or real based on config)"""
     try:
@@ -881,7 +881,7 @@ def process_gcash_payment(request):
 
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsCashierOrAbove])
 def process_maya_payment(request):
     """Process Maya QR payment (mock or real based on config)"""
     try:
@@ -939,7 +939,7 @@ def process_maya_payment(request):
 
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsCashierOrAbove])
 def process_card_payment(request):
     """Process card payment via Maya Terminal (mock or real)"""
     try:
@@ -999,7 +999,7 @@ def process_card_payment(request):
 
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsCashierOrAbove])
 def get_payment_config(request):
     """Get payment gateway configuration (for frontend)"""
     from .models import PaymentGatewayConfig
@@ -1110,7 +1110,7 @@ def upload_payment_qr(request, gateway):
 
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsCashierOrAbove])
 def get_gateway_qr_config(request, gateway):
     """Get payment gateway config including QR image URL"""
     from .models import PaymentGatewayConfig
