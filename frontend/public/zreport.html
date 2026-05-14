@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Z-Report — TarsierPOS</title>
+    <title>Z-Report - TarsierPOS</title>
     <script>if(localStorage.getItem('darkMode')==='true')document.documentElement.classList.add('dark');</script>
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/png" href="assets/tarsier-icon.png">
@@ -328,12 +328,12 @@
         }
 
         function fmtTime(isoStr) {
-            if (!isoStr) return '—';
+            if (!isoStr) return '-';
             return formatTS(isoStr);
         }
 
         function fmtBusiestHour(hour) {
-            if (hour === null || hour === undefined) return '—';
+            if (hour === null || hour === undefined) return '-';
             const prefs = (() => { try { return JSON.parse(localStorage.getItem('clock_prefs') || '{}'); } catch(e) { return {}; } })();
             const use12 = prefs.format !== '24h';
             const start = new Date(2000, 0, 1, hour, 0);
@@ -398,9 +398,9 @@
             if (data.generated_at) {
                 document.getElementById('rpt-generated-at').textContent = formatTS(data.generated_at);
             }
-            document.getElementById('rpt-generated-by').textContent = data.generated_by || '—';
-            document.getElementById('rpt-opening-txn').textContent = data.opening_txn_no || '—';
-            document.getElementById('rpt-closing-txn').textContent = data.closing_txn_no || '—';
+            document.getElementById('rpt-generated-by').textContent = data.generated_by || '-';
+            document.getElementById('rpt-opening-txn').textContent = data.opening_txn_no || '-';
+            document.getElementById('rpt-closing-txn').textContent = data.closing_txn_no || '-';
             document.getElementById('rpt-first-time').textContent = fmtTime(data.first_txn_time);
             document.getElementById('rpt-last-time').textContent = fmtTime(data.last_txn_time);
 
