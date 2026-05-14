@@ -10,8 +10,18 @@
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="shared-styles.css">
 </head>
-<body class="bg-gray-50">
-    <script>if (!localStorage.getItem('access_token')) { window.location.href = 'login.html'; }</script>
+<body class="bg-gray-50" style="visibility:hidden">
+    <script>
+        // FLAG-028: hide body until role check passes to prevent flash of manager-only settings UI
+        (function () {
+            const t = localStorage.getItem('access_token');
+            if (!t) { window.location.replace('login.html'); return; }
+            let role = null;
+            try { role = JSON.parse(atob(t.split('.')[1])).role || null; } catch (e) {}
+            if (!role || role === 'cashier') { window.location.replace('index.html'); return; }
+            document.body.style.visibility = '';
+        })();
+    </script>
 
     <!-- NAVIGATION -->
     <nav class="bg-gradient-to-r from-blue-600 to-blue-800 text-white shadow-lg sticky top-0 z-50">

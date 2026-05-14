@@ -519,9 +519,12 @@ class PosTransactionItem(BaseModelWithUUID):
 
 
 class TransactionItemVariant(models.Model):
-    # FLAG-003: group_name/option_name are denormalized strings, not FKs.
-    # Risk: if VariantOption is renamed/deleted, historical data diverges.
-    # Fix planned in Variants 2.0: add FK to VariantOption.
+    # NOTE: group_name and option_name are stored as plain CharFields (snapshot at transaction time).
+    # This is intentional for receipt immutability — variant renames/deletes do not affect historical records.
+    # Verified: services.py:317 writes from rv['group'].name / rv['option'].name at create time, and
+    # TransactionItemVariantSerializer (serializers.py:217) reads only these stored fields — no live
+    # lookup against ProductVariant. If live referential integrity is needed in future, add FK to
+    # ProductVariant with on_delete=PROTECT (Variants 2.0).
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     transaction_item = models.ForeignKey(
         'PosTransactionItem', on_delete=models.CASCADE, related_name='variant_selections'

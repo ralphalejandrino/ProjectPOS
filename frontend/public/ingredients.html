@@ -239,6 +239,7 @@
       <button onclick="loadRestockLog()"
         class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm transition">Refresh</button>
     </div>
+    <div id="restockTruncationNotice" class="hidden mb-2 px-3 py-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg"></div>
     <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
       <table class="w-full text-sm">
         <thead class="bg-gray-50 border-b border-gray-100 text-gray-500 text-xs uppercase tracking-wide">
@@ -799,15 +800,22 @@ function renderUnits() {
 async function loadRestockLog() {
   const ingId = document.getElementById('restockFilterIngredient').value;
   const tbody = document.getElementById('restockTableBody');
+  const notice = document.getElementById('restockTruncationNotice');
+  notice.classList.add('hidden');
   tbody.innerHTML = `<tr><td colspan="7" class="text-center py-6"><div class="flex justify-center"><div class="spinner"></div></div></td></tr>`;
 
   try {
     let logs = [];
+    const SAMPLE_CAP = 20;
     if (ingId) {
       const data = await apiFetch(`/ingredients/${ingId}/restock_logs/`);
       logs = Array.isArray(data) ? data : (data?.results || []);
     } else {
-      const sample  = ingredients.slice(0, 20);
+      const sample  = ingredients.slice(0, SAMPLE_CAP);
+      if (ingredients.length > SAMPLE_CAP) {
+        notice.textContent = `Showing restock logs for the first ${SAMPLE_CAP} of ${ingredients.length} ingredients. Select a specific ingredient to see its full history.`;
+        notice.classList.remove('hidden');
+      }
       const results = await Promise.all(
         sample.map(i => apiFetch(`/ingredients/${i.id}/restock_logs/`).catch(() => []))
       );
