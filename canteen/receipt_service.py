@@ -317,7 +317,7 @@ def kick_cash_drawer():
             return
         p = Network(ip, port=port, timeout=3)
         try:
-            drawer_pin = getattr(settings, 'CASH_DRAWER_PIN', 0)  # 0=pin2, 1=pin5
+            drawer_pin = getattr(settings, 'CASH_DRAWER_PIN', 2)  # 2=pin2, 5=pin5 (escpos rejects 0)
             p.cashdraw(drawer_pin)
         finally:
             p.close()

@@ -661,15 +661,9 @@
         }
 
         function loadSettings() {
-            // System/receipt preferences from localStorage (business info loaded from backend via loadBusinessProfile)
-            const settings = {
-                showLogo: localStorage.getItem('showLogo') !== 'false',
-                currency: localStorage.getItem('currency') || 'PHP',
-            };
-
-            document.getElementById('show-logo').checked = settings.showLogo;
-            document.getElementById('currency').value = settings.currency;
-            // Tax Rate is populated from API vat_rate in loadBusinessProfile — do not overwrite with a hardcoded fallback here
+            // Receipt preference (UI-only) still from localStorage
+            document.getElementById('show-logo').checked = localStorage.getItem('showLogo') !== 'false';
+            // Currency and Tax Rate are populated from API in loadBusinessProfile — do not overwrite here
         }
 
         async function loadBusinessProfile() {
@@ -685,6 +679,8 @@
                 document.getElementById('receipt-header').value = data.receipt_header || '';
                 document.getElementById('receipt-footer').value = data.receipt_footer || '';
                 document.getElementById('low-stock-threshold').value = data.low_stock_threshold ?? 10;
+                const currencyEl = document.getElementById('currency');
+                if (currencyEl && data.currency) currencyEl.value = data.currency;
                 const nameEl = document.getElementById('site-name');
                 const tagEl = document.getElementById('site-tagline');
                 if (nameEl) nameEl.textContent = data.business_name;
@@ -835,16 +831,18 @@
 
         async function saveSystemSettings() {
             try {
+                const taxRateVal = parseFloat(document.getElementById('tax-rate').value);
                 const response = await authenticatedFetch(`${API_BASE}/business/update/`, {
                     method: 'PATCH',
                     body: JSON.stringify({
                         low_stock_threshold: (() => { const v = parseInt(document.getElementById('low-stock-threshold').value); return !isNaN(v) ? v : 10; })(),
+                        currency: document.getElementById('currency').value,
+                        vat_rate: !isNaN(taxRateVal) ? taxRateVal : 12,
                     })
                 });
                 const data = await response.json();
                 if (data.success) {
-                    localStorage.setItem('currency', document.getElementById('currency').value);
-                    localStorage.setItem('taxRate', document.getElementById('tax-rate').value);
+                    localStorage.removeItem('biz_profile');
                     showSuccessModal();
                 } else {
                     showAlert('Failed to save system settings: ' + (data.error || data.detail || 'Unknown error'));

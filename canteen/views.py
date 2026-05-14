@@ -1436,6 +1436,7 @@ def get_business_profile(request):
         'vat_enabled': profile.vat_enabled,
         'vat_rate': float(profile.vat_rate),
         'vat_inclusive': profile.vat_inclusive,
+        'currency': profile.currency,
         'sc_discount_enabled': profile.sc_discount_enabled,
         'sc_discount_rate': float(profile.sc_discount_rate),
         'pwd_discount_enabled': profile.pwd_discount_enabled,
@@ -1455,7 +1456,7 @@ def get_business_profile(request):
 def update_business_profile(request):
     from .models import BusinessProfile
     profile = BusinessProfile.get_instance()
-    fields = ['business_name', 'tagline', 'contact_number', 'email', 'address', 'tin', 'receipt_header', 'receipt_footer', 'low_stock_threshold', 'printer_ip', 'printer_port', 'printer_enabled', 'color_scheme', 'logo', 'vat_enabled', 'vat_rate', 'vat_inclusive', 'sc_discount_enabled', 'sc_discount_rate', 'pwd_discount_enabled', 'pwd_discount_rate', 'promo_discount_enabled', 'track_inventory']
+    fields = ['business_name', 'tagline', 'contact_number', 'email', 'address', 'tin', 'receipt_header', 'receipt_footer', 'low_stock_threshold', 'printer_ip', 'printer_port', 'printer_enabled', 'color_scheme', 'logo', 'vat_enabled', 'vat_rate', 'vat_inclusive', 'currency', 'sc_discount_enabled', 'sc_discount_rate', 'pwd_discount_enabled', 'pwd_discount_rate', 'promo_discount_enabled', 'track_inventory']
     for field in fields:
         if field in request.data:
             setattr(profile, field, request.data[field])
