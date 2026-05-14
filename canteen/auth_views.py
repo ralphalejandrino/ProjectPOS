@@ -49,6 +49,8 @@ def login_view(request):
         login(request, user)
         cache.delete(cache_key)  # Reset on success
         user_data = UserSerializer(user).data
+        user_data.pop('phone', None)
+        user_data.pop('email', None)
         return Response({
             'success': True,
             'user': user_data,

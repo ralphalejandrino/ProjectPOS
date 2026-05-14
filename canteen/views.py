@@ -1162,7 +1162,7 @@ class ItemViewSet(viewsets.ModelViewSet):
             return ItemUpdateSerializer
         return ItemSerializer  # list, retrieve → read serializer with photo fallback
     
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=['get'], permission_classes=[IsManagerOrAbove])
     def analytics(self, request):
         """Get inventory analytics"""
         from .models import BusinessProfile
