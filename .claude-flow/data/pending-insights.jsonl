@@ -114,3 +114,4 @@
 {"type":"edit","file":"/home/ralph/TarsierPOS/frontend/public/settings.html","timestamp":1778733838243,"sessionId":null}
 {"type":"edit","file":"/home/ralph/TarsierPOS/frontend/public/settings.html","timestamp":1778733859196,"sessionId":null}
 {"type":"edit","file":"/home/ralph/TarsierPOS/frontend/public/settings.html","timestamp":1778733869420,"sessionId":null}
+{"type":"edit","file":"/home/ralph/TarsierPOS/canteen/migrations/0022_alter_paymentgatewayconfig_gateway_and_more.py","timestamp":1778736066477,"sessionId":null}

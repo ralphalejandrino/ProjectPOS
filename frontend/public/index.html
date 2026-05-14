@@ -849,7 +849,7 @@ async function logout() {
         }
 
         async function loadPaymentVisibility() {
-            for (const gateway of ['gcash', 'maya']) {
+            for (const gateway of ['gcash', 'maya', 'card']) {
                 try {
                     const response = await authenticatedFetch(`${PAYMENTS_API}/config/${gateway}/`);
                     const data = await response.json();
@@ -861,11 +861,16 @@ async function logout() {
                     console.error(`Failed to load ${gateway} visibility:`, e);
                 }
             }
-            // Card — Coming Soon button visibility from localStorage
-            const cardBtn = document.querySelector('button[disabled].cursor-not-allowed');
-            if (cardBtn) {
-                const cardEnabled = localStorage.getItem('payment_card');
-                cardBtn.style.display = (cardEnabled === 'false') ? 'none' : '';
+            // Card — fallback for legacy Coming Soon button without id=btn-card
+            const cardFallbackBtn = document.querySelector('button[disabled].cursor-not-allowed');
+            if (cardFallbackBtn && !document.getElementById('btn-card')) {
+                try {
+                    const response = await authenticatedFetch(`${PAYMENTS_API}/config/card/`);
+                    const data = await response.json();
+                    cardFallbackBtn.style.display = data.is_active === false ? 'none' : '';
+                } catch (e) {
+                    console.error('Failed to load card visibility:', e);
+                }
             }
         }
 

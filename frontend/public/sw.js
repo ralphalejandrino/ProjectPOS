@@ -1,4 +1,4 @@
-const CACHE_NAME = 'tarsierpos-v44'; // canonical cache version
+const CACHE_NAME = 'tarsierpos-v45'; // canonical cache version
 const ASSETS = [
   'index.html',
   'login.html',
@@ -11,6 +11,7 @@ const ASSETS = [
   'app.js',
   'config.js',
   'dashboard.js',
+  'payments.js',
   'styles.css',
   'shared-styles.css',
   'manifest.json',

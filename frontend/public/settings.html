@@ -767,11 +767,11 @@
                 if (taxRateEl) taxRateEl.value = (data.vat_rate !== undefined && data.vat_rate !== null && !isNaN(parseFloat(data.vat_rate))) ? parseFloat(data.vat_rate) : 12;
                 if (vatRateRow) vatRateRow.classList.toggle('hidden', !data.vat_enabled);
                 const scEl = document.getElementById('sc-discount-enabled');
-                if (scEl) scEl.checked = data.sc_discount_enabled !== false;
+                if (scEl) scEl.checked = data.sc_discount_enabled === true;
                 const scRateEl = document.getElementById('sc-discount-rate');
                 if (scRateEl) scRateEl.value = (data.sc_discount_rate !== undefined && data.sc_discount_rate !== null && !isNaN(parseFloat(data.sc_discount_rate))) ? parseFloat(data.sc_discount_rate) : 20;
                 const pwdEl = document.getElementById('pwd-discount-enabled');
-                if (pwdEl) pwdEl.checked = data.pwd_discount_enabled !== false;
+                if (pwdEl) pwdEl.checked = data.pwd_discount_enabled === true;
                 const pwdRateEl = document.getElementById('pwd-discount-rate');
                 if (pwdRateEl) pwdRateEl.value = (data.pwd_discount_rate !== undefined && data.pwd_discount_rate !== null && !isNaN(parseFloat(data.pwd_discount_rate))) ? parseFloat(data.pwd_discount_rate) : 20;
                 const promoEl = document.getElementById('promo-discount-enabled');
@@ -918,10 +918,6 @@
         }
 
         async function togglePaymentMethod(method, enabled) {
-            if (method === 'card') {
-                localStorage.setItem('payment_card', enabled);
-                return;
-            }
             try {
                 const response = await authenticatedFetch(`${PAYMENTS_API}/config/update/`, {
                     method: 'POST',
@@ -1187,7 +1183,7 @@
         }
 
         async function loadPaymentMethodStates() {
-            for (const gateway of ['gcash', 'maya']) {
+            for (const gateway of ['gcash', 'maya', 'card']) {
                 try {
                     const response = await authenticatedFetch(`${PAYMENTS_API}/config/${gateway}/`);
                     const data = await response.json();
@@ -1198,12 +1194,6 @@
                 } catch (e) {
                     console.error(`Failed to load ${gateway} state:`, e);
                 }
-            }
-            // Card toggle — read from localStorage (no backend row for card)
-            const cardCheckbox = document.getElementById('enable-card');
-            if (cardCheckbox) {
-                const stored = localStorage.getItem('payment_card');
-                cardCheckbox.checked = stored === null ? true : stored === 'true';
             }
         }
 

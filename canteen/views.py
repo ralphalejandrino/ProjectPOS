@@ -1045,7 +1045,7 @@ def update_payment_config(request):
         gateway = request.data.get('gateway')
         config_data = request.data.get('config', {})
         
-        if gateway not in ['gcash', 'maya']:
+        if gateway not in ['gcash', 'maya', 'card']:
             return Response({
                 'success': False,
                 'message': 'Invalid gateway'
