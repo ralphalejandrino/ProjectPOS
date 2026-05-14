@@ -196,7 +196,7 @@ def print_zreport_summary(data):
                 p.text(profile.receipt_header + '\n')
             p.text('-' * RECEIPT_WIDTH + '\n')
             p.set(align='center', bold=True)
-            p.text('Z-REPORT — END OF DAY\n')
+            p.text('Z-REPORT - END OF DAY\n')
             p.set(align='left', bold=False)
             p.text(f"Date: {data.get('date', '')}\n")
             if data.get('generated_by'):
@@ -270,7 +270,7 @@ def print_xreport_summary(data):
                 p.text(profile.receipt_header + '\n')
             p.text('-' * RECEIPT_WIDTH + '\n')
             p.set(align='center', bold=True)
-            p.text('X-REPORT — SHIFT SUMMARY\n')
+            p.text('X-REPORT - SHIFT SUMMARY\n')
             p.set(align='left', bold=False)
             if data.get('cashier'):
                 p.text(f"Cashier: {data['cashier']}\n")
