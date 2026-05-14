@@ -386,17 +386,32 @@ class PosTransactionViewSet(viewsets.ViewSet):
         from .models import BusinessProfile as _BP
         from decimal import Decimal, ROUND_HALF_UP
         _bp = _BP.get_instance()
+        # VAT-exempt sales (BIR: SC/PWD discounted transactions are VAT-exempt)
+        _exempt_raw = completed.filter(discount_type__in=['sc', 'pwd']).aggregate(
+            total=Sum('total_amount')
+        )['total'] or 0
+        vat_exempt_sales = float(_exempt_raw)
+
         if _bp.vat_enabled:
             _gross_d = Decimal(str(_gross_raw))
+            _exempt_d = Decimal(str(_exempt_raw))
+            _vatable_gross_d = _gross_d - _exempt_d
             _vat_rate_d = Decimal(str(_bp.vat_rate))
-            vat_amount = float(
-                (_gross_d * _vat_rate_d / (Decimal('100') + _vat_rate_d))
-                .quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-            )
-            net_of_vat = float(
-                (_gross_d - Decimal(str(vat_amount)))
-                .quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-            )
+            if _bp.vat_inclusive:
+                vat_amount = float(
+                    (_vatable_gross_d * _vat_rate_d / (Decimal('100') + _vat_rate_d))
+                    .quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+                )
+                net_of_vat = float(
+                    (_gross_d - Decimal(str(vat_amount)))
+                    .quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+                )
+            else:
+                vat_amount = float(
+                    (_vatable_gross_d * _vat_rate_d / Decimal('100'))
+                    .quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+                )
+                net_of_vat = gross
         else:
             vat_amount = 0.0
             net_of_vat = gross
@@ -532,7 +547,9 @@ class PosTransactionViewSet(viewsets.ViewSet):
             'void_total': void_total,
             'net_sales': net_sales,
             'vat_rate': float(_bp.vat_rate) if _bp.vat_enabled else None,
+            'vat_inclusive': bool(_bp.vat_inclusive) if _bp.vat_enabled else None,
             'vat_amount': vat_amount,
+            'vat_exempt_sales': vat_exempt_sales,
             'net_of_vat': net_of_vat,
             'average_transaction': average_transaction,
             'cash_expected': cash_expected,
@@ -833,7 +850,6 @@ def process_gcash_payment(request):
                     payment_method='gcash',
                     cashier=request.user,
                     gcash_reference=result['transaction_id'],
-                    transaction_no=result['reference']
                 )
 
                 return Response({
@@ -895,7 +911,6 @@ def process_maya_payment(request):
                 items_data=items,
                 payment_method='maya',
                 cashier=request.user,
-                transaction_no=result['reference'],
                 maya_reference=result['transaction_id']
             )
             
@@ -954,7 +969,6 @@ def process_card_payment(request):
                 items_data=items,
                 payment_method='card',
                 cashier=request.user,
-                transaction_no=result['reference'],
                 card_reference=result['transaction_id']
             )
             
@@ -1421,6 +1435,7 @@ def get_business_profile(request):
         'logo': request.build_absolute_uri(profile.logo.url) if profile.logo else None,
         'vat_enabled': profile.vat_enabled,
         'vat_rate': float(profile.vat_rate),
+        'vat_inclusive': profile.vat_inclusive,
         'sc_discount_enabled': profile.sc_discount_enabled,
         'sc_discount_rate': float(profile.sc_discount_rate),
         'pwd_discount_enabled': profile.pwd_discount_enabled,
@@ -1440,7 +1455,7 @@ def get_business_profile(request):
 def update_business_profile(request):
     from .models import BusinessProfile
     profile = BusinessProfile.get_instance()
-    fields = ['business_name', 'tagline', 'contact_number', 'email', 'address', 'tin', 'receipt_header', 'receipt_footer', 'low_stock_threshold', 'printer_ip', 'printer_port', 'printer_enabled', 'color_scheme', 'logo', 'vat_enabled', 'vat_rate', 'sc_discount_enabled', 'sc_discount_rate', 'pwd_discount_enabled', 'pwd_discount_rate', 'promo_discount_enabled', 'track_inventory']
+    fields = ['business_name', 'tagline', 'contact_number', 'email', 'address', 'tin', 'receipt_header', 'receipt_footer', 'low_stock_threshold', 'printer_ip', 'printer_port', 'printer_enabled', 'color_scheme', 'logo', 'vat_enabled', 'vat_rate', 'vat_inclusive', 'sc_discount_enabled', 'sc_discount_rate', 'pwd_discount_enabled', 'pwd_discount_rate', 'promo_discount_enabled', 'track_inventory']
     for field in fields:
         if field in request.data:
             setattr(profile, field, request.data[field])

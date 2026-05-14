@@ -167,7 +167,11 @@
                         <span id="rpt-net-of-vat" class="font-medium text-gray-800"></span>
                     </div>
                     <div class="flex justify-between items-center">
-                        <span class="text-gray-600">VAT Amount (12%)</span>
+                        <span class="text-gray-600">VAT-Exempt Sales (SC/PWD)</span>
+                        <span id="rpt-vat-exempt" class="font-medium text-gray-800"></span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span id="rpt-vat-amount-label" class="text-gray-600">VAT Amount</span>
                         <span id="rpt-vat-amount" class="font-medium text-gray-800"></span>
                     </div>
                     <div class="flex justify-between items-center border-t pt-2 font-semibold">
@@ -410,11 +414,17 @@
             document.getElementById('rpt-busiest-hour').textContent = fmtBusiestHour(data.busiest_hour);
 
             // Section D — VAT Breakdown
+            const vatMode = data.vat_inclusive === false ? 'Exclusive' : 'Inclusive';
             const vatLabel = data.vat_rate != null
-                ? `VAT Breakdown (${data.vat_rate}% Inclusive)`
+                ? `VAT Breakdown (${data.vat_rate}% ${vatMode})`
                 : 'VAT Breakdown';
             document.getElementById('rpt-vat-header').textContent = vatLabel;
+            const vatAmtLabel = data.vat_rate != null
+                ? `VAT Amount (${data.vat_rate}%)`
+                : 'VAT Amount';
+            document.getElementById('rpt-vat-amount-label').textContent = vatAmtLabel;
             document.getElementById('rpt-net-of-vat').textContent = fmt(data.net_of_vat);
+            document.getElementById('rpt-vat-exempt').textContent = fmt(data.vat_exempt_sales || 0);
             document.getElementById('rpt-vat-amount').textContent = fmt(data.vat_amount);
             document.getElementById('rpt-gross-vat').textContent = fmt(data.gross_sales);
 

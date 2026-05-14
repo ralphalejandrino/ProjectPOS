@@ -238,7 +238,7 @@ async function loadSiteName() {
             color_scheme: data.color_scheme,
             logo: data.logo || null,
             vat_enabled: !!data.vat_enabled,
-            vat_rate: data.vat_rate || 12,
+            vat_rate: (data.vat_rate !== undefined && data.vat_rate !== null && !isNaN(parseFloat(data.vat_rate))) ? parseFloat(data.vat_rate) : 12,
             sc_discount_enabled: data.sc_discount_enabled !== false,
             sc_discount_rate: data.sc_discount_rate || 20,
             pwd_discount_enabled: data.pwd_discount_enabled !== false,

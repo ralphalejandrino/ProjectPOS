@@ -730,6 +730,7 @@ class BusinessProfile(models.Model):
     track_inventory = models.BooleanField(default=True, verbose_name='Track Inventory')
     vat_enabled = models.BooleanField(default=False, verbose_name='VAT Enabled')
     vat_rate = models.DecimalField(max_digits=5, decimal_places=2, default=12.0, verbose_name='VAT Rate (%)')
+    vat_inclusive = models.BooleanField(default=True, verbose_name='VAT Inclusive Pricing')
     # Per-type discount configuration (restored — migration 0009)
     sc_discount_enabled = models.BooleanField(default=True, verbose_name='SC Discount Enabled')
     sc_discount_rate = models.DecimalField(
