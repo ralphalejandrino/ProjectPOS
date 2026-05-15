@@ -579,11 +579,7 @@ window.confirmAction = confirmAction;
                     closeCashModal();
                     showCustomSuccess('Cash Payment Complete!', data);
                     autoPrintReceipt(data.id);
-                    window.cart.items = [];
-                    window.cart.total = 0;
-                    window.cart.discountType = '';
-                    window.cart.discountAmount = 0;
-                    window.cart.discountIdNumber = '';
+                    window.clearCartState();
                     updateCart();
                 } else {
                     showCustomError('Transaction Failed', data.error || 'Please try again');
@@ -697,11 +693,7 @@ window.confirmAction = confirmAction;
                     closeGCashModal();
                     showCustomSuccess('GCash Payment Complete!', data);
                     autoPrintReceipt(data.id);
-                    window.cart.items = [];
-                    window.cart.total = 0;
-                    window.cart.discountType = '';
-                    window.cart.discountAmount = 0;
-                    window.cart.discountIdNumber = '';
+                    window.clearCartState();
                     updateCart();
                 } else {
                     showCustomError('Transaction Failed', data.error || 'Please try again');
@@ -772,11 +764,7 @@ window.confirmAction = confirmAction;
                     closeMayaModal();
                     showCustomSuccess('Maya Payment Complete!', data);
                     autoPrintReceipt(data.id);
-                    window.cart.items = [];
-                    window.cart.total = 0;
-                    window.cart.discountType = '';
-                    window.cart.discountAmount = 0;
-                    window.cart.discountIdNumber = '';
+                    window.clearCartState();
                     updateCart();
                 } else {
                     showCustomError('Transaction Failed', data.error || 'Please try again');
