@@ -17,6 +17,34 @@ let allProducts = [];
 let allCategories = [];
 
 // ============================================
+// CART TOTAL — single source of truth (QA-S2-002)
+// ============================================
+
+function getCartTotal() {
+    const subtotal = window.cart.items.reduce((sum, item) => {
+        const price = parseFloat(item.price) || 0;
+        const quantity = parseInt(item.quantity) || 0;
+        return sum + (price * quantity);
+    }, 0);
+    return Math.max(0, subtotal - (window.cart.discountAmount || 0));
+}
+window.getCartTotal = getCartTotal;
+
+// Reset cart + ALL discount state (QA-S2-001) — used by every clear path
+// so the display and payment modal can never diverge.
+function clearCartState() {
+    window.cart.items = [];
+    window.cart.total = 0;
+    window.cart.discountAmount = 0;
+    window.cart.discountType = null;
+    window.cart.discountIdNumber = '';
+    window.cart.discountLabel = null;
+    window.cart.selectedDiscountType = null;
+    window.cart.pendingDiscountType = null;
+}
+window.clearCartState = clearCartState;
+
+// ============================================
 // API BASE URL
 // ============================================
 
@@ -409,16 +437,8 @@ function updateCart() {
     const cartTotal = document.getElementById('cart-total');
     const cartCount = document.getElementById('cart-count');
 
-    // Calculate subtotal
-    const subtotal = window.cart.items.reduce((sum, item) => {
-        const price = parseFloat(item.price) || 0;
-        const quantity = parseInt(item.quantity) || 0;
-        return sum + (price * quantity);
-    }, 0);
-
-    // Apply discount from modal (always active when set)
-    const discount = window.cart.discountAmount || 0;
-    window.cart.total = Math.max(0, subtotal - discount);
+    // Total (incl. discount) — single source of truth shared with payment modal
+    window.cart.total = getCartTotal();
 
     // Update count
     const totalItems = window.cart.items.reduce((sum, item) => sum + item.quantity, 0);
@@ -482,8 +502,7 @@ function attachEventListeners() {
                     'Are you sure you want to remove all items from the cart?',
                     () => {
                         window.cart.items.forEach(i => updateProductStock(i.id, i.quantity));
-                        window.cart.items = [];
-                        window.cart.total = 0;
+                        clearCartState();
                         updateCart();
                     }
                 );
