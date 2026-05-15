@@ -56,7 +56,8 @@ self.addEventListener('fetch', (event) => {
       return fetch(event.request).then((response) => {
         // Cache successful same-origin responses (images, JS, CSS, HTML)
         if (response && response.status === 200 && response.type === 'basic') {
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, response.clone()));
+          const responseToCache = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseToCache));
         }
         return response;
       });
