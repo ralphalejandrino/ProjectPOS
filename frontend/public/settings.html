@@ -962,10 +962,7 @@
             document.getElementById('success-modal').classList.add('hidden');
         }
 
-        async function logout() {
-            await clearTokens();
-            window.location.href = 'login.html';
-        }
+        // logout() is provided by config.js (awaits token blacklist, then location.replace)
 
         async function uploadQR(gateway) {
             const input = document.getElementById(`${gateway}-qr-upload`);

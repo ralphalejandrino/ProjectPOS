@@ -14,7 +14,7 @@
     <link rel="stylesheet" href="shared-styles.css">
 </head>
 <body class="bg-gray-50">
-    <script>if (!localStorage.getItem('access_token')) { window.location.href = 'login.html'; }</script>
+    <script>if (!localStorage.getItem('access_token')) { window.location.replace('login.html'); }</script>
 
     <!-- NAVIGATION (EXACT SAME AS POS) -->
     <nav class="bg-gradient-to-r from-blue-600 to-blue-800 text-white shadow-lg sticky top-0 z-[50]">
@@ -766,11 +766,7 @@
             showAdjustStockModal(product);
         }
 
-        // Logout function
-        async function logout() {
-            clearTokens();
-            window.location.href = 'login.html';
-        }
+        // logout() is provided by config.js (awaits token blacklist, then location.replace)
 
         function openCategoryModal() {
             document.getElementById('category-modal').classList.remove('hidden');

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'tarsierpos-v45'; // canonical cache version
+const CACHE_NAME = 'tarsierpos-v46'; // canonical cache version (v46: purge any stale API responses cached by older SW)
 const ASSETS = [
   'index.html',
   'login.html',

@@ -31,9 +31,10 @@
 <body class="bg-gray-50">
     <!-- Auth Check -->
     <script>
-        // Check if user is logged in via JWT directly from localStorage
+        // Check if user is logged in via JWT directly from localStorage.
+        // Use location.replace so the back button cannot return to this protected page.
         if (!localStorage.getItem('access_token')) {
-            window.location.href = 'login.html';
+            window.location.replace('login.html');
         }
     </script>
 
@@ -636,11 +637,7 @@ window.confirmAction = confirmAction;
         document.getElementById('userRole').textContent = 'AUTHORIZED';
     }
 
-// Logout function
-async function logout() {
-    clearTokens();
-    window.location.href = 'login.html';
-}
+// logout() is provided by config.js (awaits token blacklist, then location.replace)
 
         // GCash Modal Functions
         async function showGCashModal() {

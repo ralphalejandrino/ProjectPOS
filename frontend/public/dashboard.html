@@ -748,11 +748,7 @@
             return str.charAt(0).toUpperCase() + str.slice(1);
         }
 
-        // Logout function
-        async function logout() {
-            clearTokens();
-            window.location.href = 'login.html';
-        }
+        // logout() is provided by config.js (awaits token blacklist, then location.replace)
     </script>
     <!-- VOID MODAL -->
     <div id="void-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4">

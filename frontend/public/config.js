@@ -41,6 +41,13 @@ const clearTokens = async () => {
     localStorage.removeItem('refresh_token');
 };
 
+// Canonical logout — AWAIT token blacklist before navigating away (no race),
+// and use location.replace so the back button cannot return to a protected page.
+async function logout() {
+    await clearTokens();
+    window.location.replace('login.html');
+}
+
 function getUserRole() {
     const token = getToken();
     if (!token) return null;
