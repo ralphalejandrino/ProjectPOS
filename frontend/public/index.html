@@ -11,6 +11,8 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="shared-styles.css">
+    <script src="config.js"></script>
+    <script src="components/nav.js"></script>
     <style>
         .product-card:hover {
             transform: translateY(-2px);
@@ -28,7 +30,7 @@
         }
     </style>
 </head>
-<body class="bg-gray-50">
+<body class="bg-gray-50" data-page="pos">
     <!-- Auth Check -->
     <script>
         // Check if user is logged in via JWT directly from localStorage.
@@ -38,40 +40,9 @@
         }
     </script>
 
-    <!-- NAVIGATION -->
-    <nav class="bg-gradient-to-r from-blue-600 to-blue-800 text-white shadow-lg sticky top-0 z-50">
-        <div class="container mx-auto px-4 py-3 flex justify-between items-center">
-            <div class="flex items-center space-x-3">
-                <span class="text-3xl">🍽️</span>
-                <div>
-                    <h1 class="text-xl font-bold text-white" id="site-name">TarsierPOS</h1>
-                    <p class="text-blue-200 text-sm" id="site-tagline">AI Powered Point of Sale System</p>
-                </div>
-            </div>
-
-            <div class="flex items-center gap-4">
-                <span id="live-clock" class="text-sm font-mono tabular-nums text-blue-100 hidden sm:block"></span>
-                <div class="text-right hidden sm:block border-r border-blue-400 pr-4 mr-2">
-                    <p class="text-sm font-bold text-white leading-tight" id="userName"></p>
-                    <p class="text-[10px] text-blue-200 uppercase tracking-widest font-black leading-tight" id="userRole"></p>
-                </div>
-                <div class="relative">
-                    <button id="menu-button" class="bg-blue-700 hover:bg-blue-800 px-4 py-2 rounded-lg font-medium transition flex items-center space-x-2">
-                        <span>☰ Menu</span>
-                        <span id="menu-arrow">▼</span>
-                    </button>
-                    <div id="dropdown-menu" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl z-50">
-                        <a href="index.html" class="block px-4 py-3 text-blue-600 bg-blue-50 font-bold rounded-t-lg">🏪 POS</a>
-                        <a href="inventory.html" class="block px-4 py-3 text-gray-700 hover:bg-gray-100">📦 Inventory</a>
-                                <a href="ingredients.html" class="block px-4 py-3 text-gray-700 hover:bg-gray-100">🧪 Ingredients</a>
-                        <a href="dashboard.html" class="block px-4 py-3 text-gray-700 hover:bg-gray-100">📊 Dashboard</a>
-                        <a href="settings.html" class="block px-4 py-3 text-gray-700 hover:bg-gray-100">⚙️ Settings</a>
-                        <a href="#" onclick="logout(); return false;" class="block px-4 py-3 text-red-600 hover:bg-red-50 rounded-b-lg">🚪 Logout</a>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </nav>
+    <!-- NAVIGATION (FEATURE-029: canonical shared nav) -->
+    <div id="nav-mount"></div>
+    <script>renderNav({ activePage: 'pos' });</script>
 
     <!-- MAIN LAYOUT -->
     <div class="flex h-[calc(100vh-73px)]">
@@ -309,7 +280,6 @@
     </div>
 
     <!-- SCRIPTS -->
-    <script src="config.js"></script>
     <script src="dialogs.js"></script>
     <script src="app.js"></script>
     <!-- payments.js intentionally NOT loaded: ISSUE-016 confirmed it is dead code.
@@ -546,40 +516,14 @@
         window.showCustomSuccess = showCustomSuccess;
         window.closePaymentSuccessModal = closePaymentSuccessModal;
 
-        // Dropdown Menu
+        // Menu toggle + user info population handled by components/nav.js (FEATURE-029)
         document.addEventListener('DOMContentLoaded', () => {
-            const menuButton = document.getElementById('menu-button');
-            const dropdown = document.getElementById('dropdown-menu');
-            const arrow = document.getElementById('menu-arrow');
-
-            if (menuButton && dropdown && arrow) {
-                menuButton.addEventListener('click', function(e) {
-                    e.stopPropagation();
-                    dropdown.classList.toggle('hidden');
-                    arrow.textContent = dropdown.classList.contains('hidden') ? '▼' : '▲';
-                });
-
-                document.addEventListener('click', function(e) {
-                    if (!dropdown.contains(e.target) && !menuButton.contains(e.target)) {
-                        dropdown.classList.add('hidden');
-                        arrow.textContent = '▼';
-                    }
-                });
-            }
             loadPaymentVisibility();
             loadSiteName();
             loadColorScheme();
             initSidebar();
             initPayments();
         });
-    try {
-        const payload = JSON.parse(atob(getToken().split('.')[1]));
-        document.getElementById('userName').textContent = payload.username || 'User';
-        document.getElementById('userRole').textContent = (payload.role || 'user').toUpperCase();
-    } catch (e) {
-        document.getElementById('userName').textContent = 'User';
-        document.getElementById('userRole').textContent = 'AUTHORIZED';
-    }
 
 // logout() is provided by config.js (awaits token blacklist, then location.replace)
 
@@ -1099,26 +1043,7 @@
     </div>
 
 <script>
-(function(){
-    try {
-        const tok = localStorage.getItem('access_token');
-        if (tok) {
-            const p = JSON.parse(atob(tok.split('.')[1]));
-            const uEl = document.getElementById('userName');
-            const rEl = document.getElementById('userRole');
-            if (uEl) uEl.textContent = p.username || 'User';
-            if (rEl) rEl.textContent = p.role || '';
-        }
-    } catch(e) {}
-    function tick() {
-        const prefs = (() => { try { return JSON.parse(localStorage.getItem('clock_prefs') || '{}'); } catch(e) { return {}; } })();
-        const use12 = prefs.format !== '24h';
-        const tz = prefs.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
-        const el = document.getElementById('live-clock');
-        if (el) el.textContent = new Date().toLocaleTimeString('en-PH', {hour:'2-digit', minute:'2-digit', second:'2-digit', hour12: use12, timeZone: tz});
-    }
-    tick(); setInterval(tick, 1000);
-})();
+// User info + live clock handled by components/nav.js (FEATURE-029)
 </script>
 </body>
 </html>

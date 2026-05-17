@@ -26,50 +26,13 @@
     .tab-bar::-webkit-scrollbar { display: none; }
   </style>
 </head>
-<body class="bg-gray-50 min-h-screen font-sans">
+<body class="bg-gray-50 min-h-screen font-sans" data-page="ingredients">
 
-<!-- ───────────── NAV (matches dashboard.html) ───────────── -->
-<nav class="bg-gradient-to-r from-blue-600 to-blue-800 text-white shadow-lg sticky top-0 z-50">
-  <div class="container mx-auto px-4 py-3 flex justify-between items-center">
-
-    <!-- Left: emoji + site name + tagline -->
-    <div class="flex items-center space-x-3">
-      <span class="text-3xl">🍽️</span>
-      <div>
-        <h1 class="text-xl font-bold text-white" id="site-name">TarsierPOS</h1>
-        <p class="text-blue-200 text-sm" id="site-tagline">AI Powered Point of Sale System</p>
-      </div>
-    </div>
-
-    <!-- Right: clock + user info + ☰ Menu -->
-    <div class="flex items-center gap-4">
-      <span id="live-clock" class="text-sm font-mono tabular-nums text-blue-100 hidden sm:block"></span>
-      <div class="text-right hidden sm:block border-r border-blue-400 pr-4 mr-2">
-        <p class="text-sm font-bold text-white leading-tight" id="userName"></p>
-        <p class="text-[10px] text-blue-200 uppercase tracking-widest font-black leading-tight" id="userRole"></p>
-      </div>
-      <div class="relative">
-        <button id="menu-button"
-          class="bg-blue-700 hover:bg-blue-800 px-4 py-2 rounded-lg font-medium transition flex items-center space-x-2">
-          <span>☰ Menu</span>
-          <span id="menu-arrow">▼</span>
-        </button>
-        <div id="dropdown-menu" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl z-50">
-          <a href="index.html"      class="block px-4 py-3 text-gray-700 hover:bg-gray-100 rounded-t-lg">🛒 POS</a>
-          <a href="inventory.html"  class="block px-4 py-3 text-gray-700 hover:bg-gray-100">📦 Inventory</a>
-          <a href="ingredients.html" class="block px-4 py-3 text-blue-600 bg-blue-50 font-bold">🧪 Ingredients</a>
-          <a href="dashboard.html"  class="block px-4 py-3 text-gray-700 hover:bg-gray-100" id="navDashLink">📊 Dashboard</a>
-          <a href="settings.html"   class="block px-4 py-3 text-gray-700 hover:bg-gray-100" id="navSettingsLink">⚙️ Settings</a>
-          <a href="xreport.html"    class="block px-4 py-3 text-gray-700 hover:bg-gray-100" id="navXLink">📈 X-Report</a>
-          <a href="zreport.html"    class="block px-4 py-3 text-gray-700 hover:bg-gray-100" id="navZLink">📉 Z-Report</a>
-          <a href="#" onclick="handleLogout(); return false;"
-            class="block px-4 py-3 text-red-600 hover:bg-red-50 rounded-b-lg">🚪 Logout</a>
-        </div>
-      </div>
-    </div>
-
-  </div>
-</nav>
+<!-- NAVIGATION (FEATURE-029: canonical shared nav) -->
+<div id="nav-mount"></div>
+<script src="config.js"></script>
+<script src="components/nav.js"></script>
+<script>renderNav({ activePage: 'ingredients' });</script>
 
 <!-- ───────────── TOAST ───────────── -->
 
@@ -510,8 +473,7 @@
 <!-- ══════════════════════════════════════════════════════
      SCRIPTS
 ══════════════════════════════════════════════════════ -->
-<script src="config.js"></script>
-    <script src="dialogs.js"></script>
+<script src="dialogs.js"></script>
 <script>
 'use strict';
 
@@ -565,18 +527,7 @@ async function checkAuth() {
   const role = getUserRole();
   if (!role) { window.location.href = 'login.html'; return; }
   if (role === 'cashier') { window.location.href = 'index.html'; return; }
-  const isManagerOrAdmin = role === 'admin' || role === 'manager';
-  ['navDashLink','navXLink','navZLink','navSettingsLink'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el && !isManagerOrAdmin) el.style.display = 'none';
-  });
-  try {
-    const p = JSON.parse(atob(token.split('.')[1]));
-    const uEl = document.getElementById('userName');
-    const rEl = document.getElementById('userRole');
-    if (uEl) uEl.textContent = p.username || 'User';
-    if (rEl) rEl.textContent = p.role || '';
-  } catch(_) {}
+  // Nav role gating + user info + tagline handled by components/nav.js
   loadSiteName();
   await loadInitialData();
 }
@@ -634,33 +585,7 @@ async function seedPresetUnits() {
   if (btn) { btn.disabled = false; btn.textContent = '🌱 Seed Preset Units'; }
 }
 
-// ─── Nav: ☰ Menu toggle ──────────────────────────────────
-document.addEventListener('DOMContentLoaded', () => {
-  const menuBtn  = document.getElementById('menu-button');
-  const dropdown = document.getElementById('dropdown-menu');
-  const arrow    = document.getElementById('menu-arrow');
-
-  menuBtn.addEventListener('click', e => {
-    e.stopPropagation();
-    dropdown.classList.toggle('hidden');
-    arrow.textContent = dropdown.classList.contains('hidden') ? '▼' : '▲';
-  });
-  document.addEventListener('click', e => {
-    if (!dropdown.contains(e.target) && !menuBtn.contains(e.target)) {
-      dropdown.classList.add('hidden');
-      arrow.textContent = '▼';
-    }
-  });
-});
-
-function handleLogout() {
-  if (typeof clearTokens === 'function') clearTokens();
-  else {
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
-  }
-  window.location.href = 'login.html';
-}
+// Nav toggle + logout handled by components/nav.js (FEATURE-029)
 
 // ─── Tabs ─────────────────────────────────────────────────
 const TAB_IDS = ['ingredients','suppliers','units','restock','recipes'];
@@ -1311,33 +1236,7 @@ function esc(str) {
 checkAuth();
 </script>
 
-<!-- Live clock + username/role (mirrors dashboard.html bottom script) -->
-<script>
-(function () {
-  try {
-    const tok = localStorage.getItem('access_token');
-    if (tok) {
-      const p = JSON.parse(atob(tok.split('.')[1]));
-      const uEl = document.getElementById('userName');
-      const rEl = document.getElementById('userRole');
-      if (uEl) uEl.textContent = p.username || 'User';
-      if (rEl) rEl.textContent = p.role || '';
-    }
-  } catch (e) {}
-
-  function tick() {
-    const prefs  = (() => { try { return JSON.parse(localStorage.getItem('clock_prefs') || '{}'); } catch (e) { return {}; } })();
-    const use12  = prefs.format !== '24h';
-    const tz     = prefs.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
-    const el     = document.getElementById('live-clock');
-    if (el) el.textContent = new Date().toLocaleTimeString('en-PH', {
-      hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: use12, timeZone: tz
-    });
-  }
-  tick();
-  setInterval(tick, 1000);
-})();
-</script>
+<!-- Live clock + username/role handled by components/nav.js (FEATURE-029) -->
 
 <script>
   if ('serviceWorker' in navigator) {
