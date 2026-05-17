@@ -10,7 +10,12 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import TokenError
 from .models import User
 from .serializers import UserSerializer, UserCreateSerializer, LoginSerializer
-from .permissions import IsManagerOrAbove
+from rest_framework.throttling import AnonRateThrottle
+from .permissions import IsManagerOrAbove, IsAdmin
+
+
+class QuickLoginRateThrottle(AnonRateThrottle):
+    scope = 'quick_login'
 
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
@@ -91,6 +96,11 @@ def current_user(request):
 class UserViewSet(viewsets.ModelViewSet):
     permission_classes = [IsManagerOrAbove]
 
+    def get_permissions(self):
+        if self.action in ['create', 'destroy']:
+            return [IsAdmin()]
+        return [IsManagerOrAbove()]
+
     def get_queryset(self):
         return User.objects.filter(role__in=['cashier', 'manager']).order_by('username')
 
@@ -106,7 +116,8 @@ class UserViewSet(viewsets.ModelViewSet):
             instance.set_password(password)
             instance.save()
 
-    @action(detail=False, methods=['get'], permission_classes=[AllowAny], url_path='quick-login')
+    @action(detail=False, methods=['get'], permission_classes=[AllowAny],
+            throttle_classes=[QuickLoginRateThrottle], url_path='quick-login')
     def quick_login(self, request):
         """Return usernames for quick-login kiosk buttons. Restricted to private/loopback IPs
         to prevent external username enumeration. Returns 404 to non-private callers so the
