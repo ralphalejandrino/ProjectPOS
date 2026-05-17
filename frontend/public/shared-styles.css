@@ -1,7 +1,83 @@
+/* =========================================================
+ * DESIGN TOKENS LOCKED 2026-05-17
+ * Visual reference:  docs/styleguide.html       (every component × every state)
+ * Brand decision:    docs/brand-decision.md     (why BLUE #1d4ed8)
+ * Brand mockups:     docs/brand-blue.html, docs/brand-orange.html, docs/brand-dual.html
+ * Source:            AUDIT-005-findings.md "Decisions to Lock" (§Decisions 2–7,13)
+ *
+ * Closes: FEATURE-028 (tokens), FEATURE-032 (visual styleguide), FLAG-059 (manifest).
+ *
+ * NEW CODE: use var(--color-*), var(--space-*), var(--text-*), var(--radius-*),
+ *           var(--shadow-*), var(--z-*). No raw hex, no raw px spacing, no magic z.
+ * EXISTING CODE: refactored opportunistically as touched (per AUDIT-005 §Decision 14).
+ * The styleguide artifact is canonical for B4-B7 and any future UI work.
+ * ========================================================= */
 :root {
-    --primary-color: #1d4ed8;
-    --primary-hover: #1e40af;
-    --primary-light: #dbeafe;
+    /* color — primary palette (locked: brand-decision.md BLUE) */
+    --color-primary:        #1d4ed8;
+    --color-primary-hover:  #1e40af;
+    --color-primary-light:  #dbeafe;
+
+    /* color — semantic */
+    --color-success:        #16a34a;
+    --color-success-hover:  #15803d;
+    --color-danger:         #dc2626;
+    --color-danger-hover:   #b91c1c;
+    --color-warning:        #f59e0b;
+    --color-warning-hover:  #d97706;
+
+    /* color — surfaces */
+    --color-surface:        #ffffff;
+    --color-surface-alt:    #f9fafb;
+    --color-ink:            #1f2937;
+    --color-ink-muted:      #6b7280;
+    --color-border:         #e5e7eb;
+
+    /* legacy aliases — config.js writes these at runtime; keep wired */
+    --primary-color:        var(--color-primary);
+    --primary-hover:        var(--color-primary-hover);
+    --primary-light:        var(--color-primary-light);
+
+    /* spacing scale (matches Tailwind p-1…p-8) */
+    --space-1: 4px;  --space-2: 8px;  --space-3: 12px; --space-4: 16px;
+    --space-5: 24px; --space-6: 32px; --space-7: 48px; --space-8: 64px;
+
+    /* type scale */
+    --text-xs:   0.75rem;
+    --text-sm:   0.875rem;
+    --text-base: 1rem;
+    --text-lg:   1.25rem;
+    --text-xl:   1.5rem;
+    --text-2xl:  1.875rem;
+
+    /* radius scale */
+    --radius-sm: 0.5rem;   /* buttons, inputs */
+    --radius-md: 0.75rem;  /* cards, panels */
+    --radius-lg: 1rem;     /* modals */
+
+    /* shadow recipes — 3 only */
+    --shadow-subtle: 0 1px 2px rgba(0,0,0,0.05);
+    --shadow-raised: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1);
+    --shadow-modal:  0 25px 50px -12px rgba(0,0,0,0.25);
+
+    /* z-index ladder — raw 9999/99999 banned (FLAG-060) */
+    --z-base:           0;
+    --z-dropdown:       1000;
+    --z-sticky:         1010;
+    --z-modal-backdrop: 1040;
+    --z-modal:          1050;
+    --z-toast:          1060;
+
+    /* touch targets */
+    --touch-min:     44px;   /* WCAG 2.5.5 global minimum */
+    --touch-min-pos: 48px;   /* POS hot-path enforced (ISSUE-086) */
+}
+
+/* Canonical nav gradient — used by shared header (FEATURE-029) */
+.nav-bar-gradient {
+    background: linear-gradient(to right, var(--color-primary), var(--color-primary-hover));
+    color: #fff;
+    box-shadow: var(--shadow-raised);
 }
 
 /* Force Apple emoji style on all platforms */
@@ -58,8 +134,8 @@ body {
 }
 
 .menu-item.active {
-    color: #2563eb;
-    background-color: #eff6ff;
+    color: var(--color-primary);
+    background-color: var(--color-primary-light);
     font-weight: 600;
 }
 
@@ -87,12 +163,12 @@ body {
 }
 
 .tab-btn:hover {
-    color: #2563eb;
+    color: var(--color-primary);
 }
 
 .tab-btn.active {
-    color: #2563eb;
-    border-bottom-color: #2563eb;
+    color: var(--color-primary);
+    border-bottom-color: var(--color-primary);
 }
 
 /* Consistent back button */
@@ -493,4 +569,122 @@ body {
 }
 .dark ::-webkit-scrollbar-thumb:hover {
   background: #6b7280;
+}
+
+/* =========================================================
+ * Dialog primitives — ISSUE-085
+ * Canonical confirm / alert / toast. Spec: docs/styleguide.html §5.
+ * ========================================================= */
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: var(--z-modal-backdrop);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+  animation: dialog-fade-in 0.15s ease-out;
+}
+.dialog {
+  background: var(--color-surface);
+  color: var(--color-ink);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-modal);
+  padding: var(--space-5);
+  max-width: 420px;
+  width: 100%;
+  border: 1px solid var(--color-border);
+  z-index: var(--z-modal);
+  animation: dialog-pop-in 0.15s ease-out;
+}
+.dialog h3 {
+  margin: 0 0 var(--space-3) 0;
+  font-size: var(--text-lg);
+  font-weight: 700;
+}
+.dialog p {
+  margin: 0;
+  color: var(--color-ink-muted);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+.dialog-actions {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: flex-end;
+  margin-top: var(--space-4);
+}
+.dialog-actions .btn {
+  min-height: var(--touch-min);
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  font-size: var(--text-sm);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s;
+}
+.dialog-actions .btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+.dialog-actions .btn-primary {
+  background: var(--color-primary);
+  color: #fff;
+}
+.dialog-actions .btn-primary:hover { background: var(--color-primary-hover); }
+.dialog-actions .btn-secondary {
+  background: var(--color-surface);
+  color: var(--color-ink);
+  border-color: var(--color-border);
+}
+.dialog-actions .btn-secondary:hover { background: var(--color-surface-alt); }
+.dialog-actions .btn-danger {
+  background: var(--color-danger);
+  color: #fff;
+}
+.dialog-actions .btn-danger:hover { background: var(--color-danger-hover); }
+
+#toast-stack {
+  position: fixed;
+  bottom: var(--space-4);
+  right: var(--space-4);
+  z-index: var(--z-toast);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  pointer-events: none;
+}
+#toast-stack .toast {
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  color: #fff;
+  font-weight: 600;
+  font-size: var(--text-sm);
+  box-shadow: var(--shadow-raised);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: 360px;
+  pointer-events: auto;
+  animation: toast-slide-in 0.2s ease-out;
+}
+#toast-stack .toast-info    { background: var(--color-primary); }
+#toast-stack .toast-success { background: var(--color-success); }
+#toast-stack .toast-warning { background: var(--color-warning); color: var(--color-ink); }
+#toast-stack .toast-danger  { background: var(--color-danger); }
+#toast-stack .toast-leaving { opacity: 0; transform: translateX(20px); transition: opacity 0.2s, transform 0.2s; }
+
+@keyframes dialog-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes dialog-pop-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes toast-slide-in {
+  from { opacity: 0; transform: translateX(20px); }
+  to   { opacity: 1; transform: translateX(0); }
 }

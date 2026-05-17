@@ -1,4 +1,4 @@
-const CACHE_NAME = 'tarsierpos-v47'; // canonical cache version (v47: bump after sw.js clone fix — ISSUE-065)
+const CACHE_NAME = 'tarsierpos-v48'; // canonical cache version (v48: dialog canonicalization — ISSUE-085)
 const ASSETS = [
   'index.html',
   'login.html',
@@ -11,6 +11,7 @@ const ASSETS = [
   'app.js',
   'config.js',
   'dashboard.js',
+  'dialogs.js',
   'payments.js',
   'styles.css',
   'shared-styles.css',
