@@ -578,7 +578,8 @@ window.confirmAction = confirmAction;
                 if (response.ok) {
                     closeCashModal();
                     showCustomSuccess('Cash Payment Complete!', data);
-                    autoPrintReceipt(data.id);
+                    // BLOCKER-1: backend services.py:343 already fires
+                    // print_receipt on transaction create; no frontend retrigger.
                     window.clearCartState();
                     updateCart();
                 } else {
@@ -692,7 +693,7 @@ window.confirmAction = confirmAction;
                 if (response.ok) {
                     closeGCashModal();
                     showCustomSuccess('GCash Payment Complete!', data);
-                    autoPrintReceipt(data.id);
+                    // BLOCKER-1: backend already auto-prints on create.
                     window.clearCartState();
                     updateCart();
                 } else {
@@ -763,7 +764,7 @@ window.confirmAction = confirmAction;
                 if (response.ok) {
                     closeMayaModal();
                     showCustomSuccess('Maya Payment Complete!', data);
-                    autoPrintReceipt(data.id);
+                    // BLOCKER-1: backend already auto-prints on create.
                     window.clearCartState();
                     updateCart();
                 } else {
@@ -963,7 +964,10 @@ window.confirmAction = confirmAction;
         }, 3000);
     }
 
-    // Auto-print to thermal printer — shows warning toast on failure
+    // Auto-print to thermal printer — shows warning toast on failure.
+    // BLOCKER-1: NOT called from cash/GCash/Maya complete handlers — the
+    // backend (canteen/services.py:343) already fires print_receipt on
+    // transaction create. Calling this from those handlers double-prints.
     async function autoPrintReceipt(txId) {
         if (!txId) return;
         try {
