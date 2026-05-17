@@ -11,11 +11,7 @@ const PaymentSystem = {
         } catch (error) {
             console.error('PaymentSystem: loadConfig failed —', error.message);
             const msg = 'Payment configuration could not be loaded. Digital payments are disabled until the page reloads successfully.';
-            if (window.showCustomError) {
-                window.showCustomError('Payment Config Error', msg);
-            } else {
-                console.warn(msg);
-            }
+            window.alertDialog({ title: 'Payment Config Error', message: msg, icon: '⚠️' });
             this.configLoadFailed = true;
         }
         this.attachEventListeners();
@@ -52,13 +48,9 @@ const PaymentSystem = {
     async processGCashPayment() {
         const cart = this.getCart();
         if (cart.items.length === 0) {
-           if (window.showCustomError) {
-        window.showCustomError('Cart Empty', 'Please add items to cart before checkout');
-    } else {
-        alert('Cart is empty!');
-    }
-    return;
-}
+            window.alertDialog({ title: 'Cart Empty', message: 'Please add items to cart before checkout', icon: '⚠️' });
+            return;
+        }
 
         this.showPaymentModal('GCash', 'Processing payment...');
 
@@ -96,13 +88,9 @@ const PaymentSystem = {
     async processMayaPayment() {
         const cart = this.getCart();
         if (cart.items.length === 0) {
-           if (window.showCustomError) {
-        window.showCustomError('Cart Empty', 'Please add items to cart before checkout');
-    } else {
-        alert('Cart is empty!');
-    }
-    return;
-}
+            window.alertDialog({ title: 'Cart Empty', message: 'Please add items to cart before checkout', icon: '⚠️' });
+            return;
+        }
 
         this.showPaymentModal('Maya QR', 'Generating QR code...');
 
@@ -144,11 +132,7 @@ const PaymentSystem = {
     async processCardPayment() {
         const cart = this.getCart();
         if (cart.items.length === 0) {
-            if (window.showCustomError) {
-                window.showCustomError('Cart Empty', 'Please add items to cart before checkout');
-            } else {
-                alert('Cart is empty!');
-            }
+            window.alertDialog({ title: 'Cart Empty', message: 'Please add items to cart before checkout', icon: '⚠️' });
             return;
         }
 
