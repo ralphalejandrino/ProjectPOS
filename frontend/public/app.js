@@ -245,18 +245,7 @@ function addToCart(product) {
     const trackInventory = _biz2.track_inventory !== false;
 
     if (trackInventory && product.stock === 0) {
-        if (window.showCustomError) {
-            window.showCustomError('Out of Stock', `${product.name} is currently out of stock`);
-        } else {
-            console.error('Out of stock:', product.name);
-            (function() {
-                const el = document.createElement('div');
-                el.style.cssText = 'position:fixed;top:16px;left:50%;transform:translateX(-50%);background:#dc2626;color:#fff;padding:10px 20px;border-radius:8px;z-index:99999;font-weight:600;';
-                el.textContent = product.name + ' is out of stock!';
-                document.body.appendChild(el);
-                setTimeout(() => el.remove(), 3000);
-            })();
-        }
+        window.alertDialog({ title: 'Out of Stock', message: `${product.name} is currently out of stock`, icon: '⚠️' });
         return;
     }
 
@@ -287,18 +276,7 @@ function addProductToCart(item, variantSelections, finalPrice) {
             existingItem.quantity++;
             updateProductStock(item.id, -1);
         } else {
-            if (window.showCustomError) {
-                window.showCustomError('Stock Limit', 'Cannot add more than available stock!');
-            } else {
-                console.error('Stock limit reached for:', item.name);
-                (function() {
-                    const el = document.createElement('div');
-                    el.style.cssText = 'position:fixed;top:16px;left:50%;transform:translateX(-50%);background:#dc2626;color:#fff;padding:10px 20px;border-radius:8px;z-index:99999;font-weight:600;';
-                    el.textContent = 'Cannot add more than available stock!';
-                    document.body.appendChild(el);
-                    setTimeout(() => el.remove(), 3000);
-                })();
-            }
+            window.toast({ message: 'Cannot add more than available stock!', severity: 'danger' });
             return;
         }
     } else {
@@ -387,9 +365,7 @@ function confirmVariantSelection() {
         const required = eg.is_required;
         const checked = document.querySelectorAll(`.variant-input[data-group="${g.id}"]:checked`);
         if (required && checked.length === 0) {
-            if (window.showCustomError) {
-                window.showCustomError('Selection Required', `Please select a "${escapeHtml(g.name)}" option.`);
-            }
+            window.alertDialog({ title: 'Selection Required', message: `Please select a "${g.name}" option.`, icon: '⚠️' });
             valid = false;
             return;
         }
@@ -488,56 +464,21 @@ function attachEventListeners() {
     // Clear cart button
     const clearCartBtn = document.getElementById('clear-cart-btn');
     if (clearCartBtn) {
-        clearCartBtn.addEventListener('click', () => {
+        clearCartBtn.addEventListener('click', async () => {
             if (window.cart.items.length === 0) {
-                if (window.showCustomError) {
-                    window.showCustomError('Cart Empty', 'Cart is already empty');
-                }
+                window.toast({ message: 'Cart is already empty', severity: 'info' });
                 return;
             }
-            
-            if (window.showCustomConfirm) {
-                window.showCustomConfirm(
-                    'Clear Cart?',
-                    'Are you sure you want to remove all items from the cart?',
-                    () => {
-                        window.cart.items.forEach(i => updateProductStock(i.id, i.quantity));
-                        clearCartState();
-                        updateCart();
-                    }
-                );
-            } else {
-                // Inline confirmation — no native confirm() dialog
-                (function() {
-                    const overlay = document.createElement('div');
-                    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:99999;';
-                    const box = document.createElement('div');
-                    box.style.cssText = 'background:#fff;border-radius:12px;padding:24px;max-width:320px;width:90%;text-align:center;box-shadow:0 4px 24px rgba(0,0,0,0.2);';
-                    box.innerHTML = '<p style="font-weight:700;font-size:1.1rem;margin-bottom:8px;">Clear Cart?</p><p style="color:#555;margin-bottom:20px;">Are you sure you want to remove all items from the cart?</p>';
-                    const btnRow = document.createElement('div');
-                    btnRow.style.cssText = 'display:flex;gap:12px;justify-content:center;';
-                    const cancelBtn = document.createElement('button');
-                    cancelBtn.textContent = 'No';
-                    cancelBtn.style.cssText = 'flex:1;padding:10px;border-radius:8px;border:1px solid #ccc;background:#f3f4f6;font-weight:600;cursor:pointer;';
-                    const confirmBtn = document.createElement('button');
-                    confirmBtn.textContent = 'Yes, Clear';
-                    confirmBtn.style.cssText = 'flex:1;padding:10px;border-radius:8px;border:none;background:#dc2626;color:#fff;font-weight:600;cursor:pointer;';
-                    cancelBtn.onclick = () => document.body.removeChild(overlay);
-                    confirmBtn.onclick = () => {
-                        document.body.removeChild(overlay);
-                        // i.id is the item UUID (unchanged — stock tracking uses item.id not cartKey)
-                        window.cart.items.forEach(i => updateProductStock(i.id, i.quantity));
-                        window.cart.items = [];
-                        window.cart.total = 0;
-                        updateCart();
-                    };
-                    btnRow.appendChild(cancelBtn);
-                    btnRow.appendChild(confirmBtn);
-                    box.appendChild(btnRow);
-                    overlay.appendChild(box);
-                    document.body.appendChild(overlay);
-                })();
-            }
+            const ok = await window.confirmDialog({
+                title: 'Clear cart?',
+                message: 'This removes all items from the current sale. The customer record is not affected.',
+                okLabel: 'Clear cart',
+                danger: true,
+            });
+            if (!ok) return;
+            window.cart.items.forEach(i => updateProductStock(i.id, i.quantity));
+            clearCartState();
+            updateCart();
         });
     }
 }
