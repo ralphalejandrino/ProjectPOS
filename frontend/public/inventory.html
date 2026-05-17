@@ -285,36 +285,6 @@
         </div>
     </div>
 
-    <!-- MODAL: CONFIRM DELETE -->
-    <div id="confirm-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70]">
-        <div class="bg-white rounded-lg shadow-2xl p-8 max-w-md w-full mx-4">
-            <h3 class="text-2xl font-bold mb-4 text-gray-800" id="confirm-title">Confirm Action</h3>
-            <p class="text-gray-600 mb-6" id="confirm-message">Are you sure?</p>
-            <div class="flex space-x-3">
-                <button onclick="confirmReject()" class="flex-1 bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 rounded-lg transition">
-                    Cancel
-                </button>
-                <button id="confirm-ok-btn" onclick="confirmAccept()" class="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-lg transition">
-                    Confirm
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- MODAL: ALERT/SUCCESS -->
-    <div id="alert-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70]">
-        <div class="bg-white rounded-lg shadow-2xl p-8 max-w-md w-full mx-4">
-            <div class="text-center">
-                <div id="alert-icon" class="text-6xl mb-4">✅</div>
-                <h3 class="text-2xl font-bold mb-2 text-gray-800" id="alert-title">Success</h3>
-                <p class="text-gray-600 mb-6" id="alert-message">Action completed</p>
-                <button onclick="closeAlertModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg font-bold transition">
-                    OK
-                </button>
-            </div>
-        </div>
-    </div>
-
     <!-- MODAL: ADJUST STOCK -->
     <div id="adjust-stock-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[50]">
         <div class="bg-white rounded-lg shadow-2xl p-8 max-w-md w-full mx-4">
@@ -358,32 +328,14 @@
 
     <!-- SCRIPTS -->
     <script src="config.js"></script>
+    <script src="dialogs.js"></script>
     <script>
         // API_BASE is defined in config.js (loaded before this script)
         let allProducts = [];
         let allCategories = [];
         let currentCategory = null;
 
-        let _confirmResolve = null;
         let globalLowStockThreshold = 10;
-
-        function showConfirm(title, message, okLabel = 'Confirm') {
-            document.getElementById('confirm-title').textContent = title;
-            document.getElementById('confirm-message').textContent = message;
-            document.getElementById('confirm-ok-btn').textContent = okLabel;
-            document.getElementById('confirm-modal').classList.remove('hidden');
-            return new Promise(resolve => { _confirmResolve = resolve; });
-        }
-
-        function confirmAccept() {
-            document.getElementById('confirm-modal').classList.add('hidden');
-            if (_confirmResolve) { _confirmResolve(true); _confirmResolve = null; }
-        }
-
-        function confirmReject() {
-            document.getElementById('confirm-modal').classList.add('hidden');
-            if (_confirmResolve) { _confirmResolve(false); _confirmResolve = null; }
-        }
 
         document.addEventListener('DOMContentLoaded', async () => {
             loadSiteName();
@@ -438,7 +390,7 @@
                     select.innerHTML += `<option value="${cat.id}">${cat.name}</option>`;
                 });
             } catch (error) {
-                showAlert('Load Error', 'Failed to load categories: ' + error.message, '❌');
+                window.alertDialog({title: 'Load Error', message: 'Failed to load categories: ' + error.message, icon: '❌'});
             }
         }
 
@@ -618,17 +570,6 @@
             `).join('');
         }
 
-        function showAlert(title, message, icon = '✅') {
-            document.getElementById('alert-icon').textContent = icon;
-            document.getElementById('alert-title').textContent = title;
-            document.getElementById('alert-message').textContent = message;
-            document.getElementById('alert-modal').classList.remove('hidden');
-        }
-
-        function closeAlertModal() {
-            document.getElementById('alert-modal').classList.add('hidden');
-        }
-
         let currentAdjustProductId = null;
 
         function showAdjustStockModal(product) {
@@ -654,7 +595,7 @@
             const reason = document.getElementById('adjust-reason').value.trim() || 'Manual adjustment';
             
             if (!amountInput || isNaN(amount) || amount === 0) {
-                showAlert('Invalid Amount', 'Please enter a valid non-zero number (+5 or -3)', '⚠️');
+                window.alertDialog({title: 'Invalid Amount', message: 'Please enter a valid non-zero number (+5 or -3)', icon: '⚠️'});
                 return;
             }
             
@@ -672,12 +613,12 @@
                     closeAdjustStockModal();
                     await loadProducts();
                     await loadAnalytics();
-                    showAlert('Stock Adjusted!', `Old: ${data.old_stock} → New: ${data.new_stock} (${amount > 0 ? '+' : ''}${amount})`, '✅');
+                    window.alertDialog({title: 'Stock Adjusted!', message: `Old: ${data.old_stock} → New: ${data.new_stock} (${amount > 0 ? '+' : ''}${amount})`, icon: '✅'});
                 } else {
-                    showAlert('Error', 'Failed to adjust stock. Please try again.', '❌');
+                    window.alertDialog({title: 'Error', message: 'Failed to adjust stock. Please try again.', icon: '❌'});
                 }
             } catch (error) {
-                showAlert('Error', 'An error occurred: ' + error.message, '❌');
+                window.alertDialog({title: 'Error', message: 'An error occurred: ' + error.message, icon: '❌'});
             } finally {
                 window.adjustingStock = false;
             }
@@ -790,18 +731,18 @@
                     closeProductModal();
                     await loadProducts();
                     await loadAnalytics();
-                    showAlert('Success', id ? 'Product updated successfully!' : 'Product added successfully!', '✅');
+                    window.alertDialog({title: 'Success', message: id ? 'Product updated successfully!' : 'Product added successfully!', icon: '✅'});
                 } else {
                     const error = await response.json();
-                    showAlert('Error', 'Failed to save product: ' + JSON.stringify(error), '❌');
+                    window.alertDialog({title: 'Error', message: 'Failed to save product: ' + JSON.stringify(error), icon: '❌'});
                 }
             } catch (error) {
-                showAlert('Error', 'An error occurred while saving. Please try again.', '❌');
+                window.alertDialog({title: 'Error', message: 'An error occurred while saving. Please try again.', icon: '❌'});
             }
         }
 
         async function deleteProduct(id, name) {
-            const ok = await showConfirm('Delete Product', `Are you sure you want to delete "${name}"? This action cannot be undone.`);
+            const ok = await window.confirmDialog({title: 'Delete Product', message: `Are you sure you want to delete "${name}"? This action cannot be undone.`, danger: true});
             if (!ok) return;
             try {
                 const response = await authenticatedFetch(`${API_BASE}/items/${id}/`, {
@@ -810,12 +751,12 @@
                 if (response.ok) {
                     await loadProducts();
                     await loadAnalytics();
-                    showAlert('Product Deleted', `"${name}" has been removed from inventory.`, '✅');
+                    window.alertDialog({title: 'Product Deleted', message: `"${name}" has been removed from inventory.`, icon: '✅'});
                 } else {
-                    showAlert('Error', 'Failed to delete product. Please try again.', '❌');
+                    window.alertDialog({title: 'Error', message: 'Failed to delete product. Please try again.', icon: '❌'});
                 }
             } catch (error) {
-                showAlert('Error', 'An error occurred. Please try again.', '❌');
+                window.alertDialog({title: 'Error', message: 'An error occurred. Please try again.', icon: '❌'});
             }
         }
 
@@ -887,9 +828,9 @@
                     loadCategories(); // refresh sidebar + product form dropdown
                 } else {
                     const d = await res.json();
-                    showAlert('Error', d.error || 'Failed to add category.', '❌');
+                    window.alertDialog({title: 'Error', message: d.error || 'Failed to add category.', icon: '❌'});
                 }
-            } catch(e) { showAlert('Error', 'Failed to add category.', '❌'); }
+            } catch(e) { window.alertDialog({title: 'Error', message: 'Failed to add category.', icon: '❌'}); }
         }
 
         async function saveCategory(id) {
@@ -905,16 +846,16 @@
                 if (res.ok) {
                     loadCategories(); // refresh sidebar + dropdown
                 } else {
-                    showAlert('Error', 'Failed to save category.', '❌');
+                    window.alertDialog({title: 'Error', message: 'Failed to save category.', icon: '❌'});
                 }
-            } catch(e) { showAlert('Error', 'Failed to save category.', '❌'); }
+            } catch(e) { window.alertDialog({title: 'Error', message: 'Failed to save category.', icon: '❌'}); }
         }
 
         async function deleteCategory(id, name, productCount) {
             const msg = productCount > 0
                 ? `Delete "${name}"? ${productCount} product(s) will become uncategorized.`
                 : `Delete "${name}"?`;
-            const ok = await showConfirm('Delete Category', msg, 'Delete');
+            const ok = await window.confirmDialog({title: 'Delete Category', message: msg, okLabel: 'Delete', danger: true});
             if (!ok) return;
             try {
                 const res = await authenticatedFetch(`${API_BASE}/categories/${id}/`, {
@@ -925,9 +866,9 @@
                     loadCategories();
                 } else {
                     const d = await res.json();
-                    showAlert('Error', d.error || 'Failed to delete category.', '❌');
+                    window.alertDialog({title: 'Error', message: d.error || 'Failed to delete category.', icon: '❌'});
                 }
-            } catch(e) { showAlert('Error', 'Failed to delete category.', '❌'); }
+            } catch(e) { window.alertDialog({title: 'Error', message: 'Failed to delete category.', icon: '❌'}); }
         }
 
         // ── Variant Manager (Step 6) ──────────────────────────────────────────
@@ -1041,7 +982,7 @@
             const id = document.getElementById('group-edit-id').value;
             const name = document.getElementById('group-name').value.trim();
             if (!name) {
-                showAlert('Validation Error', 'Group name is required.', '⚠️');
+                window.alertDialog({title: 'Validation Error', message: 'Group name is required.', icon: '⚠️'});
                 return;
             }
             const payload = {
@@ -1061,30 +1002,30 @@
                 if (res.ok) {
                     closeAddGroupModal();
                     await loadVariantGroups();
-                    showAlert('Saved', id ? 'Variant group updated.' : 'Variant group created.', '✅');
+                    window.alertDialog({title: 'Saved', message: id ? 'Variant group updated.' : 'Variant group created.', icon: '✅'});
                 } else {
                     const d = await res.json();
-                    showAlert('Error', 'Failed to save: ' + JSON.stringify(d), '❌');
+                    window.alertDialog({title: 'Error', message: 'Failed to save: ' + JSON.stringify(d), icon: '❌'});
                 }
             } catch (e) {
-                showAlert('Error', 'An error occurred: ' + e.message, '❌');
+                window.alertDialog({title: 'Error', message: 'An error occurred: ' + e.message, icon: '❌'});
             }
         }
 
         async function deleteGroup(groupId, groupName) {
-            const ok = await showConfirm('Delete Variant Group', `Delete "${groupName}"? All options and assignments will be removed.`, 'Delete');
+            const ok = await window.confirmDialog({title: 'Delete Variant Group', message: `Delete "${groupName}"? All options and assignments will be removed.`, okLabel: 'Delete', danger: true});
             if (!ok) return;
             try {
                 const res = await authenticatedFetch(`${API_BASE}/variant-groups/${groupId}/`, { method: 'DELETE' });
                 if (res.ok || res.status === 204) {
                     await loadVariantGroups();
-                    showAlert('Deleted', `Variant group "${groupName}" removed.`, '✅');
+                    window.alertDialog({title: 'Deleted', message: `Variant group "${groupName}" removed.`, icon: '✅'});
                 } else {
                     const d = await res.json().catch(() => ({}));
-                    showAlert('Error', d.error || 'Failed to delete group.', '❌');
+                    window.alertDialog({title: 'Error', message: d.error || 'Failed to delete group.', icon: '❌'});
                 }
             } catch (e) {
-                showAlert('Error', 'An error occurred: ' + e.message, '❌');
+                window.alertDialog({title: 'Error', message: 'An error occurred: ' + e.message, icon: '❌'});
             }
         }
 
@@ -1121,7 +1062,7 @@
             const optionId = document.getElementById('option-edit-id').value;
             const name = document.getElementById('option-name').value.trim();
             if (!name) {
-                showAlert('Validation Error', 'Option name is required.', '⚠️');
+                window.alertDialog({title: 'Validation Error', message: 'Option name is required.', icon: '⚠️'});
                 return;
             }
             const payload = {
@@ -1142,18 +1083,18 @@
                 if (res.ok) {
                     closeAddOptionModal();
                     await loadVariantGroups();
-                    showAlert('Saved', optionId ? 'Option updated.' : 'Option added.', '✅');
+                    window.alertDialog({title: 'Saved', message: optionId ? 'Option updated.' : 'Option added.', icon: '✅'});
                 } else {
                     const d = await res.json();
-                    showAlert('Error', 'Failed to save: ' + JSON.stringify(d), '❌');
+                    window.alertDialog({title: 'Error', message: 'Failed to save: ' + JSON.stringify(d), icon: '❌'});
                 }
             } catch (e) {
-                showAlert('Error', 'An error occurred: ' + e.message, '❌');
+                window.alertDialog({title: 'Error', message: 'An error occurred: ' + e.message, icon: '❌'});
             }
         }
 
         async function deleteOption(groupId, optionId, optionName) {
-            const ok = await showConfirm('Delete Option', `Delete option "${optionName}"?`, 'Delete');
+            const ok = await window.confirmDialog({title: 'Delete Option', message: `Delete option "${optionName}"?`, okLabel: 'Delete', danger: true});
             if (!ok) return;
             try {
                 const res = await authenticatedFetch(
@@ -1162,13 +1103,13 @@
                 );
                 if (res.ok || res.status === 204) {
                     await loadVariantGroups();
-                    showAlert('Deleted', `Option "${optionName}" removed.`, '✅');
+                    window.alertDialog({title: 'Deleted', message: `Option "${optionName}" removed.`, icon: '✅'});
                 } else {
                     const d = await res.json().catch(() => ({}));
-                    showAlert('Error', d.error || 'Failed to delete option.', '❌');
+                    window.alertDialog({title: 'Error', message: d.error || 'Failed to delete option.', icon: '❌'});
                 }
             } catch (e) {
-                showAlert('Error', 'An error occurred: ' + e.message, '❌');
+                window.alertDialog({title: 'Error', message: 'An error occurred: ' + e.message, icon: '❌'});
             }
         }
 
@@ -1235,7 +1176,7 @@
                             method: 'DELETE'
                         });
                         if (!delRes.ok && delRes.status !== 404) {
-                            showAlert('Save Error', `Failed to remove assignment (${delRes.status}). Please try again.`, '❌');
+                            window.alertDialog({title: 'Save Error', message: `Failed to remove assignment (${delRes.status}). Please try again.`, icon: '❌'});
                             return;
                         }
                     }
@@ -1249,14 +1190,14 @@
                     });
                     if (!postRes.ok) {
                         const errData = await postRes.json().catch(() => ({}));
-                        showAlert('Save Error', `Failed to assign group (${postRes.status}): ${JSON.stringify(errData)}`, '❌');
+                        window.alertDialog({title: 'Save Error', message: `Failed to assign group (${postRes.status}): ${JSON.stringify(errData)}`, icon: '❌'});
                         return;
                     }
                 }
                 closeCatVariantModal();
-                showAlert('Saved', 'Category variant groups updated.', '✅');
+                window.alertDialog({title: 'Saved', message: 'Category variant groups updated.', icon: '✅'});
             } catch (e) {
-                showAlert('Error', 'An error occurred: ' + e.message, '❌');
+                window.alertDialog({title: 'Error', message: 'An error occurred: ' + e.message, icon: '❌'});
             }
         }
 
@@ -1356,28 +1297,20 @@
                 const data = await res.json();
                 showImportResult(data);
             } catch (err) {
-                showAlert('Import Failed', err.message, '❌');
+                window.alertDialog({title: 'Import Failed', message: err.message, icon: '❌'});
             }
             this.value = '';
         });
 
         function showImportResult(data) {
             const errorRows = data.rows.filter(r => r.status === 'error');
-            let html = `<div class="text-sm">
-                <p class="font-semibold mb-2">Import complete</p>
-                <p>✅ Created: ${data.created} &nbsp; 🔄 Updated: ${data.updated} &nbsp; ❌ Errors: ${data.errors}</p>`;
+            let msg = `✅ Created: ${data.created}   🔄 Updated: ${data.updated}   ❌ Errors: ${data.errors}`;
             if (errorRows.length) {
-                html += `<div class="mt-3 max-h-48 overflow-y-auto">
-                    <p class="font-medium text-red-600 mb-1">Rows with errors:</p>`;
-                errorRows.forEach(r => {
-                    html += `<p class="text-red-500">Row ${r.row} — ${escapeHtml(r.name || '?')}: ${escapeHtml(r.message)}</p>`;
-                });
-                html += `</div>`;
+                msg += '\n\nRows with errors:\n' + errorRows.map(r =>
+                    `Row ${r.row} — ${r.name || '?'}: ${r.message}`
+                ).join('\n');
             }
-            html += `</div>`;
-            document.getElementById('alert-title').textContent = 'CSV Import Result';
-            document.getElementById('alert-message').innerHTML = html;
-            document.getElementById('alert-modal').classList.remove('hidden');
+            window.alertDialog({ title: 'CSV Import Result', message: msg, icon: 'ℹ️' });
             loadProducts();
         }
     </script>
