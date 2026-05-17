@@ -12,7 +12,7 @@
     { key: 'dashboard',   href: 'dashboard.html',   emoji: '📊', label: 'Dashboard',   roles: ['manager', 'admin'] },
     { key: 'xreport',     href: 'xreport.html',     emoji: '📈', label: 'X-Report',    roles: ['manager', 'admin'] },
     { key: 'zreport',     href: 'zreport.html',     emoji: '📉', label: 'Z-Report',    roles: ['manager', 'admin'] },
-    { key: 'settings',    href: 'settings.html',    emoji: '⚙️', label: 'Settings',    roles: ['manager', 'admin'] },
+    { key: 'settings',    href: 'settings.html',    emoji: '⚙️', label: 'Settings',    roles: ['admin'] },
   ];
 
   function readTokenPayload() {
