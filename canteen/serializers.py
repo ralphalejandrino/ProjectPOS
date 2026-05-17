@@ -3,6 +3,7 @@ Clean POS Serializers - No Legacy School Code
 """
 from rest_framework import serializers
 from django.contrib.auth import authenticate
+from django.utils.timezone import localtime
 from .models import (
     ItemCategory,
     Item,
@@ -166,16 +167,21 @@ class ItemCreateSerializer(serializers.ModelSerializer):
 
 
 class ItemLogSerializer(serializers.ModelSerializer):
-    item_name = serializers.CharField(source='item.name', read_only=True)
-    created_by_username = serializers.CharField(source='created_by.username', read_only=True)
-    
+    created_by_name = serializers.SerializerMethodField()
+    created_at = serializers.SerializerMethodField()
+
     class Meta:
         model = ItemLog
         fields = [
-            'id', 'item', 'item_name', 'quantity', 'current_stock',
-            'action', 'remarks', 'created_by', 'created_by_username',
-            'created_at'
+            'id', 'created_at', 'action', 'quantity', 'current_stock',
+            'remarks', 'created_by_name'
         ]
+
+    def get_created_by_name(self, instance):
+        return instance.created_by.username if instance.created_by else 'system'
+
+    def get_created_at(self, instance):
+        return localtime(instance.created_at).strftime('%Y-%m-%d %H:%M')
 
 
 # ============================================================================

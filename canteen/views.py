@@ -27,6 +27,7 @@ from .serializers import (
     IngredientSerializer,
     IngredientRestockLogSerializer,
     RecipeIngredientSerializer,
+    ItemLogSerializer,
 )
 from django.db.models import Sum, Count, F, FloatField
 from django.db.models.functions import TruncDate
@@ -1222,6 +1223,14 @@ class ItemViewSet(viewsets.ModelViewSet):
             'average_profit_margin': round(avg_margin, 2),
         })
     
+    @action(detail=True, methods=['get'], permission_classes=[IsManagerOrAbove])
+    def logs(self, request, pk=None):
+        """Return last 50 stock audit log entries for this item."""
+        item = self.get_object()
+        qs = ItemLog.objects.filter(item=item).order_by('-created_at')[:50]
+        serializer = ItemLogSerializer(qs, many=True)
+        return Response(serializer.data)
+
     @action(detail=True, methods=['post'], permission_classes=[IsManagerOrAbove])
     def adjust_stock(self, request, pk=None):
         """Adjust stock levels — Audit Verified"""
