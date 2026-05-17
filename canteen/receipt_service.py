@@ -3,6 +3,24 @@ from django.conf import settings
 from escpos.printer import File
 from .models import BusinessProfile
 import logging
+
+# ISSUE-095: USB printer device auto-detect
+_USB_DEVICE_CANDIDATES = ['/dev/usb/lp1', '/dev/usb/lp0', '/dev/lp0', '/dev/lp1']
+_cached_usb_path = None
+
+def _get_usb_device_path():
+    """First openable USB printer device path, cached; None if none work."""
+    global _cached_usb_path
+    if _cached_usb_path is not None:
+        return _cached_usb_path
+    import os
+    for p in _USB_DEVICE_CANDIDATES:
+        if os.path.exists(p) and os.access(p, os.W_OK):
+            logging.getLogger(__name__).info("Receipt printer USB device detected at: %s", p)
+            _cached_usb_path = p
+            return p
+    logging.getLogger(__name__).warning("No USB printer device found. Tried: %s", _USB_DEVICE_CANDIDATES)
+    return None
 logger = logging.getLogger(__name__)
 
 RECEIPT_WIDTH = 32  # 58mm thermal paper @ ESC/POS Font B (384 dots / 12)
@@ -27,7 +45,7 @@ def print_receipt(transaction):
         if not ip:
             return {'success': False, 'message': 'Printer not configured. Set up Business Profile in Settings.'}
 
-        p = File('/dev/usb/lp1')
+        p = File(_get_usb_device_path() or '/dev/usb/lp1')
         p.set(font='b', align='left')
         try:
             # Header — business name (large, bold, centered)
@@ -218,7 +236,7 @@ def print_zreport_summary(data):
         ip, port, profile = _get_printer()
         if not ip:
             return {'success': False, 'message': 'Printer not configured.'}
-        p = File('/dev/usb/lp1')
+        p = File(_get_usb_device_path() or '/dev/usb/lp1')
         p.set(font='b', align='left')
         try:
             p.set(align='center', bold=True, double_height=True, double_width=True)
@@ -293,7 +311,7 @@ def print_xreport_summary(data):
         ip, port, profile = _get_printer()
         if not ip:
             return {'success': False, 'message': 'Printer not configured.'}
-        p = File('/dev/usb/lp1')
+        p = File(_get_usb_device_path() or '/dev/usb/lp1')
         p.set(font='b', align='left')
         try:
             p.set(align='center', bold=True, double_height=True, double_width=True)
@@ -350,7 +368,7 @@ def kick_cash_drawer():
         ip, port, _profile = _get_printer()
         if not ip:
             return
-        p = File('/dev/usb/lp1')
+        p = File(_get_usb_device_path() or '/dev/usb/lp1')
         p.set(font='b', align='left')
         try:
             drawer_pin = getattr(settings, 'CASH_DRAWER_PIN', 2)  # 2=pin2, 5=pin5 (escpos rejects 0)
