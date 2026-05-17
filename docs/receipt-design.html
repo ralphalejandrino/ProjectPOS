@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>TarsierPOS — 58mm Receipt Design (FEATURE-034)</title>
+<style>
+  :root {
+    --paper: #fdfdfb;
+    --ink: #0f172a;
+    --rule: #1f2937;
+    --muted: #64748b;
+    --bg: #eef1f5;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 32px;
+    background: var(--bg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    color: var(--ink);
+  }
+  header {
+    max-width: 1280px;
+    margin: 0 auto 24px;
+  }
+  header h1 {
+    margin: 0 0 4px;
+    font-size: 20px;
+    font-weight: 700;
+  }
+  header p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  header code { background:#fff; padding:1px 6px; border-radius:4px; font-size:12px; }
+
+  .grid {
+    max-width: 1280px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 24px;
+  }
+  .card {
+    background: var(--paper);
+    border-radius: 8px;
+    box-shadow:
+      0 1px 2px rgba(0,0,0,0.05),
+      0 4px 12px rgba(0,0,0,0.08);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .label {
+    background: #1e293b;
+    color: #f8fafc;
+    padding: 8px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    display: flex;
+    justify-content: space-between;
+  }
+  .label small { color: #94a3b8; font-weight: 400; text-transform: none; letter-spacing: 0; }
+
+  /*
+    Receipt block — 32 characters wide, ESC/POS Font B emulation.
+    Each char ~7.5px wide; line-height tight; no wrap.
+  */
+  pre.receipt {
+    margin: 0;
+    padding: 16px 12px;
+    font-family: "Menlo", "Consolas", "DejaVu Sans Mono", monospace;
+    font-size: 12px;
+    line-height: 1.25;
+    color: var(--ink);
+    white-space: pre;
+    overflow-x: auto;
+    background:
+      repeating-linear-gradient(
+        180deg,
+        transparent 0 14px,
+        rgba(0,0,0,0.015) 14px 15px
+      );
+    /* 32ch + padding so the simulated paper edge sits visually right */
+    width: max-content;
+    min-width: 100%;
+  }
+  pre.receipt b { font-weight: 700; }
+  pre.receipt .big {
+    display: inline-block;
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+  }
+  pre.receipt .center { display:block; text-align:center; }
+
+  footer {
+    max-width: 1280px;
+    margin: 32px auto 0;
+    padding: 16px;
+    background: #fff;
+    border-radius: 8px;
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+  footer code { background:#f1f5f9; padding:1px 5px; border-radius:3px; }
+  footer h2 { font-size: 13px; color: var(--ink); margin: 0 0 8px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>TarsierPOS — 58mm Thermal Receipt Design</h1>
+  <p>
+    Ticket: <code>FEATURE-034</code> · Width: <strong>32 chars</strong> (ESC/POS Font B on 58mm paper, 384 dots ÷ 12) ·
+    Authoritative visual contract for both <code>canteen/receipt_service.py</code> (FIX-PENDING-14) and on-screen receipts (FLAG-064 parity).
+  </p>
+</header>
+
+<div class="grid">
+
+  <!-- ============================================================
+       1. CASH SALE — VAT-inclusive, 3 items, 1 variant, PWD discount
+       ============================================================ -->
+  <section class="card">
+    <div class="label">Cash sale<small>3 items · PWD 20% · VAT-exempt</small></div>
+<pre class="receipt"><span class="center"><span class="big">My Store</span></span>
+<span class="center">Point of Sale System</span>
+<span class="center">123 Taft Ave, Manila</span>
+<span class="center">TIN: 000-123-456-000</span>
+<span class="center">MIN: 12345678901234</span>
+<span class="center">Serial: TPSPOS-0001</span>
+--------------------------------
+Receipt #: OR-000123
+Date: 2026-05-17 14:32
+Cashier: jdoe
+--------------------------------
+Iced Latte 2 x 120.00      240.00
+  Size: Large +20.00
+Chicken Sandwich           185.00
+  1 x 185.00
+Brewed Coffee 1 x 95.00     95.00
+--------------------------------
+Subtotal (VAT-inc):        520.00
+VAT (12%) Removed:         -55.71
+PWD Discount (20%):        -92.86
+PWD ID: PWD-2024-9981
+<b>TOTAL:                     371.43</b>
+Payment: Cash
+Cash: PHP 500.00  Change: 128.57
+--------------------------------
+<span class="center">VAT-EXEMPT TRANSACTION</span>
+<span class="center">(RA 10754)</span>
+<span class="center">This serves as your</span>
+<span class="center">OFFICIAL RECEIPT</span>
+<span class="center">Thank you for your purchase!</span></pre>
+  </section>
+
+  <!-- ============================================================
+       2. GCASH SALE — variant with negative price_modifier (ISSUE-074)
+       ============================================================ -->
+  <section class="card">
+    <div class="label">GCash sale<small>Neg. modifier · No discount</small></div>
+<pre class="receipt"><span class="center"><span class="big">My Store</span></span>
+<span class="center">Point of Sale System</span>
+<span class="center">123 Taft Ave, Manila</span>
+<span class="center">TIN: 000-123-456-000</span>
+<span class="center">MIN: 12345678901234</span>
+<span class="center">Serial: TPSPOS-0001</span>
+--------------------------------
+Receipt #: OR-000124
+Date: 2026-05-17 14:41
+Cashier: jdoe
+--------------------------------
+Iced Latte 1 x 110.00      110.00
+  Size: Small -10.00
+Pandesal 4 x 8.00           32.00
+--------------------------------
+Subtotal (VAT-inc):        142.00
+<b>TOTAL:                     142.00</b>
+Incl. VAT (12%):            15.21
+Payment: GCash
+Ref#: 9821 4471 0033
+Phone: 0917-555-0123
+--------------------------------
+<span class="center">This serves as your</span>
+<span class="center">OFFICIAL RECEIPT</span>
+<span class="center">Thank you for your purchase!</span></pre>
+  </section>
+
+  <!-- ============================================================
+       3. VOID RECEIPT
+       ============================================================ -->
+  <section class="card">
+    <div class="label">Void receipt<small>Reprint w/ VOID stamp</small></div>
+<pre class="receipt"><span class="center"><span class="big">My Store</span></span>
+<span class="center">123 Taft Ave, Manila</span>
+<span class="center">TIN: 000-123-456-000</span>
+<span class="center">MIN: 12345678901234</span>
+--------------------------------
+<span class="center"><b>** VOIDED **</b></span>
+--------------------------------
+Original OR#: OR-000123
+Voided: 2026-05-17 14:55
+Voided by: mgr_anne
+Reason: Customer changed mind
+--------------------------------
+Iced Latte 2 x 120.00      240.00
+  Size: Large +20.00
+Chicken Sandwich           185.00
+Brewed Coffee 1 x 95.00     95.00
+--------------------------------
+<b>Reversed total:            371.43</b>
+--------------------------------
+<span class="center">VOID — NOT A SALE</span>
+<span class="center">Stock and ingredients</span>
+<span class="center">restored to inventory.</span></pre>
+  </section>
+
+  <!-- ============================================================
+       4. X-REPORT — shift summary
+       ============================================================ -->
+  <section class="card">
+    <div class="label">X-Report<small>Mid-shift snapshot</small></div>
+<pre class="receipt"><span class="center"><span class="big">My Store</span></span>
+<span class="center">123 Taft Ave, Manila</span>
+<span class="center">TIN: 000-123-456-000</span>
+<span class="center">MIN: 12345678901234</span>
+--------------------------------
+<span class="center"><b>X-REPORT — SHIFT SUMMARY</b></span>
+--------------------------------
+Cashier: jdoe
+Opened: 2026-05-17 08:00
+Printed: 2026-05-17 14:45
+--------------------------------
+Gross Sales:            12,480.00
+Voids:                     371.43
+<b>Net Sales:              12,108.57</b>
+Transactions:                  47
+--------------------------------
+  Cash (29):             7,420.00
+  GCash (12):            3,180.00
+  Maya (6):              1,508.57
+--------------------------------
+<span class="center">NOT A Z-READING</span>
+<span class="center">For shift review only</span></pre>
+  </section>
+
+  <!-- ============================================================
+       5. Z-REPORT — end of day (FEATURE-011 cluster)
+       ============================================================ -->
+  <section class="card">
+    <div class="label">Z-Report<small>End-of-day · BIR-bound</small></div>
+<pre class="receipt"><span class="center"><span class="big">My Store</span></span>
+<span class="center">123 Taft Ave, Manila</span>
+<span class="center">TIN: 000-123-456-000</span>
+<span class="center">MIN: 12345678901234</span>
+<span class="center">Serial: TPSPOS-0001</span>
+--------------------------------
+<span class="center"><b>Z-REPORT — END OF DAY</b></span>
+<span class="center">Z# 000087</span>
+--------------------------------
+Date: 2026-05-17
+By: mgr_anne
+Reset counter: 87
+--------------------------------
+Beg. OR#:        OR-000077
+End. OR#:        OR-000124
+--------------------------------
+Gross Sales:            18,920.00
+Voids:                     742.86
+Refunds:                     0.00
+<b>Net Sales:              18,177.14</b>
+Transactions:                  64
+--------------------------------
+VATable Sales:          15,231.25
+VAT (12%):               1,827.75
+VAT-Exempt:              1,118.14
+Zero-rated:                  0.00
+--------------------------------
+DISCOUNTS GIVEN:
+SC              -PHP     420.00
+PWD             -PHP     185.71
+Promo           -PHP     137.15
+Total           -PHP     742.86
+--------------------------------
+  Cash (38):            10,820.00
+  GCash (18):            5,440.00
+  Maya (8):              1,917.14
+--------------------------------
+Cash Expected:          10,820.00
+Closing Cash:           10,800.00
+Over/Short:                -20.00
+--------------------------------
+<span class="center">Accumulated Grand Total</span>
+<span class="center">PHP 1,284,917.43</span>
+--------------------------------
+<span class="center">Z-READING — KEEP ON FILE</span>
+<span class="center">BIR Permit #: ____________</span>
+<span class="center">Please come again!</span></pre>
+  </section>
+
+</div>
+
+<footer>
+  <h2>Notes for implementers</h2>
+  &bull; <strong>Width:</strong> 32 chars hard. Use <code>RECEIPT_WIDTH = 32</code> in <code>receipt_service.py</code> (currently 42, sized for 80mm).<br>
+  &bull; <strong>Item rows:</strong> when <code>name + " " + qty_price</code> + total exceeds 32 chars, the qty_price block wraps to the next line under the name (see &ldquo;Chicken Sandwich&rdquo; in the cash sample).<br>
+  &bull; <strong>Variant lines:</strong> indent 2 spaces, show <code>+amount</code> or <code>-amount</code> per <code>price_modifier</code> (ISSUE-074 negative supported).<br>
+  &bull; <strong>VAT-inc subtotal label:</strong> only when <code>vat_enabled</code> OR <code>is_vat_exempt</code> (FLAG-064 parity rule).<br>
+  &bull; <strong>BIR fields:</strong> TIN exists on <code>BusinessProfile</code>; <code>MIN</code> and <code>Serial</code> need new fields (FLAG-056 follow-up — render placeholders for now).<br>
+  &bull; <strong>Z-report:</strong> Reset counter, beginning/ending OR#, accumulated grand total, and BIR Permit # are mandatory; design here is what FEATURE-011 (B12) must finalize against.<br>
+  &bull; <strong>Parity:</strong> On-screen receipt (success modal) renders the same fields and ordering. Diverges &rarr; FLAG-064 reopens.
+</footer>
+
+</body>
+</html>
