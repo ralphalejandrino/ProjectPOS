@@ -72,7 +72,6 @@
 </nav>
 
 <!-- ───────────── TOAST ───────────── -->
-<div id="toastContainer" class="fixed bottom-5 right-5 z-[100] flex flex-col gap-2 pointer-events-none"></div>
 
 <!-- ───────────── MAIN CONTENT ───────────── -->
 <div class="container mx-auto px-4 py-6">
@@ -504,17 +503,6 @@
     </div>
   </div>
 
-  <!-- ── CONFIRM MODAL ── -->
-  <div id="confirmModal" class="modal-panel hidden bg-white rounded-2xl shadow-2xl w-full max-w-sm">
-    <div class="px-6 py-5">
-      <h2 class="font-semibold text-gray-800 mb-2" id="confirmTitle">Confirm</h2>
-      <p class="text-sm text-gray-500" id="confirmMessage"></p>
-    </div>
-    <div class="flex justify-end gap-2 px-6 py-4 border-t border-gray-100">
-      <button onclick="closeModal()" class="px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600 text-sm transition">Cancel</button>
-      <button id="confirmOkBtn" class="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-medium transition">Confirm</button>
-    </div>
-  </div>
 
 </div><!-- /backdrop -->
 
@@ -523,6 +511,7 @@
      SCRIPTS
 ══════════════════════════════════════════════════════ -->
 <script src="config.js"></script>
+    <script src="dialogs.js"></script>
 <script>
 'use strict';
 
@@ -610,7 +599,7 @@ async function loadInitialData() {
     // Show preset seed banner when the units table is completely empty
     checkPresetBanner();
   } catch (e) {
-    showToast('Failed to load data: ' + e.message, 'error');
+    window.toast({message: 'Failed to load data: ' + e.message, severity: 'error'});
   }
 }
 
@@ -623,7 +612,7 @@ function checkPresetBanner() {
 async function seedPresetUnits() {
   const btn = document.querySelector('#presetUnitsBanner button');
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Seeding…'; }
-  showToast('Seeding preset units…', 'info');
+  window.toast({message: 'Seeding preset units…', severity: 'info'});
 
   let added = 0;
   for (const u of PRESET_UNITS) {
@@ -640,7 +629,7 @@ async function seedPresetUnits() {
   }
 
   await refreshUnits();
-  showToast(`${added} preset unit${added !== 1 ? 's' : ''} added!`, 'success');
+  window.toast({message: `${added} preset unit${added !== 1 ? 's' : ''} added!`, severity: 'success'});
   checkPresetBanner();
   if (btn) { btn.disabled = false; btn.textContent = '🌱 Seed Preset Units'; }
 }
@@ -869,7 +858,7 @@ async function loadMenuItems() {
       menuItems.map(m => `<option value="${m.id}">${esc(m.name)}</option>`).join('');
     populateNewRecipeIngredientSelect();
   } catch (e) {
-    showToast('Failed to load menu items', 'error');
+    window.toast({message: 'Failed to load menu items', severity: 'error'});
   }
 }
 
@@ -968,7 +957,7 @@ async function saveRecipeIngredient() {
   const variantId = document.getElementById('recipeVariantSelect').value;
   const ingId     = document.getElementById('newRecipeIngredient').value;
   const qty       = document.getElementById('newRecipeQty').value;
-  if (!ingId || !qty) { showToast('Select an ingredient and quantity', 'error'); return; }
+  if (!ingId || !qty) { window.toast({message: 'Select an ingredient and quantity', severity: 'error'}); return; }
 
   const payload = { item: itemId, ingredient: ingId, quantity_used: qty };
   if (variantId) payload.variant = variantId;
@@ -980,23 +969,23 @@ async function saveRecipeIngredient() {
       body: JSON.stringify(payload),
     });
     cancelAddRecipeRow();
-    showToast('Ingredient added to recipe', 'success');
+    window.toast({message: 'Ingredient added to recipe', severity: 'success'});
     await loadRecipeIngredients();
   } catch (e) {
-    showToast('Failed: ' + e.message, 'error');
+    window.toast({message: 'Failed: ' + e.message, severity: 'error'});
   }
 }
 
 async function deleteRecipeIngredient(id) {
-  showConfirm('Remove Ingredient', 'Remove this ingredient from the recipe?', async () => {
+  window.confirmDialog({title: 'Remove Ingredient', message: 'Remove this ingredient from the recipe?', danger: true}).then(ok => { if (ok) (async () => {
     try {
       await apiFetch(`/recipe-ingredients/${id}/`, { method: 'DELETE' });
-      showToast('Removed from recipe', 'success');
+      window.toast({message: 'Removed from recipe', severity: 'success'});
       await loadRecipeIngredients();
     } catch (e) {
-      showToast('Failed: ' + e.message, 'error');
+      window.toast({message: 'Failed: ' + e.message, severity: 'error'});
     }
-  });
+  })(); });
 }
 
 // ─── Modals ───────────────────────────────────────────────
@@ -1043,8 +1032,8 @@ async function submitIngredientModal() {
   const id   = document.getElementById('ingredientId').value;
   const name = document.getElementById('ingredientName').value.trim();
   const unit = document.getElementById('ingredientUnit').value;
-  if (!name) { showToast('Name is required', 'error'); return; }
-  if (!unit) { showToast('Unit is required', 'error'); return; }
+  if (!name) { window.toast({message: 'Name is required', severity: 'error'}); return; }
+  if (!unit) { window.toast({message: 'Unit is required', severity: 'error'}); return; }
 
   const payload = {
     name,
@@ -1063,19 +1052,19 @@ async function submitIngredientModal() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-      showToast('Ingredient updated', 'success');
+      window.toast({message: 'Ingredient updated', severity: 'success'});
     } else {
       await apiFetch('/ingredients/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-      showToast('Ingredient added', 'success');
+      window.toast({message: 'Ingredient added', severity: 'success'});
     }
     closeModal();
     await refreshIngredients();
   } catch (e) {
-    showToast('Failed: ' + e.message, 'error');
+    window.toast({message: 'Failed: ' + e.message, severity: 'error'});
   }
 }
 
@@ -1104,7 +1093,7 @@ function openSupplierModal(id) {
 async function submitSupplierModal() {
   const id   = document.getElementById('supplierId').value;
   const name = document.getElementById('supplierName').value.trim();
-  if (!name) { showToast('Name is required', 'error'); return; }
+  if (!name) { window.toast({message: 'Name is required', severity: 'error'}); return; }
 
   const payload = {
     name,
@@ -1128,11 +1117,11 @@ async function submitSupplierModal() {
         body: JSON.stringify(payload),
       });
     }
-    showToast(id ? 'Supplier updated' : 'Supplier added', 'success');
+    window.toast({message: id ? 'Supplier updated' : 'Supplier added', severity: 'success'});
     closeModal();
     await refreshSuppliers();
   } catch (e) {
-    showToast('Failed: ' + e.message, 'error');
+    window.toast({message: 'Failed: ' + e.message, severity: 'error'});
   }
 }
 
@@ -1156,8 +1145,8 @@ async function submitUnitModal() {
   const id   = document.getElementById('unitId').value;
   const name = document.getElementById('unitName').value.trim();
   const abbr = document.getElementById('unitAbbr').value.trim();
-  if (!name) { showToast('Name is required', 'error'); return; }
-  if (!abbr) { showToast('Abbreviation is required', 'error'); return; }
+  if (!name) { window.toast({message: 'Name is required', severity: 'error'}); return; }
+  if (!abbr) { window.toast({message: 'Abbreviation is required', severity: 'error'}); return; }
 
   try {
     if (id) {
@@ -1173,11 +1162,11 @@ async function submitUnitModal() {
         body: JSON.stringify({ name, abbreviation: abbr }),
       });
     }
-    showToast(id ? 'Unit updated' : 'Unit added', 'success');
+    window.toast({message: id ? 'Unit updated' : 'Unit added', severity: 'success'});
     closeModal();
     await refreshUnits();
   } catch (e) {
-    showToast('Failed: ' + e.message, 'error');
+    window.toast({message: 'Failed: ' + e.message, severity: 'error'});
   }
 }
 
@@ -1194,11 +1183,11 @@ function openRestockModal(id) {
 async function submitRestockModal() {
   const id  = document.getElementById('restockIngredientId').value;
   const qty = document.getElementById('restockQty').value;
-  if (!qty || parseFloat(qty) <= 0) { showToast('Enter a valid quantity', 'error'); return; }
+  if (!qty || parseFloat(qty) <= 0) { window.toast({message: 'Enter a valid quantity', severity: 'error'}); return; }
 
   const item = ingredients.find(i => String(i.id) === String(id));
   if (item && item.track_inventory === false) {
-    showToast('Inventory tracking is disabled for this item.', 'error');
+    window.toast({message: 'Inventory tracking is disabled for this item.', severity: 'error'});
     return;
   }
 
@@ -1214,32 +1203,21 @@ async function submitRestockModal() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
-    showToast('Restock recorded', 'success');
+    window.toast({message: 'Restock recorded', severity: 'success'});
     closeModal();
     await refreshIngredients();
   } catch (e) {
-    showToast('Failed: ' + e.message, 'error');
+    window.toast({message: 'Failed: ' + e.message, severity: 'error'});
   }
 }
 
-// ─── Confirm modal ───────────────────────────────────────
-function showConfirm(title, message, onOk) {
-  document.getElementById('confirmTitle').textContent   = title;
-  document.getElementById('confirmMessage').textContent = message;
-  const btn = document.getElementById('confirmOkBtn');
-  btn.onclick = () => { closeModal(); onOk(); };
-  showModal('confirmModal');
-}
 
 function confirmDeactivate(type, id) {
   const item = type === 'ingredient' ? ingredients.find(i => i.id === id)
     : type === 'supplier' ? suppliers.find(s => s.id === id)
     : null;
   const name = item ? item.name : String(id);
-  showConfirm(
-    'Confirm Deactivate',
-    `Deactivate "${name}"? It will no longer appear in active lists.`,
-    async () => {
+  window.confirmDialog({title: 'Confirm Deactivate', message: `Deactivate "${name}"? It will no longer appear in active lists.`, danger: true}).then(ok => { if (ok) (async () => {
       try {
         const url = type === 'ingredient' ? `/ingredients/${id}/`
           : type === 'supplier' ? `/suppliers/${id}/`
@@ -1249,15 +1227,14 @@ function confirmDeactivate(type, id) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ is_active: false }),
         });
-        showToast(`${name} deactivated`, 'success');
+        window.toast({message: `${name} deactivated`, severity: 'success'});
         if (type === 'ingredient') await refreshIngredients();
         else if (type === 'supplier') await refreshSuppliers();
         else await refreshUnits();
       } catch (e) {
-        showToast('Failed: ' + e.message, 'error');
+        window.toast({message: 'Failed: ' + e.message, severity: 'error'});
       }
-    }
-  );
+    })(); });
 }
 
 async function toggleUnitActive(id, currentlyActive) {
@@ -1267,10 +1244,10 @@ async function toggleUnitActive(id, currentlyActive) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ is_active: !currentlyActive }),
     });
-    showToast(currentlyActive ? 'Unit deactivated' : 'Unit activated', 'success');
+    window.toast({message: currentlyActive ? 'Unit deactivated' : 'Unit activated', severity: 'success'});
     await refreshUnits();
   } catch (e) {
-    showToast('Failed: ' + e.message, 'error');
+    window.toast({message: 'Failed: ' + e.message, severity: 'error'});
   }
 }
 
@@ -1298,7 +1275,7 @@ async function refreshIngredients() {
     renderIngredients();
     updateStats();
     populateSelectsGlobally();
-  } catch (e) { showToast('Refresh failed', 'error'); }
+  } catch (e) { window.toast({message: 'Refresh failed', severity: 'error'}); }
 }
 
 async function refreshSuppliers() {
@@ -1307,7 +1284,7 @@ async function refreshSuppliers() {
     suppliers = Array.isArray(data) ? data : (data?.results || []);
     renderSuppliers();
     updateStats();
-  } catch (e) { showToast('Refresh failed', 'error'); }
+  } catch (e) { window.toast({message: 'Refresh failed', severity: 'error'}); }
 }
 
 async function refreshUnits() {
@@ -1316,22 +1293,13 @@ async function refreshUnits() {
     units = Array.isArray(data) ? data : (data?.results || []);
     renderUnits();
     checkPresetBanner();
-  } catch (e) { showToast('Refresh failed', 'error'); }
+  } catch (e) { window.toast({message: 'Refresh failed', severity: 'error'}); }
 }
 
 function populateSelectsGlobally() {
   populateRestockFilter();
 }
 
-// ─── Toast ────────────────────────────────────────────────
-function showToast(message, type = 'info') {
-  const colors = { success: 'bg-green-600 text-white', error: 'bg-red-600 text-white', info: 'bg-gray-800 text-white' };
-  const el = document.createElement('div');
-  el.className = `toast pointer-events-auto px-4 py-3 rounded-xl shadow-lg text-sm font-medium max-w-xs ${colors[type] || colors.info}`;
-  el.textContent = message;
-  document.getElementById('toastContainer').appendChild(el);
-  setTimeout(() => el.remove(), 3200);
-}
 
 // ─── Escape helper ────────────────────────────────────────
 function esc(str) {
