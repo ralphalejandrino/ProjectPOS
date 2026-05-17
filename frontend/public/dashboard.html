@@ -510,7 +510,7 @@
                 const discountHtml = (() => {
                     if (!t.discount_amount || parseFloat(t.discount_amount) <= 0) return '';
                     const dtype = t.discount_type || 'discount';
-                    const labelMap = { sc: 'SC Discount', pwd: 'PWD Discount', promo: 'Promo Discount' };
+                    const labelMap = { sc: 'SC Discount', pwd: 'PWD Discount', promo: 'Discount' };
                     const label = labelMap[dtype] || 'Discount';
                     const profile = JSON.parse(localStorage.getItem('biz_profile') || '{}');
                     const rate = dtype === 'sc' ? (profile.sc_discount_rate || 20)

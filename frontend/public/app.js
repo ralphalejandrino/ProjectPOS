@@ -579,7 +579,7 @@ function applyModalDiscount(prefix) {
     } else if (type === 'promo') {
         const pct = parseFloat(document.getElementById(prefix + '-promo-pct').value) || 0;
         discountAmount = subtotal * (pct / 100);
-        discountLabel = 'Promo Discount (' + pct + '%)';
+        discountLabel = 'Discount (' + pct + '%)';
     }
 
     const discountId = document.getElementById(prefix + '-discount-id')?.value || '';
