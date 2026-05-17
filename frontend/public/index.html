@@ -310,6 +310,7 @@
 
     <!-- SCRIPTS -->
     <script src="config.js"></script>
+    <script src="dialogs.js"></script>
     <script src="app.js"></script>
     <!-- payments.js intentionally NOT loaded: ISSUE-016 confirmed it is dead code.
          The PaymentSystem object in payments.js attaches event listeners to
@@ -323,7 +324,7 @@
         // Cash Payment Functions
         function showCashModal() {
             if (window.cart.items.length === 0) {
-                showCustomError('Cart Empty', 'Please add items to cart before checkout');
+                window.alertDialog({title: 'Cart Empty', message: 'Please add items to cart before checkout'});
                 return;
             }
             initModalDiscount('cash');
@@ -461,59 +462,6 @@
             }
         }
 
-	function showCustomConfirm(title, message, onConfirm) {
-    const modal = document.getElementById('payment-modal');
-    if (modal) {
-        modal.querySelector('.payment-method').textContent = title;
-        modal.querySelector('.payment-message').innerHTML = `
-            <div class="text-center">
-                <div class="text-6xl mb-4">❓</div>
-                <p class="text-lg font-bold text-gray-800 mb-2">${title}</p>
-                <p class="text-gray-700 mb-6">${message}</p>
-                <div class="flex space-x-3">
-                    <button onclick="closePaymentSuccessModal()" class="flex-1 bg-gray-500 hover:bg-gray-600 text-white px-6 py-3 rounded-lg font-bold transition">
-                        Cancel
-                    </button>
-                    <button onclick="confirmAction()" class="flex-1 bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg font-bold transition">
-                        Clear Cart
-                    </button>
-                </div>
-            </div>
-        `;
-        modal.classList.remove('hidden');
-        window.pendingConfirmAction = onConfirm;
-    }
-}
-
-function confirmAction() {
-    if (window.pendingConfirmAction) {
-        window.pendingConfirmAction();
-        window.pendingConfirmAction = null;
-    }
-    closePaymentSuccessModal();
-}
-
-window.showCustomConfirm = showCustomConfirm;
-window.confirmAction = confirmAction;
-
-        function showCustomError(title, message) {
-            const modal = document.getElementById('payment-modal');
-            if (modal) {
-                modal.querySelector('.payment-method').textContent = title;
-                modal.querySelector('.payment-message').innerHTML = `
-                    <div class="text-center">
-                        <div class="text-6xl mb-4">⚠️</div>
-                        <p class="text-lg font-bold text-red-600 mb-2">${title}</p>
-                        <p class="text-gray-700 mb-6">${message}</p>
-                        <button onclick="closePaymentSuccessModal()" class="bg-gray-600 hover:bg-gray-700 text-white px-8 py-3 rounded-lg font-bold transition">
-                            OK
-                        </button>
-                    </div>
-                `;
-                modal.classList.remove('hidden');
-            }
-        }
-
         function closePaymentSuccessModal() {
             const modal = document.getElementById('payment-modal');
             if (modal) modal.classList.add('hidden');
@@ -524,7 +472,7 @@ window.confirmAction = confirmAction;
         async function completeCashSale() {
             if (_paymentInProgress) return;
             if (!window.cart || !window.cart.items) {
-                showCustomError('Cart Error', 'Cart not initialized. Please refresh the page.');
+                window.alertDialog({title: 'Cart Error', message: 'Cart not initialized. Please refresh the page.'});
                 return;
             }
             const total = window.cart.total;
@@ -541,7 +489,7 @@ window.confirmAction = confirmAction;
             if (_cashDiscId) window.cart.discountIdNumber = _cashDiscId.value.trim();
 
             if ((window.cart.discountType === 'sc' || window.cart.discountType === 'pwd') && !window.cart.discountIdNumber?.trim()) {
-                showCustomError('ID Required', 'SC/PWD ID number is required.');
+                window.alertDialog({title: 'ID Required', message: 'SC/PWD ID number is required.'});
                 return;
             }
 
@@ -583,11 +531,11 @@ window.confirmAction = confirmAction;
                     window.clearCartState();
                     updateCart();
                 } else {
-                    showCustomError('Transaction Failed', data.error || 'Please try again');
+                    window.alertDialog({title: 'Transaction Failed', message: data.error || 'Please try again'});
                 }
             } catch (error) {
                 console.error('Cash payment error:', error);
-                showCustomError('Payment Error', error.message);
+                window.alertDialog({title: 'Payment Error', message: error.message});
             } finally {
                 _paymentInProgress = false;
                 if (btn) { btn.disabled = false; btn.textContent = 'Complete Sale'; }
@@ -596,7 +544,6 @@ window.confirmAction = confirmAction;
 
         window.showCashModal = showCashModal;
         window.showCustomSuccess = showCustomSuccess;
-        window.showCustomError = showCustomError;
         window.closePaymentSuccessModal = closePaymentSuccessModal;
 
         // Dropdown Menu
@@ -639,7 +586,7 @@ window.confirmAction = confirmAction;
         // GCash Modal Functions
         async function showGCashModal() {
             if (!window.cart || !window.cart.items || window.cart.items.length === 0) {
-                showCustomError('Cart Empty', 'Please add items before payment'); return;
+                window.alertDialog({title: 'Cart Empty', message: 'Please add items before payment'}); return;
             }
             initModalDiscount('gcash');
             document.getElementById('gcash-total').textContent = window.cart.total.toFixed(2);
@@ -664,11 +611,11 @@ window.confirmAction = confirmAction;
         async function completeGCashSale() {
             if (_paymentInProgress) return;
             const reference = document.getElementById('gcash-reference').value.trim();
-            if (!reference) { showCustomError('Reference Required', 'Please enter the GCash reference number'); return; }
+            if (!reference) { window.alertDialog({title: 'Reference Required', message: 'Please enter the GCash reference number'}); return; }
             const _gcashDiscId = document.getElementById('gcash-discount-id');
             if (_gcashDiscId) window.cart.discountIdNumber = _gcashDiscId.value.trim();
             if ((window.cart.discountType === 'sc' || window.cart.discountType === 'pwd') && !window.cart.discountIdNumber?.trim()) {
-                showCustomError('ID Required', 'SC/PWD ID number is required.');
+                window.alertDialog({title: 'ID Required', message: 'SC/PWD ID number is required.'});
                 return;
             }
             _paymentInProgress = true;
@@ -697,10 +644,10 @@ window.confirmAction = confirmAction;
                     window.clearCartState();
                     updateCart();
                 } else {
-                    showCustomError('Transaction Failed', data.error || 'Please try again');
+                    window.alertDialog({title: 'Transaction Failed', message: data.error || 'Please try again'});
                 }
             } catch (e) {
-                showCustomError('Payment Error', e.message);
+                window.alertDialog({title: 'Payment Error', message: e.message});
             } finally {
                 _paymentInProgress = false;
                 if (btn) { btn.disabled = false; btn.textContent = 'Confirm'; }
@@ -710,7 +657,7 @@ window.confirmAction = confirmAction;
         // Maya Modal Functions
         async function showMayaModal() {
             if (!window.cart || !window.cart.items || window.cart.items.length === 0) {
-                showCustomError('Cart Empty', 'Please add items before payment'); return;
+                window.alertDialog({title: 'Cart Empty', message: 'Please add items before payment'}); return;
             }
             initModalDiscount('maya');
             document.getElementById('maya-total').textContent = window.cart.total.toFixed(2);
@@ -735,11 +682,11 @@ window.confirmAction = confirmAction;
         async function completeMayaSale() {
             if (_paymentInProgress) return;
             const reference = document.getElementById('maya-reference').value.trim();
-            if (!reference) { showCustomError('Reference Required', 'Please enter the Maya reference number'); return; }
+            if (!reference) { window.alertDialog({title: 'Reference Required', message: 'Please enter the Maya reference number'}); return; }
             const _mayaDiscId = document.getElementById('maya-discount-id');
             if (_mayaDiscId) window.cart.discountIdNumber = _mayaDiscId.value.trim();
             if ((window.cart.discountType === 'sc' || window.cart.discountType === 'pwd') && !window.cart.discountIdNumber?.trim()) {
-                showCustomError('ID Required', 'SC/PWD ID number is required.');
+                window.alertDialog({title: 'ID Required', message: 'SC/PWD ID number is required.'});
                 return;
             }
             _paymentInProgress = true;
@@ -768,10 +715,10 @@ window.confirmAction = confirmAction;
                     window.clearCartState();
                     updateCart();
                 } else {
-                    showCustomError('Transaction Failed', data.error || 'Please try again');
+                    window.alertDialog({title: 'Transaction Failed', message: data.error || 'Please try again'});
                 }
             } catch (e) {
-                showCustomError('Payment Error', e.message);
+                window.alertDialog({title: 'Payment Error', message: e.message});
             } finally {
                 _paymentInProgress = false;
                 if (btn) { btn.disabled = false; btn.textContent = 'Confirm'; }
@@ -948,7 +895,7 @@ window.confirmAction = confirmAction;
         const btn = document.getElementById('thermal-print-btn');
         if (!btn) return;
         const txId = btn.dataset.transactionId;
-        if (!txId) { showCustomError('Print Error', 'No transaction ID — cannot print.'); return; }
+        if (!txId) { window.alertDialog({title: 'Print Error', message: 'No transaction ID — cannot print.'}); return; }
         btn.disabled = true;
         btn.textContent = 'Printing...';
         try {
@@ -975,18 +922,11 @@ window.confirmAction = confirmAction;
                 { method: 'POST' });
             const data = await resp.json();
             if (data.print_status && !data.print_status.success) {
-                showPrintWarning(data.print_status.message);
+                window.toast({message: data.print_status.message, severity: 'warning'});
             }
         } catch(e) { /* network error — printer may not be reachable */ }
     }
 
-    function showPrintWarning(msg) {
-        const toast = document.createElement('div');
-        toast.className = 'fixed bottom-4 right-4 bg-yellow-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 flex items-center gap-2';
-        toast.innerHTML = '<span class="text-xl">&#9888;</span><span>' + escapeHtml(msg || 'Printer error') + '</span>';
-        document.body.appendChild(toast);
-        setTimeout(() => toast.remove(), 5000);
-    }
     window.autoPrintReceipt = autoPrintReceipt;
     window.thermalPrint = thermalPrint;
 
