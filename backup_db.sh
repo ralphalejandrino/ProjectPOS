@@ -7,12 +7,14 @@
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DB_SRC="$SCRIPT_DIR/db.sqlite3"
 BACKUP_DIR="$SCRIPT_DIR/backups"
-LOG="/var/log/tarsierpos-backup.log"
+LOG_DIR="$SCRIPT_DIR/logs"
+LOG="$LOG_DIR/backup.log"
 TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
 FILENAME="db_$(date '+%Y%m%d_%H%M%S').sqlite3"
 DEST="$BACKUP_DIR/$FILENAME"
 
-# Ensure log file exists and is writable
+# Ensure log dir + file exist; fall back to /tmp only if creation fails
+mkdir -p "$LOG_DIR" 2>/dev/null || true
 touch "$LOG" 2>/dev/null || LOG="/tmp/tarsierpos-backup.log"
 
 # Create backup directory if needed
