@@ -1,21 +1,24 @@
 from decimal import Decimal, ROUND_HALF_UP
 from django.conf import settings
-from escpos.printer import Network
+from escpos.printer import File
 from .models import BusinessProfile
 import logging
 logger = logging.getLogger(__name__)
 
-RECEIPT_WIDTH = 42  # 80mm thermal paper standard
+RECEIPT_WIDTH = 32  # 58mm thermal paper @ ESC/POS Font B (384 dots / 12)
+                    # Visual contract: docs/receipt-design.html (FEATURE-034)
 
 def _truncate(text, max_len):
     """Truncate text with ellipsis if it exceeds max_len."""
     return text[:max_len - 3] + '...' if len(text) > max_len else text
 
 def _get_printer():
+    """Returns (transport, port, profile) if printing is enabled, else (None, None, None).
+    Print transport is the local USB device /dev/usb/lp1; network printer_ip is optional."""
     profile = BusinessProfile.objects.first()
-    if not profile or not profile.printer_enabled or not profile.printer_ip:
+    if not profile or not profile.printer_enabled:
         return None, None, None
-    return profile.printer_ip, profile.printer_port or 9100, profile
+    return (profile.printer_ip or 'usb'), (profile.printer_port or 9100), profile
 
 def print_receipt(transaction):
     """ESC/POS receipt print. Returns status dict. Never raises."""
@@ -24,7 +27,8 @@ def print_receipt(transaction):
         if not ip:
             return {'success': False, 'message': 'Printer not configured. Set up Business Profile in Settings.'}
 
-        p = Network(ip, port=port, timeout=3)
+        p = File('/dev/usb/lp1')
+        p.set(font='b', align='left')
         try:
             # Header — business name (large, bold, centered)
             p.set(align='center', bold=True, double_height=True, double_width=True)
@@ -46,6 +50,16 @@ def print_receipt(transaction):
             if profile and profile.tin:
                 p.text(f'TIN: {profile.tin}\n')
 
+            # MIN / Serial — BIR-mandated for accredited POS. Fields are
+            # forward-compatible: render only when BusinessProfile gains
+            # them via FLAG-056 (getattr with default keeps this safe today).
+            min_no = getattr(profile, 'min_number', '') if profile else ''
+            serial_no = getattr(profile, 'serial_number', '') if profile else ''
+            if min_no:
+                p.text(f'MIN: {min_no}\n')
+            if serial_no:
+                p.text(f'Serial: {serial_no}\n')
+
             p.text('-' * RECEIPT_WIDTH + '\n')
 
             # Receipt header text (skip if blank)
@@ -60,21 +74,39 @@ def print_receipt(transaction):
                 p.text(f'Cashier: {transaction.cashier.username}\n')
             p.text('-' * RECEIPT_WIDTH + '\n')
 
-            # Items
+            # Items — at 58mm/Font B the row is tight (32 chars). When the
+            # name + qty_price would push past the width, the qty_price
+            # wraps to an indented second line under the name (see
+            # docs/receipt-design.html "Chicken Sandwich" sample).
             subtotal_sum = 0.0
             for item in transaction.items.select_related('item').all():
                 qty_price = f'{item.quantity} x {float(item.unit_price):.2f}'
                 subtotal = f'{float(item.subtotal):.2f}'
                 subtotal_sum += float(item.subtotal)
-                # Truncate name so name + qty_price + subtotal fits in RECEIPT_WIDTH
-                max_name = RECEIPT_WIDTH - len(qty_price) - len(subtotal) - 2
-                name = _truncate(item.item.name, max_name) if item.item else 'Item'
-                line = f'{name} {qty_price}'
-                padding = RECEIPT_WIDTH - len(line) - len(subtotal)
-                p.text(line + ' ' * max(padding, 1) + subtotal + '\n')
+                name = (item.item.name if item.item else 'Item')
+
+                # Single-line layout: "name qty_price     subtotal"
+                single_line_len = len(name) + 1 + len(qty_price) + 1 + len(subtotal)
+                if single_line_len <= RECEIPT_WIDTH:
+                    line = f'{name} {qty_price}'
+                    padding = RECEIPT_WIDTH - len(line) - len(subtotal)
+                    p.text(line + ' ' * max(padding, 1) + subtotal + '\n')
+                else:
+                    # Two-line layout: name + subtotal on row 1, qty_price indented on row 2
+                    name_trunc = _truncate(name, RECEIPT_WIDTH - len(subtotal) - 1)
+                    padding = RECEIPT_WIDTH - len(name_trunc) - len(subtotal)
+                    p.text(name_trunc + ' ' * max(padding, 1) + subtotal + '\n')
+                    p.text(f'  {qty_price}\n')
+
                 for vs in item.variant_selections.all():
-                    modifier_str = f'+PHP {float(vs.price_modifier):.2f}' if vs.price_modifier > 0 else ''
-                    p.text(f'  {vs.group_name}: {vs.option_name} {modifier_str}\n')
+                    mod = float(vs.price_modifier or 0)
+                    if mod > 0:
+                        modifier_str = f' +{mod:.2f}'
+                    elif mod < 0:
+                        modifier_str = f' {mod:.2f}'  # native '-' sign (ISSUE-074)
+                    else:
+                        modifier_str = ''
+                    p.text(f'  {vs.group_name}: {vs.option_name}{modifier_str}\n')
 
             p.text('-' * RECEIPT_WIDTH + '\n')
 
@@ -154,7 +186,8 @@ def print_receipt(transaction):
                 cash_dec = Decimal(str(cash_raw))
                 total_dec = Decimal(str(total))
                 change_dec = (cash_dec - total_dec).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-                p.text(f'Cash: PHP {cash_dec:.2f}  Change: PHP {change_dec:.2f}\n')
+                # 32-char layout — see docs/receipt-design.html (cash sample).
+                p.text(f'Cash: PHP {cash_dec:.2f}  Change: {change_dec:.2f}\n')
             elif transaction.payment_method in ('gcash', 'maya'):
                 ref = transaction.gcash_reference or transaction.maya_reference or 'N/A'
                 p.text(f'Ref#: {ref}\n')
@@ -185,7 +218,8 @@ def print_zreport_summary(data):
         ip, port, profile = _get_printer()
         if not ip:
             return {'success': False, 'message': 'Printer not configured.'}
-        p = Network(ip, port=port, timeout=3)
+        p = File('/dev/usb/lp1')
+        p.set(font='b', align='left')
         try:
             p.set(align='center', bold=True, double_height=True, double_width=True)
             p.text((profile.business_name if profile else 'Z-REPORT') + '\n')
@@ -259,7 +293,8 @@ def print_xreport_summary(data):
         ip, port, profile = _get_printer()
         if not ip:
             return {'success': False, 'message': 'Printer not configured.'}
-        p = Network(ip, port=port, timeout=3)
+        p = File('/dev/usb/lp1')
+        p.set(font='b', align='left')
         try:
             p.set(align='center', bold=True, double_height=True, double_width=True)
             p.text((profile.business_name if profile else 'X-REPORT') + '\n')
@@ -315,7 +350,8 @@ def kick_cash_drawer():
         ip, port, _profile = _get_printer()
         if not ip:
             return
-        p = Network(ip, port=port, timeout=3)
+        p = File('/dev/usb/lp1')
+        p.set(font='b', align='left')
         try:
             drawer_pin = getattr(settings, 'CASH_DRAWER_PIN', 2)  # 2=pin2, 5=pin5 (escpos rejects 0)
             p.cashdraw(drawer_pin)
