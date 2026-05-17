@@ -1,14 +1,16 @@
 [Unit]
-Description=TarsierPos Backend (Django :9000)
+Description=TarsierPOS Gunicorn
 After=network.target
 
 [Service]
 User=__DEPLOY_USER__
+Group=www-data
 WorkingDirectory=/home/__DEPLOY_USER__/TarsierPOS
 ExecStart=/home/__DEPLOY_USER__/TarsierPOS/venv/bin/gunicorn pos_config.wsgi:application --bind 127.0.0.1:9000 --workers 3 --timeout 60
-ExecStopPost=/bin/bash /home/__DEPLOY_USER__/TarsierPOS/backup_db.sh
 Restart=always
 RestartSec=5
+EnvironmentFile=/home/__DEPLOY_USER__/TarsierPOS/.env
+ExecStopPost=/home/__DEPLOY_USER__/TarsierPOS/backup_db.sh
 StandardOutput=journal
 StandardError=journal
 

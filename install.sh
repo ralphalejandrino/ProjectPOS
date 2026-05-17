@@ -174,8 +174,7 @@ chmod +x "$PROJ/health_check.sh" "$PROJ/backup_db.sh"
 
 # ── 9. Systemd services ───────────────────────────────────────────────────────
 echo "[9/11] Installing systemd services..."
-sed "s|__DEPLOY_USER__|$DEPLOY_USER|g" "$PROJ/tarsierpos-backend.service"  > "$SERVICE_DIR/tarsierpos-backend.service"
-sed "s|__DEPLOY_USER__|$DEPLOY_USER|g" "$PROJ/tarsierpos-frontend.service" > "$SERVICE_DIR/tarsierpos-frontend.service"
+sed "s|__DEPLOY_USER__|$DEPLOY_USER|g" "$PROJ/tarsierpos.service.template" > "$SERVICE_DIR/tarsierpos.service"
 
 systemctl daemon-reload
 
@@ -183,8 +182,8 @@ systemctl daemon-reload
 chown -R "$DEPLOY_USER":"$DEPLOY_USER" "$PROJ"
 chmod 664 "$PROJ/db.sqlite3" 2>/dev/null || true
 
-systemctl enable tarsierpos-backend tarsierpos-frontend
-systemctl start  tarsierpos-backend tarsierpos-frontend
+systemctl enable tarsierpos.service
+systemctl start  tarsierpos.service
 
 # ── 10. Cron watchdog (root crontab) ──────────────────────────────────────────
 echo "[10/11] Adding health-check cron job..."
@@ -208,7 +207,7 @@ echo ""
 echo "=== Installation complete ==="
 echo ""
 
-for svc in tarsierpos-backend tarsierpos-frontend; do
+for svc in tarsierpos; do
     if systemctl is-active --quiet "$svc"; then
         echo "  ✓ $svc  ACTIVE"
     else

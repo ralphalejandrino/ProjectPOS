@@ -17,7 +17,7 @@ TarsierPOS is an offline-first point-of-sale system for Philippine SME cafes and
 ## Stack
 | Layer | Technology |
 |---|---|
-| Backend | Django 4.2 |
+| Backend | Django 5.2 |
 | Database | SQLite (busy_timeout = 30000ms) |
 | Frontend | Vanilla JS PWA |
 | Service Worker | tarsierpos-v43 |
@@ -55,7 +55,7 @@ TarsierPOS is an offline-first point-of-sale system for Philippine SME cafes and
 ├── manage.py
 ├── requirements.txt
 ├── db.sqlite3
-├── tarsierpos-backend.service  # systemd unit (gunicorn)
+├── tarsierpos.service  # systemd unit (gunicorn)
 ├── tarsierpos-frontend.service # systemd unit (disabled — nginx handles)
 └── nginx.conf
 ```
@@ -92,7 +92,7 @@ TarsierPOS is an offline-first point-of-sale system for Philippine SME cafes and
 
 ```bash
 # Services
-tarsierpos-backend.service   # gunicorn on port 9000 — ACTIVE
+tarsierpos.service   # gunicorn on port 9000 — ACTIVE
 tarsierpos-frontend.service  # disabled — nginx handles HTTPS (FIX-047)
 nginx                        # HTTPS reverse proxy — ACTIVE
 
@@ -139,7 +139,7 @@ python manage.py seed_demo
 python manage.py collectstatic
 
 # 7. Restart services
-sudo systemctl restart tarsierpos-backend.service
+sudo systemctl restart tarsierpos.service
 sudo systemctl reload nginx
 ```
 
@@ -221,7 +221,6 @@ sudo systemctl reload nginx
 
 | Ticket | Location | Issue |
 |---|---|---|
-| FIX-PENDING-02 | .gitignore | Add `backups/` to .gitignore |
 | FIX-PENDING-03 | views.py | Z-report void list needs `order_by('voided_at')` |
 | FIX-PENDING-05 | services.py | `BusinessProfile.objects.first()` called twice per discounted transaction |
 | FIX-PENDING-06 | inventory.html | `z-50` → `z-[50]` normalization on two modals |
@@ -277,7 +276,7 @@ git push
 
 Both services are enabled to start on boot:
 ```bash
-sudo systemctl enable tarsierpos-backend.service
+sudo systemctl enable tarsierpos.service
 sudo systemctl enable nginx
 ```
 gunicorn has `Restart=always` with `RestartSec=5` — it auto-restarts on crash without a reboot.
@@ -290,7 +289,7 @@ Run in this exact order:
 
 ```bash
 # 1. Confirm both services came up
-sudo systemctl status tarsierpos-backend.service
+sudo systemctl status tarsierpos.service
 sudo systemctl status nginx
 
 # 2. Confirm ports are listening
@@ -310,7 +309,7 @@ All four must pass before declaring the system live.
 ## Quick Restart (No Reboot)
 
 ```bash
-sudo systemctl restart tarsierpos-backend.service
+sudo systemctl restart tarsierpos.service
 sudo systemctl reload nginx
 ```
 
@@ -322,8 +321,8 @@ sudo systemctl reload nginx
 
 ```
 1. Is gunicorn running?
-   sudo systemctl status tarsierpos-backend.service
-   → Not running: sudo systemctl restart tarsierpos-backend.service
+   sudo systemctl status tarsierpos.service
+   → Not running: sudo systemctl restart tarsierpos.service
 
 2. Is nginx running and listening on 443?
    sudo ss -tlnp | grep 443
@@ -360,7 +359,7 @@ sudo ufw reload
 
 ## Service File Reference
 
-`/etc/systemd/system/tarsierpos-backend.service`
+`/etc/systemd/system/tarsierpos.service`
 - `Restart=always` — auto-restarts on crash
 - `RestartSec=5` — 5s delay between restart attempts
 - `After=network.target` — waits for network before starting
@@ -381,7 +380,7 @@ tailscale0 rules will still apply — they are persistent via ufw.
 ---
 
 ## Verified Working State (2026-05-12)
-- tarsierpos-backend.service: enabled, Restart=always ✓
+- tarsierpos.service: enabled, Restart=always ✓
 - nginx: enabled ✓
 - UFW: 443/80 allowed on tailscale0 ✓
 - Tailscale: active, direct connection to red-eye ✓
