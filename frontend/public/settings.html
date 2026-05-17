@@ -578,7 +578,7 @@
         <div id="tab-users" class="hidden space-y-6">
 
             <!-- USER MANAGEMENT -->
-            <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
+            <div id="user-management-section" class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
                 <h3 class="text-lg font-semibold text-gray-800 mb-4">👥 User Management</h3>
 
                 <!-- User list -->
@@ -994,7 +994,22 @@
             }
         }
 
+        const ROLE_LABELS = { admin: 'Admin', manager: 'Manager', cashier: 'Cashier' };
+
+        function roleBadgeClass(role) {
+            if (role === 'admin') return 'bg-red-100 text-red-700';
+            if (role === 'manager') return 'bg-purple-100 text-purple-700';
+            return 'bg-blue-100 text-blue-700';
+        }
+
         async function loadUsers() {
+            // Defense in depth — backend already gates the role endpoint to admins,
+            // but managers can reach settings.html, so hide the whole section for them.
+            const section = document.getElementById('user-management-section');
+            if (getUserRole() !== 'admin') {
+                if (section) section.classList.add('hidden');
+                return;
+            }
             try {
                 const response = await authenticatedFetch(`${API_BASE}/users/`);
                 const data = await response.json();
@@ -1004,14 +1019,22 @@
                     list.innerHTML = '<p class="text-gray-400 text-sm">No cashier accounts yet.</p>';
                     return;
                 }
+                const roleOptions = u => Object.keys(ROLE_LABELS).map(value =>
+                    `<option value="${value}" ${u.role === value ? 'selected' : ''}>${ROLE_LABELS[value]}</option>`
+                ).join('');
                 list.innerHTML = users.map(u => `
                     <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                         <div>
                             <span class="font-medium text-gray-800">${escapeHtml(u.username)}</span>
-                            <span class="ml-2 text-xs px-2 py-0.5 rounded-full ${u.role === 'manager' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}">${escapeHtml(u.role)}</span>
+                            <span class="ml-2 text-xs px-2 py-0.5 rounded-full ${roleBadgeClass(u.role)}">${escapeHtml(u.role)}</span>
                             ${!u.is_active ? '<span class="ml-2 text-xs text-red-500">(inactive)</span>' : ''}
                         </div>
-                        <div class="flex gap-2">
+                        <div class="flex items-center gap-2">
+                            <select data-current="${escapeHtml(u.role)}"
+                                onchange="changeUserRole(${u.id}, '${escapeHtml(u.username)}', this.value, this)"
+                                style="border:1px solid var(--color-border,#d1d5db);border-radius:var(--radius-md,0.375rem);padding:0.25rem 0.5rem;font-size:0.75rem;color:var(--color-primary,#1d4ed8);background:#fff;">
+                                ${roleOptions(u)}
+                            </select>
                             <button onclick="toggleUserActive(${u.id}, ${!u.is_active})"
                                 class="text-xs px-3 py-1 rounded-lg ${u.is_active ? 'bg-red-100 text-red-600 hover:bg-red-200' : 'bg-green-100 text-green-600 hover:bg-green-200'}">
                                 ${u.is_active ? 'Deactivate' : 'Activate'}
@@ -1021,6 +1044,39 @@
                 `).join('');
             } catch (e) {
                 console.error('Failed to load users:', e);
+            }
+        }
+
+        async function changeUserRole(userId, username, newRole, selectEl) {
+            const previousRole = selectEl.dataset.current;
+            if (newRole === previousRole) return;
+            const ok = await window.confirmDialog({
+                title: 'Change role',
+                message: `Change ${username}'s role to ${ROLE_LABELS[newRole] || newRole}?`,
+                okLabel: 'Change',
+                cancelLabel: 'Cancel',
+                danger: true,
+            });
+            if (!ok) {
+                selectEl.value = previousRole;
+                return;
+            }
+            try {
+                const response = await authenticatedFetch(`${API_BASE}/users/${userId}/role/`, {
+                    method: 'PATCH',
+                    body: JSON.stringify({ role: newRole })
+                });
+                const data = await response.json().catch(() => ({}));
+                if (response.ok) {
+                    window.toast({ severity: 'success', message: `${username} is now ${ROLE_LABELS[newRole] || newRole}` });
+                    selectEl.dataset.current = newRole;
+                } else {
+                    window.toast({ severity: 'danger', message: `Role change failed: ${data.error || response.status}` });
+                    selectEl.value = previousRole;
+                }
+            } catch (e) {
+                window.toast({ severity: 'danger', message: `Role change failed: ${e.message}` });
+                selectEl.value = previousRole;
             }
         }
 

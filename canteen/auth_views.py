@@ -97,7 +97,9 @@ class UserViewSet(viewsets.ModelViewSet):
     permission_classes = [IsManagerOrAbove]
 
     def get_permissions(self):
-        if self.action in ['create', 'destroy']:
+        # Overriding get_permissions takes precedence over @action(permission_classes=...),
+        # so admin-only actions (set_role) must be gated here too — not just on the decorator.
+        if self.action in ['create', 'destroy', 'set_role']:
             return [IsAdmin()]
         return [IsManagerOrAbove()]
 
@@ -115,6 +117,32 @@ class UserViewSet(viewsets.ModelViewSet):
         if password and len(password) >= 6:
             instance.set_password(password)
             instance.save()
+
+    @action(detail=True, methods=['patch'], permission_classes=[IsAdmin], url_path='role')
+    def set_role(self, request, pk=None):
+        """Admin-only role assignment. Rejects unknown roles (400) and self-demotion
+        of the last admin path (403) to prevent lockout. Target is looked up against
+        the full User table — not the cashier/manager-filtered queryset — so an admin
+        targeting their own id gets the 403 safety message rather than a 404."""
+        valid_roles = [choice[0] for choice in User.ROLE_CHOICES]
+        new_role = str(request.data.get('role', '')).strip()
+        if new_role not in valid_roles:
+            return Response(
+                {'error': f'Invalid role. Choose from: {", ".join(valid_roles)}'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            user = User.objects.get(pk=pk)
+        except User.DoesNotExist:
+            return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+        if user.pk == request.user.pk and new_role != 'admin':
+            return Response(
+                {'error': 'You cannot change your own admin role (prevents lockout).'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        user.role = new_role
+        user.save(update_fields=['role'])
+        return Response({'id': user.pk, 'username': user.username, 'role': user.role})
 
     @action(detail=False, methods=['get'], permission_classes=[AllowAny],
             throttle_classes=[QuickLoginRateThrottle], url_path='quick-login')
