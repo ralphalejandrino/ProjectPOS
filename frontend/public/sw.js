@@ -1,4 +1,4 @@
-const CACHE_NAME = 'tarsierpos-v48'; // canonical cache version (v48: dialog canonicalization — ISSUE-085)
+const CACHE_NAME = 'tarsierpos-v49'; // canonical cache version (v49: invalidate stale settings.html missing role dropdown — ISSUE-096; markup added in ISSUE-089 but SW version was not bumped)
 const ASSETS = [
   'index.html',
   'login.html',
