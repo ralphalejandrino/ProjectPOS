@@ -17,12 +17,17 @@
 <body class="bg-gray-50" data-page="dashboard" style="visibility:hidden">
     <script>
         // FLAG-028: hide body until role check passes to prevent one-frame flash of manager-only UI
+        // ISSUE-066: cashier denial routes to friendly denied.html instead of silent index.html redirect
         (function () {
             const t = localStorage.getItem('access_token');
             if (!t) { window.location.replace('login.html'); return; }
             let role = null;
             try { role = JSON.parse(atob(t.split('.')[1])).role || null; } catch (e) {}
-            if (!role || role === 'cashier') { window.location.replace('index.html'); return; }
+            const allowedRoles = ['admin', 'manager'];
+            if (!role || !allowedRoles.includes(role)) {
+                window.location.replace('denied.html?from=' + encodeURIComponent(location.pathname));
+                return;
+            }
             document.body.style.visibility = '';
         })();
     </script>
@@ -190,8 +195,8 @@
             loadSiteName();
             // Role-gate: dashboard is manager/admin only
             const role = getUserRole();
-            if (!role || role === 'cashier') {
-                window.location.href = 'index.html';
+            if (!role || !['admin', 'manager'].includes(role)) {
+                window.location.replace('denied.html?from=' + encodeURIComponent(location.pathname));
                 return;
             }
             if (role === 'manager' || role === 'admin') {

@@ -26,7 +26,22 @@
     .tab-bar::-webkit-scrollbar { display: none; }
   </style>
 </head>
-<body class="bg-gray-50 min-h-screen font-sans" data-page="ingredients">
+<body class="bg-gray-50 min-h-screen font-sans" data-page="ingredients" style="visibility:hidden">
+<script>
+    // FLAG-028: hide body until role check passes to prevent one-frame flash of manager-only ingredients UI (ISSUE-087)
+    (function () {
+        const t = localStorage.getItem('access_token');
+        if (!t) { window.location.replace('login.html'); return; }
+        let role = null;
+        try { role = JSON.parse(atob(t.split('.')[1])).role || null; } catch (e) {}
+        const allowedRoles = ['admin', 'manager'];
+        if (!role || !allowedRoles.includes(role)) {
+            window.location.replace('denied.html?from=' + encodeURIComponent(location.pathname));
+            return;
+        }
+        document.body.style.visibility = '';
+    })();
+</script>
 
 <!-- NAVIGATION (FEATURE-029: canonical shared nav) -->
 <div id="nav-mount"></div>
@@ -523,10 +538,13 @@ async function apiFetch(path, options) {
 // ─── Auth & Init ─────────────────────────────────────────
 async function checkAuth() {
   const token = localStorage.getItem('access_token');
-  if (!token) { window.location.href = 'login.html'; return; }
+  if (!token) { window.location.replace('login.html'); return; }
   const role = getUserRole();
-  if (!role) { window.location.href = 'login.html'; return; }
-  if (role === 'cashier') { window.location.href = 'index.html'; return; }
+  if (!role) { window.location.replace('login.html'); return; }
+  if (!['admin', 'manager'].includes(role)) {
+    window.location.replace('denied.html?from=' + encodeURIComponent(location.pathname));
+    return;
+  }
   // Nav role gating + user info + tagline handled by components/nav.js
   loadSiteName();
   await loadInitialData();

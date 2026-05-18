@@ -15,8 +15,22 @@
     <script src="config.js"></script>
     <script src="components/nav.js"></script>
 </head>
-<body class="bg-gray-50" data-page="inventory">
-    <script>if (!localStorage.getItem('access_token')) { window.location.replace('login.html'); }</script>
+<body class="bg-gray-50" data-page="inventory" style="visibility:hidden">
+    <script>
+        // FLAG-028: hide body until role check passes to prevent one-frame flash of manager-only inventory UI (ISSUE-087)
+        (function () {
+            const t = localStorage.getItem('access_token');
+            if (!t) { window.location.replace('login.html'); return; }
+            let role = null;
+            try { role = JSON.parse(atob(t.split('.')[1])).role || null; } catch (e) {}
+            const allowedRoles = ['admin', 'manager'];
+            if (!role || !allowedRoles.includes(role)) {
+                window.location.replace('denied.html?from=' + encodeURIComponent(location.pathname));
+                return;
+            }
+            document.body.style.visibility = '';
+        })();
+    </script>
 
     <!-- NAVIGATION (FEATURE-029: canonical shared nav) -->
     <div id="nav-mount"></div>
@@ -310,8 +324,8 @@
         document.addEventListener('DOMContentLoaded', async () => {
             loadSiteName();
             const role = getUserRole();
-            if (!role || role === 'cashier') {
-                window.location.href = 'index.html';
+            if (!role || !['admin', 'manager'].includes(role)) {
+                window.location.replace('denied.html?from=' + encodeURIComponent(location.pathname));
                 return;
             }
             // Show manage categories button for managers and admins
