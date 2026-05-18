@@ -1,4 +1,4 @@
-const CACHE_NAME = 'tarsierpos-v50'; // canonical cache version (v50: FEATURE-033 — touch targets, denied.html, pre-paint role guards)
+const CACHE_NAME = 'tarsierpos-v51'; // canonical cache version (v51: ISSUE-100 — settings admin-only guard, more touch targets)
 const ASSETS = [
   'index.html',
   'login.html',
