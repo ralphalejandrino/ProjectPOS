@@ -824,7 +824,7 @@
                 document.body.appendChild(el);
             }
             el.textContent = msg;
-            el.style.background = type === 'success' ? '#16a34a' : '#dc2626';
+            el.style.background = type === 'success' ? 'var(--color-success)' : 'var(--color-danger)';
             el.style.color = '#fff';
             el.style.opacity = '1';
             clearTimeout(el._timeout);

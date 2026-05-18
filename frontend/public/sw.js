@@ -1,4 +1,4 @@
-const CACHE_NAME = 'tarsierpos-v52'; // canonical cache version (v52: FLAG-060 — z-index ladder tokens replace magic numbers)
+const CACHE_NAME = 'tarsierpos-v53'; // canonical cache version (v53: FLAG-061 — inline hex colors replaced with --color-* tokens)
 const ASSETS = [
   'index.html',
   'login.html',
