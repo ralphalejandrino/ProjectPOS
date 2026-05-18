@@ -1,4 +1,4 @@
-const CACHE_NAME = 'tarsierpos-v54'; // canonical cache version (v54: FLAG-061 — inline px radii replaced with --radius-* tokens)
+const CACHE_NAME = 'tarsierpos-v55'; // canonical cache version (v55: FLAG-062 — one-off modals: Escape/backdrop-click/focus normalization)
 const ASSETS = [
   'index.html',
   'login.html',

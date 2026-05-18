@@ -148,6 +148,71 @@
     });
   };
 
+  /* =========================================================
+   * One-off modal behavior — FLAG-062
+   * Normalizes Escape-to-close, backdrop-click-to-close, and
+   * focus-first-interactive across markup-driven modals
+   * (those defined in HTML and toggled via .hidden).
+   *
+   * Markup contract: add data-modal to the backdrop element. To
+   * route close through a page-specific cleanup function, also
+   * add data-modal-close="globalFunctionName". Without it the
+   * default close is `el.classList.add('hidden')`.
+   * ========================================================= */
+  function firstFocusable(container) {
+    const sel = 'input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled]), [tabindex]:not([tabindex="-1"])';
+    return container.querySelector(sel);
+  }
+
+  window.attachModalBehavior = function (el, opts) {
+    if (!el || el._modalBehaviorAttached) return;
+    opts = opts || {};
+    el._modalBehaviorAttached = true;
+    const close = typeof opts.onClose === 'function'
+      ? opts.onClose
+      : () => el.classList.add('hidden');
+
+    el.addEventListener('click', (e) => {
+      if (el.classList.contains('hidden')) return;
+      if (e.target === el) close();
+    });
+
+    let prevFocus = null;
+    const sync = () => {
+      const visible = !el.classList.contains('hidden');
+      if (visible && !el._modalOpen) {
+        el._modalOpen = true;
+        prevFocus = document.activeElement;
+        const f = firstFocusable(el);
+        if (f) setTimeout(() => f.focus(), 0);
+      } else if (!visible && el._modalOpen) {
+        el._modalOpen = false;
+        if (prevFocus && prevFocus.focus) prevFocus.focus();
+      }
+    };
+    new MutationObserver(sync).observe(el, { attributes: true, attributeFilter: ['class'] });
+    sync();
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && el._modalOpen) close();
+    });
+  };
+
+  function autoRegisterModals() {
+    document.querySelectorAll('[data-modal]').forEach((el) => {
+      const fnName = el.getAttribute('data-modal-close');
+      const onClose = fnName && typeof window[fnName] === 'function'
+        ? window[fnName]
+        : null;
+      window.attachModalBehavior(el, onClose ? { onClose } : {});
+    });
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', autoRegisterModals);
+  } else {
+    autoRegisterModals();
+  }
+
   const TOAST_ICONS = { info: 'ℹ️', success: '✅', warning: '⚠️', danger: '❌' };
   const SEVERITY_ALIASES = { error: 'danger', warn: 'warning' };
 

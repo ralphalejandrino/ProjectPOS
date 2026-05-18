@@ -150,7 +150,7 @@
     </div>
 
     <!-- MODAL: ADD/EDIT PRODUCT -->
-    <div id="product-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center" style="z-index: var(--z-modal);">
+    <div id="product-modal" data-modal data-modal-close="closeProductModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center" style="z-index: var(--z-modal);">
         <div class="bg-white rounded-lg shadow-2xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
             <div class="p-6 border-b border-gray-200">
                 <h3 class="text-2xl font-bold text-gray-800" id="modal-title">Add Product</h3>
@@ -271,7 +271,7 @@
     </div>
 
     <!-- MODAL: ADJUST STOCK -->
-    <div id="adjust-stock-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center" style="z-index: var(--z-modal);">
+    <div id="adjust-stock-modal" data-modal data-modal-close="closeAdjustStockModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center" style="z-index: var(--z-modal);">
         <div class="bg-white rounded-lg shadow-2xl p-8 max-w-md w-full mx-4">
             <h3 class="text-2xl font-bold mb-4 text-gray-800">📦 Adjust Stock</h3>
             
@@ -1284,7 +1284,7 @@
     </script>
 
     <!-- Category Management Modal -->
-    <div id="category-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center p-4" style="z-index: var(--z-modal);">
+    <div id="category-modal" data-modal data-modal-close="closeCategoryModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center p-4" style="z-index: var(--z-modal);">
         <div class="bg-white rounded-xl shadow-xl w-full max-w-2xl">
             <div class="px-6 py-4 border-b flex items-center justify-between">
                 <h3 class="text-lg font-bold text-gray-800">Manage Categories</h3>
@@ -1309,7 +1309,7 @@
     </div>
 
     <!-- Category Variant Groups Modal (Step 7) -->
-    <div id="cat-variant-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center p-4" style="z-index: var(--z-modal);">
+    <div id="cat-variant-modal" data-modal data-modal-close="closeCatVariantModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center p-4" style="z-index: var(--z-modal);">
         <div class="bg-white rounded-xl shadow-xl w-full max-w-md flex flex-col" style="max-height: 85vh;">
             <div class="px-6 py-4 border-b flex items-center justify-between flex-shrink-0">
                 <h3 class="text-lg font-bold text-gray-800" id="cat-variant-modal-title">Variant Groups for Category</h3>
@@ -1327,7 +1327,7 @@
     </div>
 
     <!-- Manage Variants Modal -->
-    <div id="manage-variants-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center p-4" style="z-index: var(--z-modal);">
+    <div id="manage-variants-modal" data-modal class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center p-4" style="z-index: var(--z-modal);">
         <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
             <div class="flex items-center justify-between p-5 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
                 <h3 class="text-lg font-semibold text-gray-800 dark:text-white">Manage Variant Groups</h3>
@@ -1347,7 +1347,7 @@
     </div>
 
     <!-- Add Variant Group Modal (Step 6) -->
-    <div id="add-group-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center p-4" style="z-index: var(--z-modal);">
+    <div id="add-group-modal" data-modal data-modal-close="closeAddGroupModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center p-4" style="z-index: var(--z-modal);">
         <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-md flex flex-col" style="max-height: 85vh;">
             <div class="flex items-center justify-between p-5 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
                 <h3 class="text-lg font-semibold text-gray-800 dark:text-white" id="add-group-modal-title">Add Variant Group</h3>
@@ -1383,7 +1383,7 @@
     </div>
 
     <!-- Add Option Modal (Step 6) -->
-    <div id="add-option-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center p-4" style="z-index: var(--z-modal);">
+    <div id="add-option-modal" data-modal data-modal-close="closeAddOptionModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center p-4" style="z-index: var(--z-modal);">
         <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-sm flex flex-col" style="max-height: 85vh;">
             <div class="flex items-center justify-between p-5 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
                 <h3 class="text-lg font-semibold text-gray-800 dark:text-white" id="add-option-modal-title">Add Option</h3>
