@@ -1,4 +1,4 @@
-const CACHE_NAME = 'tarsierpos-v55'; // canonical cache version (v55: FLAG-062 — one-off modals: Escape/backdrop-click/focus normalization)
+const CACHE_NAME = 'tarsierpos-v56'; // canonical cache version (v56: ISSUE-088 — payment complete modal tagged for data-modal auto-register)
 const ASSETS = [
   'index.html',
   'login.html',
