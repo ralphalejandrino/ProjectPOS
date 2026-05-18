@@ -1,4 +1,4 @@
-const CACHE_NAME = 'tarsierpos-v49'; // canonical cache version (v49: invalidate stale settings.html missing role dropdown — ISSUE-096; markup added in ISSUE-089 but SW version was not bumped)
+const CACHE_NAME = 'tarsierpos-v50'; // canonical cache version (v50: FEATURE-033 — touch targets, denied.html, pre-paint role guards)
 const ASSETS = [
   'index.html',
   'login.html',
@@ -8,6 +8,7 @@ const ASSETS = [
   'settings.html',
   'xreport.html',
   'zreport.html',
+  'denied.html',
   'app.js',
   'config.js',
   'dashboard.js',
