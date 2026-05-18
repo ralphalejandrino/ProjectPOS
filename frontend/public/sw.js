@@ -1,4 +1,4 @@
-const CACHE_NAME = 'tarsierpos-v57'; // canonical cache version (v57: ISSUE-101 — correct GCash #1973fa / Maya #2ff19e brand hex)
+const CACHE_NAME = 'tarsierpos-v58'; // canonical cache version (v58: ISSUE-101 follow-up / ISSUE-102 — revert Maya button to black, apply brand accents inside Maya/GCash modals)
 const ASSETS = [
   'index.html',
   'login.html',

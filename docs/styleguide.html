@@ -810,7 +810,7 @@
       <div class="row" style="flex-direction:column;align-items:stretch;max-width:320px">
         <button class="btn btn-lg btn-success" style="width:100%">Cash</button>
         <button class="btn btn-lg" style="width:100%;background:#ffffff;border:2px solid #1973fa;color:#1973fa;font-weight:800">GCash</button>
-        <button class="btn btn-lg" style="width:100%;background:#2ff19e;color:#fff;border:2px solid #2ff19e;font-weight:800">Maya</button>
+        <button class="btn btn-lg" style="width:100%;background:#000000;color:#fff;border:2px solid #000000;font-weight:800">Maya</button>
         <button class="btn btn-lg" style="width:100%;background:var(--color-surface);color:var(--color-ink-muted);border:1px solid var(--color-border)" disabled>VISA &nbsp; MC &nbsp; <span style="font-size:var(--text-xs);font-weight:400">(Coming Soon)</span></button>
       </div>
 <pre><code>&lt;button class="btn btn-md btn-primary"&gt;Primary&lt;/button&gt;
@@ -1030,16 +1030,16 @@ window.toast('Synced');  // info default</code></pre>
           <h3>GCash Payment</h3>
           <p style="color:var(--color-ink-muted);font-size:var(--text-sm)">Ask customer to scan:</p>
           <div style="width:160px;height:160px;background:var(--color-ink);color:#fff;border-radius:var(--radius-sm);margin:var(--space-3) auto;display:flex;align-items:center;justify-content:center;font-size:var(--text-xs)">[QR]</div>
-          <p style="font-size:var(--text-2xl);font-weight:800;color:var(--color-primary);margin:0 0 var(--space-3)">₱315.00</p>
+          <p style="font-size:var(--text-2xl);font-weight:800;color:#1973fa;margin:0 0 var(--space-3)">₱315.00</p>
           <input class="input" placeholder="Customer phone (optional)" style="width:100%;text-align:center;margin-bottom:var(--space-2)">
           <input class="input" placeholder="Enter GCash reference number" style="width:100%;text-align:center;margin-bottom:var(--space-3)">
           <div class="dlg-actions">
             <button class="btn btn-md btn-secondary" style="flex:1">Cancel</button>
-            <button class="btn btn-md btn-primary" style="flex:1">Confirm</button>
+            <button class="btn btn-md" style="flex:1;background:#1973fa;color:#fff">Confirm</button>
           </div>
         </div>
       </div>
-      <p class="note">Live markup: <code>index.html:906–973</code>. QR loaded from <code>${PAYMENTS_API}/config/gcash/</code>; falls back to "No QR uploaded" message.</p>
+      <p class="note">Live markup: <code>index.html:906–973</code>. QR loaded from <code>${PAYMENTS_API}/config/gcash/</code>; falls back to "No QR uploaded" message. Confirm button and total use the GCash brand blue <code>#1973fa</code> as an inline sanctioned brand-color exception.</p>
     </div>
 
     <!-- ============================================== -->
@@ -1050,16 +1050,16 @@ window.toast('Synced');  // info default</code></pre>
           <h3>Maya Payment</h3>
           <p style="color:var(--color-ink-muted);font-size:var(--text-sm)">Ask customer to scan:</p>
           <div style="width:160px;height:160px;background:var(--color-ink);color:#fff;border-radius:var(--radius-sm);margin:var(--space-3) auto;display:flex;align-items:center;justify-content:center;font-size:var(--text-xs)">[QR]</div>
-          <p style="font-size:var(--text-2xl);font-weight:800;color:#6b21a8;margin:0 0 var(--space-3)">₱315.00</p>
+          <p style="font-size:var(--text-2xl);font-weight:800;color:#059669;margin:0 0 var(--space-3)">₱315.00</p>
           <input class="input" placeholder="Customer phone (optional)" style="width:100%;text-align:center;margin-bottom:var(--space-2)">
           <input class="input" placeholder="Enter Maya reference number" style="width:100%;text-align:center;margin-bottom:var(--space-3)">
           <div class="dlg-actions">
             <button class="btn btn-md btn-secondary" style="flex:1">Cancel</button>
-            <button class="btn btn-md" style="flex:1;background:#6b21a8;color:#fff">Confirm</button>
+            <button class="btn btn-md" style="flex:1;background:#2ff19e;color:#1f2937">Confirm</button>
           </div>
         </div>
       </div>
-      <p class="note">Live markup: <code>index.html:976–1043</code>. Confirm button uses Maya brand purple (one of the few sanctioned brand-color exceptions).</p>
+      <p class="note">Live markup: <code>index.html:976–1043</code>. Confirm button uses Maya brand mint green <code>#2ff19e</code> with dark text (<code>--color-ink</code>) — bright-on-white green fails WCAG, so the on-white total amount uses the darker derived <code>#059669</code> (emerald-600) instead.</p>
     </div>
 
     <!-- ============================================== -->

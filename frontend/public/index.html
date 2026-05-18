@@ -125,7 +125,7 @@
                     <button id="btn-gcash" onclick="showGCashModal()" class="touch-target-pos w-full font-bold py-3 rounded-lg transition flex items-center justify-center" style="background-color:#ffffff; border: 2px solid #1973fa;">
                         <img src="assets/gcash-logo.png" alt="GCash" style="height:36px; width:auto; max-width:85%; object-fit:contain;">
                     </button>
-                    <button id="btn-maya" onclick="showMayaModal()" class="touch-target-pos w-full font-bold py-3 rounded-lg transition flex items-center justify-center" style="background-color:#2ff19e; border: 2px solid #2ff19e;">
+                    <button id="btn-maya" onclick="showMayaModal()" class="touch-target-pos w-full font-bold py-3 rounded-lg transition flex items-center justify-center" style="background-color:#000000; border: 2px solid #000000;">
                         <img src="assets/maya-logo.png" alt="Maya" style="height:36px; width:auto; max-width:85%; object-fit:contain;">
                     </button>
                     <button disabled class="touch-target-pos w-full bg-white text-gray-400 font-bold py-3 rounded-lg border border-gray-200 cursor-not-allowed flex items-center justify-center">VISA &nbsp; MC &nbsp; <span class="text-xs font-normal">(Coming Soon)</span></button>
@@ -911,7 +911,7 @@
                 <img id="gcash-qr-display" src="" alt="GCash QR" class="w-48 h-48 object-contain mx-auto border rounded hidden">
                 <p id="gcash-qr-missing" class="text-red-500 text-sm">No QR uploaded. Go to Settings to upload.</p>
             </div>
-            <p class="text-2xl font-black text-blue-600 mb-4">₱<span id="gcash-total">0.00</span></p>
+            <p class="text-2xl font-black mb-4" style="color:#1973fa">₱<span id="gcash-total">0.00</span></p>
             <input type="tel" id="gcash-customer-phone" placeholder="Customer phone number (optional)"
                 class="w-full border rounded-lg p-2 mb-3 text-center">
             <input type="text" id="gcash-reference" placeholder="Enter GCash reference number"
@@ -967,7 +967,7 @@
 
             <div class="flex gap-2">
                 <button onclick="closeGCashModal()" class="flex-1 bg-gray-200 text-gray-700 py-2 rounded-lg">Cancel</button>
-                <button id="btn-confirm-gcash" onclick="completeGCashSale()" class="flex-1 bg-blue-600 text-white py-2 rounded-lg font-bold">Confirm</button>
+                <button id="btn-confirm-gcash" onclick="completeGCashSale()" class="flex-1 text-white py-2 rounded-lg font-bold" style="background-color:#1973fa">Confirm</button>
             </div>
         </div>
     </div>
@@ -981,7 +981,7 @@
                 <img id="maya-qr-display" src="" alt="Maya QR" class="w-48 h-48 object-contain mx-auto border rounded hidden">
                 <p id="maya-qr-missing" class="text-red-500 text-sm">No QR uploaded. Go to Settings to upload.</p>
             </div>
-            <p class="text-2xl font-black text-purple-600 mb-4">₱<span id="maya-total">0.00</span></p>
+            <p class="text-2xl font-black text-emerald-600 mb-4">₱<span id="maya-total">0.00</span></p>
             <input type="tel" id="maya-customer-phone" placeholder="Customer phone number (optional)"
                 class="w-full border rounded-lg p-2 mb-3 text-center">
             <input type="text" id="maya-reference" placeholder="Enter Maya reference number"
@@ -1037,7 +1037,7 @@
 
             <div class="flex gap-2">
                 <button onclick="closeMayaModal()" class="flex-1 bg-gray-200 text-gray-700 py-2 rounded-lg">Cancel</button>
-                <button id="btn-confirm-maya" onclick="completeMayaSale()" class="flex-1 bg-purple-600 text-white py-2 rounded-lg font-bold">Confirm</button>
+                <button id="btn-confirm-maya" onclick="completeMayaSale()" class="flex-1 text-gray-900 py-2 rounded-lg font-bold" style="background-color:#2ff19e">Confirm</button>
             </div>
         </div>
     </div>
