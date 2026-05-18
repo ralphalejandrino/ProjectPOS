@@ -1,4 +1,4 @@
-const CACHE_NAME = 'tarsierpos-v56'; // canonical cache version (v56: ISSUE-088 — payment complete modal tagged for data-modal auto-register)
+const CACHE_NAME = 'tarsierpos-v57'; // canonical cache version (v57: ISSUE-101 — correct GCash #1973fa / Maya #2ff19e brand hex)
 const ASSETS = [
   'index.html',
   'login.html',
