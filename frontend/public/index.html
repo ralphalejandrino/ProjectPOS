@@ -121,15 +121,15 @@
 
                 <!-- Payment Buttons (collapsed by default) -->
                 <div id="payments-section" class="px-4 pb-4 space-y-2 hidden">
-                    <button onclick="showCashModal()" class="w-full font-bold py-3 rounded-lg transition" style="background-color:#16a34a; color:#ffffff; border: 2px solid #15803d; font-size:20px; min-height:58px; height:58px;">Cash</button>
-                    <button id="btn-gcash" onclick="showGCashModal()" class="w-full font-bold py-3 rounded-lg transition flex items-center justify-center" style="background-color:#ffffff; border: 2px solid #0070E0; height:58px;">
+                    <button onclick="showCashModal()" class="touch-target-pos w-full font-bold py-3 rounded-lg transition" style="background: var(--color-success); color:#ffffff; border: 2px solid var(--color-success-hover); font-size:20px;">Cash</button>
+                    <button id="btn-gcash" onclick="showGCashModal()" class="touch-target-pos w-full font-bold py-3 rounded-lg transition flex items-center justify-center" style="background-color:#ffffff; border: 2px solid #0070E0;">
                         <img src="assets/gcash-logo.png" alt="GCash" style="height:36px; width:auto; max-width:85%; object-fit:contain;">
                     </button>
-                    <button id="btn-maya" onclick="showMayaModal()" class="w-full font-bold py-3 rounded-lg transition flex items-center justify-center" style="background-color:#000000; border: 2px solid #000000; height:58px;">
+                    <button id="btn-maya" onclick="showMayaModal()" class="touch-target-pos w-full font-bold py-3 rounded-lg transition flex items-center justify-center" style="background-color:#000000; border: 2px solid #000000;">
                         <img src="assets/maya-logo.png" alt="Maya" style="height:36px; width:auto; max-width:85%; object-fit:contain;">
                     </button>
-                    <button disabled class="w-full bg-white text-gray-400 font-bold py-3 rounded-lg border border-gray-200 cursor-not-allowed flex items-center justify-center" style="height:58px;">VISA &nbsp; MC &nbsp; <span class="text-xs font-normal">(Coming Soon)</span></button>
-                    <button id="btn-no-sale" onclick="noSale()" class="hidden w-full bg-amber-100 hover:bg-amber-200 text-amber-800 font-bold rounded-lg border border-amber-300 transition" style="font-size:20px; height:58px;">
+                    <button disabled class="touch-target-pos w-full bg-white text-gray-400 font-bold py-3 rounded-lg border border-gray-200 cursor-not-allowed flex items-center justify-center">VISA &nbsp; MC &nbsp; <span class="text-xs font-normal">(Coming Soon)</span></button>
+                    <button id="btn-no-sale" onclick="noSale()" class="touch-target-pos hidden w-full bg-amber-100 hover:bg-amber-200 text-amber-800 font-bold rounded-lg border border-amber-300 transition" style="font-size:20px;">
                         No Sale
                     </button>
                 </div>
@@ -155,11 +155,11 @@
             </div>
 
             <div class="grid grid-cols-5 gap-2 mb-4">
-                <button onclick="addCashAmount(20)" class="bg-gray-100 hover:bg-gray-200 py-2 rounded font-medium text-sm">₱20</button>
-                <button onclick="addCashAmount(50)" class="bg-gray-100 hover:bg-gray-200 py-2 rounded font-medium text-sm">₱50</button>
-                <button onclick="addCashAmount(100)" class="bg-gray-100 hover:bg-gray-200 py-2 rounded font-medium text-sm">₱100</button>
-                <button onclick="addCashAmount(500)" class="bg-gray-100 hover:bg-gray-200 py-2 rounded font-medium text-sm">₱500</button>
-                <button onclick="addCashAmount(1000)" class="bg-gray-100 hover:bg-gray-200 py-2 rounded font-medium text-sm">₱1000</button>
+                <button onclick="addCashAmount(20)" class="touch-target-pos bg-gray-100 hover:bg-gray-200 py-2 rounded font-medium text-sm">₱20</button>
+                <button onclick="addCashAmount(50)" class="touch-target-pos bg-gray-100 hover:bg-gray-200 py-2 rounded font-medium text-sm">₱50</button>
+                <button onclick="addCashAmount(100)" class="touch-target-pos bg-gray-100 hover:bg-gray-200 py-2 rounded font-medium text-sm">₱100</button>
+                <button onclick="addCashAmount(500)" class="touch-target-pos bg-gray-100 hover:bg-gray-200 py-2 rounded font-medium text-sm">₱500</button>
+                <button onclick="addCashAmount(1000)" class="touch-target-pos bg-gray-100 hover:bg-gray-200 py-2 rounded font-medium text-sm">₱1000</button>
             </div>
 
             <div id="cash-insufficient" class="hidden bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
@@ -175,17 +175,17 @@
             <div id="cash-discount-section" class="hidden mt-3 pt-3 border-t border-gray-100">
                 <div class="flex gap-2 mb-3" id="cash-discount-type-buttons">
                     <button id="cash-btn-sc" onclick="selectDiscountType('cash','sc')"
-                            class="hidden flex-1 py-1.5 text-xs font-semibold border-2 border-gray-300
+                            class="touch-target-pos hidden flex-1 py-1.5 text-xs font-semibold border-2 border-gray-300
                                    rounded-lg text-gray-600 hover:border-blue-400 hover:text-blue-600 transition">
                         👴 Senior Citizen
                     </button>
                     <button id="cash-btn-pwd" onclick="selectDiscountType('cash','pwd')"
-                            class="hidden flex-1 py-1.5 text-xs font-semibold border-2 border-gray-300
+                            class="touch-target-pos hidden flex-1 py-1.5 text-xs font-semibold border-2 border-gray-300
                                    rounded-lg text-gray-600 hover:border-blue-400 hover:text-blue-600 transition">
                         ♿ PWD
                     </button>
                     <button id="cash-btn-promo" onclick="selectDiscountType('cash','promo')"
-                            class="hidden flex-1 py-1.5 text-xs font-semibold border-2 border-gray-300
+                            class="touch-target-pos hidden flex-1 py-1.5 text-xs font-semibold border-2 border-gray-300
                                    rounded-lg text-gray-600 hover:border-green-400 hover:text-green-600 transition">
                         🏷️ Discount
                     </button>
@@ -921,17 +921,17 @@
             <div id="gcash-discount-section" class="hidden mt-2 pt-3 border-t border-gray-100 text-left">
                 <div class="flex gap-2 mb-3">
                     <button id="gcash-btn-sc" onclick="selectDiscountType('gcash','sc')"
-                            class="hidden flex-1 py-1.5 text-xs font-semibold border-2 border-gray-300
+                            class="touch-target-pos hidden flex-1 py-1.5 text-xs font-semibold border-2 border-gray-300
                                    rounded-lg text-gray-600 hover:border-blue-400 hover:text-blue-600 transition">
                         👴 Senior Citizen
                     </button>
                     <button id="gcash-btn-pwd" onclick="selectDiscountType('gcash','pwd')"
-                            class="hidden flex-1 py-1.5 text-xs font-semibold border-2 border-gray-300
+                            class="touch-target-pos hidden flex-1 py-1.5 text-xs font-semibold border-2 border-gray-300
                                    rounded-lg text-gray-600 hover:border-blue-400 hover:text-blue-600 transition">
                         ♿ PWD
                     </button>
                     <button id="gcash-btn-promo" onclick="selectDiscountType('gcash','promo')"
-                            class="hidden flex-1 py-1.5 text-xs font-semibold border-2 border-gray-300
+                            class="touch-target-pos hidden flex-1 py-1.5 text-xs font-semibold border-2 border-gray-300
                                    rounded-lg text-gray-600 hover:border-green-400 hover:text-green-600 transition">
                         🏷️ Discount
                     </button>
@@ -991,17 +991,17 @@
             <div id="maya-discount-section" class="hidden mt-2 pt-3 border-t border-gray-100 text-left">
                 <div class="flex gap-2 mb-3">
                     <button id="maya-btn-sc" onclick="selectDiscountType('maya','sc')"
-                            class="hidden flex-1 py-1.5 text-xs font-semibold border-2 border-gray-300
+                            class="touch-target-pos hidden flex-1 py-1.5 text-xs font-semibold border-2 border-gray-300
                                    rounded-lg text-gray-600 hover:border-blue-400 hover:text-blue-600 transition">
                         👴 Senior Citizen
                     </button>
                     <button id="maya-btn-pwd" onclick="selectDiscountType('maya','pwd')"
-                            class="hidden flex-1 py-1.5 text-xs font-semibold border-2 border-gray-300
+                            class="touch-target-pos hidden flex-1 py-1.5 text-xs font-semibold border-2 border-gray-300
                                    rounded-lg text-gray-600 hover:border-blue-400 hover:text-blue-600 transition">
                         ♿ PWD
                     </button>
                     <button id="maya-btn-promo" onclick="selectDiscountType('maya','promo')"
-                            class="hidden flex-1 py-1.5 text-xs font-semibold border-2 border-gray-300
+                            class="touch-target-pos hidden flex-1 py-1.5 text-xs font-semibold border-2 border-gray-300
                                    rounded-lg text-gray-600 hover:border-green-400 hover:text-green-600 transition">
                         🏷️ Discount
                     </button>

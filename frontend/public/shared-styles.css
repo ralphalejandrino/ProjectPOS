@@ -80,6 +80,10 @@
     box-shadow: var(--shadow-raised);
 }
 
+/* Touch-target enforcement (ISSUE-086) — WCAG 2.5.5 + POS hot-path uplift */
+.touch-target     { min-height: var(--touch-min);     min-width: var(--touch-min); }
+.touch-target-pos { min-height: var(--touch-min-pos); min-width: var(--touch-min-pos); }
+
 /* Force Apple emoji style on all platforms */
 body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
