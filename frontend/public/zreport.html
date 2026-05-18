@@ -30,7 +30,10 @@
             if (!t) { window.location.replace('login.html'); return; }
             let role = null;
             try { role = JSON.parse(atob(t.split('.')[1])).role || null; } catch (e) {}
-            if (!role || role === 'cashier') { window.location.replace('index.html'); return; }
+            if (!role || role === 'cashier') {
+                window.location.replace('denied.html?from=' + encodeURIComponent(location.pathname));
+                return;
+            }
             document.body.style.visibility = '';
         })();
     </script>
@@ -255,7 +258,7 @@
         document.addEventListener('DOMContentLoaded', () => {
             const role = getUserRole();
             if (role !== 'manager' && role !== 'admin') {
-                window.location.href = 'index.html';
+                window.location.replace('denied.html?from=' + encodeURIComponent(location.pathname));
                 return;
             }
 

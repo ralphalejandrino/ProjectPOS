@@ -118,7 +118,7 @@
             // Role gate: allow cashier AND manager/admin (xreport is cashier-accessible)
             const role = getUserRole();
             if (!role) {
-                window.location.href = 'login.html';
+                window.location.replace('login.html');
                 return;
             }
 
