@@ -3,7 +3,8 @@
 // Minimal alert helper — matches the dynamic modal pattern used in viewReceipt()
 function showDashboardAlert(message) {
     const modal = document.createElement('div');
-    modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4';
+    modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4';
+    modal.style.zIndex = 'var(--z-modal)';
     modal.innerHTML = `
         <div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full">
             <div class="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-5 text-center rounded-t-2xl">
@@ -248,7 +249,8 @@ async function viewReceipt(transactionId) {
         
         // Create modal
         const modal = document.createElement('div');
-        modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4';
+        modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4';
+    modal.style.zIndex = 'var(--z-modal)';
         modal.innerHTML = `
             <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[80vh] overflow-y-auto">
                 <div class="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-6 text-center">

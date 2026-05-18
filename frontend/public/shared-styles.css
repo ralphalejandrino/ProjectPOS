@@ -348,12 +348,8 @@ body {
 .rounded-tl-lg { border-top-left-radius: 0.5rem; }
 .rounded-tr-lg { border-top-right-radius: 0.5rem; }
 
-/* --- Z-index (arbitrary values) --- */
-.z-\[60\] { z-index: 60; }
-.z-\[9998\] { z-index: 9998; }
-.z-\[9999\] { z-index: 9999; }
-.z-\[10000\] { z-index: 10000; }
-.z-\[99999\] { z-index: 99999; }
+/* Z-index arbitrary utilities retired (FLAG-060). Use the semantic
+ * --z-* ladder via inline style="z-index: var(--z-modal);" etc. */
 
 /* --- Text colors --- */
 .text-gray-900 { --tw-text-opacity: 1; color: rgb(17 24 39 / var(--tw-text-opacity)); }

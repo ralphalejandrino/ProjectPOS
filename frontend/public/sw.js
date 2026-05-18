@@ -1,4 +1,4 @@
-const CACHE_NAME = 'tarsierpos-v51'; // canonical cache version (v51: ISSUE-100 — settings admin-only guard, more touch targets)
+const CACHE_NAME = 'tarsierpos-v52'; // canonical cache version (v52: FLAG-060 — z-index ladder tokens replace magic numbers)
 const ASSETS = [
   'index.html',
   'login.html',

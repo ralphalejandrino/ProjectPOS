@@ -82,7 +82,7 @@
     }).join('');
 
     mount.innerHTML = `
-      <nav class="nav-bar-gradient sticky top-0 z-50${printSafe ? ' no-print' : ''}">
+      <nav class="nav-bar-gradient sticky top-0${printSafe ? ' no-print' : ''}" style="z-index: var(--z-sticky);">
         <div class="container mx-auto px-4 py-3 flex justify-between items-center">
           <div class="flex items-center space-x-3">
             <span class="text-3xl">🍽️</span>
@@ -103,7 +103,7 @@
                 <span>☰ Menu</span>
                 <span id="menu-arrow">▼</span>
               </button>
-              <div id="dropdown-menu" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl z-50">
+              <div id="dropdown-menu" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl" style="z-index: var(--z-dropdown);">
                 ${linksHTML}
                 <a href="#" id="nav-logout" class="block px-4 py-3 text-red-600 hover:bg-red-50 rounded-b-lg">🚪 Logout</a>
               </div>

@@ -712,7 +712,7 @@
         // logout() is provided by config.js (awaits token blacklist, then location.replace)
     </script>
     <!-- VOID MODAL -->
-    <div id="void-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div id="void-modal" class="hidden fixed inset-0 flex items-center justify-center p-4" style="z-index: var(--z-modal);">
         <div class="absolute inset-0 bg-black bg-opacity-60 backdrop-blur-sm" onclick="closeVoidModal()"></div>
         <div class="relative bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden transform transition-all">
             <div class="bg-red-600 px-6 py-4 flex items-center justify-between">
@@ -740,7 +740,7 @@
     </div>
 
     <!-- TRANSACTION DETAIL MODAL -->
-    <div id="detail-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div id="detail-modal" class="hidden fixed inset-0 flex items-center justify-center p-4" style="z-index: var(--z-modal);">
         <div class="absolute inset-0 bg-black bg-opacity-60 backdrop-blur-sm" onclick="closeDetailModal()"></div>
         <div class="relative bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden transform transition-all">
             <div class="bg-blue-600 px-6 py-4 flex items-center justify-between">
