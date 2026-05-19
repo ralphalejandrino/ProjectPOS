@@ -15,3 +15,12 @@ db.sqlite3-shm
 db.sqlite3-wal
 certs/
 media/
+
+# ── Tool & runtime artifacts ─────────────────────
+.claude-flow/
+frontend/public/.claude-flow/
+logs/
+
+# ── DB backups (use backup_db.sh; don't commit) ──
+db.sqlite3.*.bak
+*.bak
