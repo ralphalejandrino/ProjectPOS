@@ -12,6 +12,7 @@
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="shared-styles.css">
     <script src="config.js"></script>
+    <script src="components/format.js"></script>
     <script src="components/nav.js"></script>
 </head>
 <body class="bg-gray-50" data-page="dashboard" style="visibility:hidden">
@@ -61,8 +62,8 @@
             <div class="bg-white rounded-lg shadow-lg p-6 border-l-4 border-blue-500">
                 <div class="flex items-center justify-between">
                     <div>
-                        <p class="text-sm text-gray-600 mb-1">This Month's Sales</p>
-                        <p id="today-sales" class="text-3xl font-bold text-blue-600">₱0</p>
+                        <p class="text-sm text-gray-600 mb-1">Today's Sales</p>
+                        <p id="today-sales" class="text-3xl font-bold text-blue-600">0</p>
                     </div>
                     <div class="text-5xl">💰</div>
                 </div>
@@ -72,7 +73,7 @@
                 <div class="flex items-center justify-between">
                     <div>
                         <p class="text-sm text-gray-600 mb-1">Total Revenue</p>
-                        <p id="total-revenue" class="text-3xl font-bold text-emerald-600">₱0</p>
+                        <p id="total-revenue" class="text-3xl font-bold text-emerald-600">0</p>
                     </div>
                     <div class="text-5xl">🏛️</div>
                 </div>
@@ -92,7 +93,7 @@
                 <div class="flex items-center justify-between">
                     <div>
                         <p class="text-sm text-gray-600 mb-1">Avg Transaction</p>
-                        <p id="avg-transaction" class="text-3xl font-bold text-purple-600">₱0</p>
+                        <p id="avg-transaction" class="text-3xl font-bold text-purple-600">0</p>
                     </div>
                     <div class="text-5xl">📈</div>
                 </div>
@@ -300,15 +301,15 @@
                 const response = await authenticatedFetch(`${API_BASE}/dashboard/`);
                 const data = await response.json();
                 
-                const monthSales = data.month.revenue;
+                const todaySales = data.today.revenue;
                 const totalRevenue = data.all_time.revenue;
-                const monthCount = data.month.transactions;
-                const avgTransaction = monthCount > 0 ? monthSales / monthCount : 0;
+                const todayCount = data.today.transactions;
+                const avgTransaction = todayCount > 0 ? todaySales / todayCount : 0;
 
-                document.getElementById('today-sales').textContent = `₱${monthSales.toFixed(2)}`;
-                document.getElementById('total-revenue').textContent = `₱${totalRevenue.toFixed(2)}`;
-                document.getElementById('today-transactions').textContent = monthCount;
-                document.getElementById('avg-transaction').textContent = `₱${avgTransaction.toFixed(2)}`;
+                document.getElementById('today-sales').textContent = formatCurrency(todaySales);
+                document.getElementById('total-revenue').textContent = formatCurrency(totalRevenue);
+                document.getElementById('today-transactions').textContent = todayCount;
+                document.getElementById('avg-transaction').textContent = formatCurrency(avgTransaction);
 
                 // Low stock count (remains separate or could be added to dashboard endpoint)
                 const itemsResponse = await authenticatedFetch(`${API_BASE}/items/`);
@@ -356,7 +357,7 @@
                             <td class="px-4 py-3 text-sm text-gray-600">${time}</td>
                             <td class="px-4 py-3 text-sm">${itemCount} items</td>
                             <td class="px-4 py-3">${paymentBadge}${discountBadge}</td>
-                            <td class="px-4 py-3 text-right font-medium">₱${parseFloat(t.total_amount).toFixed(2)}</td>
+                            <td class="px-4 py-3 text-right font-medium">${formatCurrency(parseFloat(t.total_amount))}</td>
                             <td class="px-4 py-3 text-center" onclick="event.stopPropagation()">
                                 ${t.void 
                                     ? '<span class="text-xs font-bold text-red-500 uppercase">Voided</span>'
@@ -393,7 +394,7 @@
                                 <span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-gray-100 text-gray-700 text-xs font-bold">${rank}</span>
                                 <div>
                                     <p class="font-medium text-gray-900">${escapeHtml(item.name)}</p>
-                                    <p class="text-sm text-gray-600">${item.quantity} sold today • ₱${parseFloat(item.revenue).toFixed(2)}</p>
+                                    <p class="text-sm text-gray-600">${item.quantity} sold today • ${formatCurrency(parseFloat(item.revenue))}</p>
                                 </div>
                             </div>
                         </div>
@@ -456,7 +457,7 @@
                             <span class="font-medium">${escapeHtml(item.name)}</span>
                             <span class="text-gray-500 ml-1">x${item.quantity}</span>
                         </div>
-                        <div class="text-gray-700">₱${(item.quantity * item.price).toFixed(2)}</div>
+                        <div class="text-gray-700">${formatCurrency(item.quantity * item.price)}</div>
                     </div>
                 `).join('');
 
@@ -466,11 +467,11 @@
                         return `
                             <div class="flex justify-between text-sm">
                                 <span class="text-gray-500">Cash Received:</span>
-                                <span class="text-gray-800">₱${t.cash_received ? parseFloat(t.cash_received).toFixed(2) : 'N/A'}</span>
+                                <span class="text-gray-800">${t.cash_received ? formatCurrency(t.cash_received) : 'N/A'}</span>
                             </div>
                             <div class="flex justify-between text-sm">
                                 <span class="text-gray-500">Change:</span>
-                                <span class="text-gray-800">₱${t.change_given ? parseFloat(t.change_given).toFixed(2) : 'N/A'}</span>
+                                <span class="text-gray-800">${t.change_given ? formatCurrency(t.change_given) : 'N/A'}</span>
                             </div>`;
                     } else if (method === 'gcash') {
                         return `
@@ -524,7 +525,7 @@
                     const rateStr = rate ? ` (${rate}%)` : '';
                     let html = `<div class="flex justify-between text-sm text-red-600 mt-1">
                             <span>${label}${rateStr}</span>
-                            <span>-₱${parseFloat(t.discount_amount).toFixed(2)}</span>
+                            <span>-${formatCurrency(parseFloat(t.discount_amount))}</span>
                         </div>`;
                     if (t.discount_id_number && (dtype === 'sc' || dtype === 'pwd')) {
                         html += `<div class="text-xs text-gray-500 mt-0.5">
@@ -563,12 +564,12 @@
                             ${(t.discount_amount && parseFloat(t.discount_amount) > 0) ? `
                             <div class="flex justify-between text-sm text-gray-600 mb-1">
                                 <span>Subtotal</span>
-                                <span>₱${(parseFloat(t.total_amount || t.total) + parseFloat(t.discount_amount)).toFixed(2)}</span>
+                                <span>${formatCurrency(parseFloat(t.total_amount || t.total) + parseFloat(t.discount_amount))}</span>
                             </div>` : ''}
                             ${discountHtml}
                             <div class="flex justify-between items-center">
                                 <span class="text-lg font-bold text-gray-800">Total</span>
-                                <span class="text-2xl font-black text-blue-600">₱${parseFloat(t.total_amount || t.total).toFixed(2)}</span>
+                                <span class="text-2xl font-black text-blue-600">${formatCurrency(parseFloat(t.total_amount || t.total))}</span>
                             </div>
                             ${t.void ? '<div class="mt-2 text-center py-1 bg-red-100 text-red-600 font-bold rounded uppercase tracking-widest text-sm">VOIDED</div>' : ''}
                             ${voidRow}
@@ -641,7 +642,7 @@
                         <div class="space-y-1">
                             <div class="flex items-center justify-between">
                                 <span class="text-sm font-medium text-gray-700">${icon} ${capitalizeFirst(method)}</span>
-                                <span class="text-sm font-bold text-gray-900">₱${amount.toFixed(2)}</span>
+                                <span class="text-sm font-bold text-gray-900">${formatCurrency(amount)}</span>
                             </div>
                             <div class="w-full bg-gray-200 rounded-full h-2">
                                 <div class="bg-blue-600 h-2 rounded-full" style="width: ${percentage}%"></div>
