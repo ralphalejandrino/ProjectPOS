@@ -1,4 +1,4 @@
-const CACHE_NAME = 'tarsierpos-v58'; // canonical cache version (v58: ISSUE-101 follow-up / ISSUE-102 — revert Maya button to black, apply brand accents inside Maya/GCash modals)
+const CACHE_NAME = 'tarsierpos-v59'; // canonical cache version (v59: BATCH 4 — ISSUE-079 currency formatter, ISSUE-082 dashboard today tile fix, FLAG-064 receipt parity, stray dashboard.js removed)
 const ASSETS = [
   'index.html',
   'login.html',
@@ -11,7 +11,7 @@ const ASSETS = [
   'denied.html',
   'app.js',
   'config.js',
-  'dashboard.js',
+  'components/format.js',
   'dialogs.js',
   'payments.js',
   'styles.css',
