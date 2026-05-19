@@ -1,4 +1,4 @@
-const CACHE_NAME = 'tarsierpos-v60'; // canonical cache version (v60: FEATURE-011-B — BusinessProfile BIR identity fields + Settings "BIR Compliance" card)
+const CACHE_NAME = 'tarsierpos-v61'; // canonical cache version (v61: FEATURE-011-D — Z-report rendering, close-shift UI, new endpoint switchover)
 const ASSETS = [
   'index.html',
   'login.html',

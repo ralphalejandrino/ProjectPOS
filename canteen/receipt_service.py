@@ -233,82 +233,138 @@ def print_receipt(transaction):
         return {'success': False, 'message': 'Printer error. Check connection.'}
 
 
-def print_zreport_summary(data):
-    """Print Z-report summary via ESC/POS. Returns status dict. Never raises."""
+def print_z_report(z_report):
+    """Print an immutable ZReport via ESC/POS thermal (58mm, PC437).
+
+    Reads ONLY from the frozen ``z_report`` instance — never from the
+    live BusinessProfile, never from live PosTransaction rows. This is
+    the FLAG-058 parity guarantee: the printed Z and the HTML Z are
+    rendered from the same immutable snapshot.
+
+    Returns True on success, False on any printer error (logged, never
+    raised — mirrors print_receipt's non-fatal contract).
+    """
     try:
         ip, port, profile = _get_printer()
         if not ip:
-            return {'success': False, 'message': 'Printer not configured.'}
-        ccode = profile.currency if profile else 'PHP'
+            logger.warning('Z-report print skipped: printer not configured.')
+            return False
+
+        # Currency is the ONLY value still allowed from BP-derived state,
+        # and even that is taken off the frozen ZReport snapshot.
+        ccode = z_report.currency or 'PHP'
         p = File(_get_usb_device_path() or '/dev/usb/lp1')
         p.set(font='b', align='left')
+
+        def rrow(label, val):
+            pad = RECEIPT_WIDTH - len(label) - len(val)
+            return label + ' ' * max(pad, 1) + val + '\n'
+
+        def money(val):
+            return format_currency(val, ccode)
+
         try:
+            # --- Header (frozen identity) ---
             p.set(align='center', bold=True, double_height=True, double_width=True)
-            p.text((profile.business_name if profile else 'Z-REPORT') + '\n')
+            p.text((z_report.business_name or 'Z-REPORT') + '\n')
             p.set(align='center', bold=False, double_height=False, double_width=False)
-            if profile and profile.tagline:
-                p.text(profile.tagline + '\n')
-            if profile and profile.receipt_header:
-                p.text(profile.receipt_header + '\n')
+            if z_report.business_address:
+                for line in z_report.business_address.strip().splitlines():
+                    line = line.strip()
+                    if line:
+                        p.text(line + '\n')
+            if z_report.business_tin:
+                p.text(f'TIN: {z_report.business_tin}\n')
+            if z_report.machine_identification_number:
+                p.text(f'MIN: {z_report.machine_identification_number}\n')
+            if z_report.machine_serial_number:
+                p.text(f'Serial: {z_report.machine_serial_number}\n')
+            if z_report.pos_accreditation_number:
+                p.text(f'Accreditation: {z_report.pos_accreditation_number}\n')
+            if z_report.pos_permit_number:
+                p.text(f'Permit: {z_report.pos_permit_number}\n')
+
+            # --- Z block ---
             p.text('-' * RECEIPT_WIDTH + '\n')
             p.set(align='center', bold=True)
-            p.text('Z-REPORT - END OF DAY\n')
+            p.text('Z REPORT\n')
             p.set(align='left', bold=False)
-            p.text(f"Date: {data.get('date', '')}\n")
-            if data.get('generated_by'):
-                p.text(f"By: {data['generated_by']}\n")
             p.text('-' * RECEIPT_WIDTH + '\n')
+            p.text(rrow(f'Z #: {z_report.z_counter}',
+                        f'Reset: {z_report.reset_counter}'))
+            p.text(f'Business Date: {z_report.business_date}\n')
+            started = z_report.started_at.strftime('%Y-%m-%d %H:%M')
+            finalized = z_report.finalized_at.strftime('%Y-%m-%d %H:%M')
+            p.text(f'Period: {started} - {finalized}\n')
+            p.text(f'Cashier: {z_report.cashier.username}\n')
+            p.text(rrow(f'From: {z_report.first_or_number or "-"}',
+                        f'To: {z_report.last_or_number or "-"}'))
+            p.text(f'Voided: {z_report.voided_count}\n')
+            for orn in (z_report.voided_or_numbers or []):
+                p.text(f'  VOID {orn}\n')
 
-            def rrow(label, val):
-                pad = RECEIPT_WIDTH - len(label) - len(val)
-                return label + ' ' * max(pad, 1) + val + '\n'
-
-            p.text(rrow('Gross Sales:', format_currency(data.get('gross_sales', 0), ccode)))
-            p.text(rrow('Voids:', format_currency(data.get('void_total', 0), ccode)))
+            # --- Sales summary ---
+            p.text('-' * RECEIPT_WIDTH + '\n')
+            p.text(rrow('Gross Sales:', money(z_report.gross_sales)))
+            p.text(rrow('Less Discounts:', money(-z_report.discount_total)))
+            if z_report.sc_discount_total:
+                p.text(rrow('  SC:', money(-z_report.sc_discount_total)))
+            if z_report.pwd_discount_total:
+                p.text(rrow('  PWD:', money(-z_report.pwd_discount_total)))
+            if z_report.promo_discount_total:
+                p.text(rrow('  Promo:', money(-z_report.promo_discount_total)))
             p.set(bold=True)
-            p.text(rrow('Net Sales:', format_currency(data.get('net_sales', 0), ccode)))
+            p.text(rrow('Net Sales:', money(z_report.net_sales)))
             p.set(bold=False)
-            p.text(rrow('Transactions:', str(data.get('transaction_count', 0))))
+            p.text(rrow('Vatable Sales:', money(z_report.vatable_sales)))
+            p.text(rrow('Output VAT:', money(z_report.output_vat)))
+            p.text(rrow('VAT-Exempt Sales:', money(z_report.vat_exempt_sales)))
+            p.text(rrow('Zero-Rated Sales:', money(z_report.zero_rated_sales)))
+
+            # --- Payments ---
             p.text('-' * RECEIPT_WIDTH + '\n')
-            for row in data.get('by_method', []):
-                method = {'cash': 'Cash', 'gcash': 'GCash', 'maya': 'Maya'}.get(
-                    row.get('payment_method', ''), row.get('payment_method', 'Other'))
-                p.text(rrow(f"  {method} ({row.get('count', 0)}):",
-                            format_currency(row.get('subtotal', 0), ccode)))
-            discount_breakdown = data.get('discount_breakdown', [])
-            if discount_breakdown:
-                p.text('-' * RECEIPT_WIDTH + '\n')
-                p.text('DISCOUNTS GIVEN:\n')
-                for d in discount_breakdown:
-                    label = d.get('label', d.get('type', 'Discount'))[:16]
-                    amount = float(d.get('total_discount', 0))
-                    p.text(rrow(label, format_currency(-amount, ccode)))
-                total_disc = float(data.get('total_discounts_given', 0))
-                p.text(rrow('Total', format_currency(-total_disc, ccode)))
+            p.text('PAYMENTS:\n')
+            labels = {'cash': 'Cash', 'gcash': 'GCash',
+                      'maya': 'Maya', 'card': 'Card'}
+            total_payments = Decimal('0')
+            for method, raw in (z_report.payment_breakdown or {}).items():
+                amt = Decimal(str(raw or 0))
+                if amt == 0:
+                    continue
+                total_payments += amt
+                p.text(rrow(f'  {labels.get(method, method.title())}:',
+                            money(amt)))
+            p.set(bold=True)
+            p.text(rrow('Total Payments:', money(total_payments)))
+            p.set(bold=False)
+
+            # --- Cash reconciliation ---
             p.text('-' * RECEIPT_WIDTH + '\n')
-            cash_expected = float(data.get('cash_expected', 0))
-            p.text(rrow('Cash Expected:', format_currency(cash_expected, ccode)))
-            if data.get('closing_cash') is not None:
-                closing_cash = float(data['closing_cash'])
-                over_short = closing_cash - cash_expected
-                p.text(rrow('Closing Cash:', format_currency(closing_cash, ccode)))
-                over_short_val = format_currency(over_short, ccode)
-                if over_short >= 0:
-                    over_short_val = '+' + over_short_val
-                p.text(rrow('Over/Short:', over_short_val))
-            else:
-                p.text('Over/Short: ________________\n')
+            p.text(rrow('Opening Cash:', money(z_report.opening_cash)))
+            p.text(rrow('Cash Collected:', money(z_report.cash_collected)))
+            p.text(rrow('Cash Expected:', money(z_report.cash_expected)))
+            if z_report.cash_counted is not None:
+                p.text(rrow('Cash Counted:', money(z_report.cash_counted)))
+            if z_report.over_short is not None:
+                os_val = money(z_report.over_short)
+                if z_report.over_short >= 0:
+                    os_val = '+' + os_val
+                p.text(rrow('Over/Short:', os_val))
+
+            # --- Footer ---
             p.text('-' * RECEIPT_WIDTH + '\n')
-            p.set(align='center')
-            if profile and profile.receipt_footer:
-                p.text(profile.receipt_footer + '\n')
+            p.set(bold=True)
+            p.text(rrow('Grand Total Sales:',
+                        money(z_report.grand_total_sales)))
+            p.set(bold=False, align='center')
+            p.text(f'Generated {finalized}\n')
             p.cut()
         finally:
             p.close()
-        return {'success': True, 'message': 'Z-report printed.'}
+        return True
     except Exception as e:
         logger.warning(f'Z-report print failed (non-fatal): {e}')
-        return {'success': False, 'message': 'Printer error. Check connection.'}
+        return False
 
 
 def print_xreport_summary(data):

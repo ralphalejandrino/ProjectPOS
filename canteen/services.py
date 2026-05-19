@@ -550,6 +550,7 @@ def close_shift_and_finalize_z(shift_id, cash_counted, cashier_user):
         cash_counted=counted,
         over_short=over_short,
         grand_total_sales=counter.grand_total,
+        currency=(bp.currency or 'PHP'),
         cashier=cashier_user,
     )
 

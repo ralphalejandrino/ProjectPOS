@@ -28,7 +28,7 @@ class Migration(migrations.Migration):
                 ('grand_total', models.DecimalField(decimal_places=2, default=0, max_digits=16)),
             ],
             options={
-                'constraints': [models.CheckConstraint(condition=models.Q(('pk', 1)), name='zcounter_singleton')],
+                'constraints': [models.CheckConstraint(check=models.Q(('pk', 1)), name='zcounter_singleton')],
             },
         ),
         migrations.CreateModel(

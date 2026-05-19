@@ -925,6 +925,12 @@ class ZReport(models.Model):
 
     grand_total_sales = models.DecimalField(max_digits=16, decimal_places=2, default=0)
 
+    # Currency snapshot — frozen at finalize time. ZReports are 10-year
+    # retained; reading currency from the live BusinessProfile at print
+    # time would silently rewrite historical Z output if currency ever
+    # changes. Display-only, but kept immutable for self-containment.
+    currency = models.CharField(max_length=8, default='PHP')
+
     cashier = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='z_reports'
     )

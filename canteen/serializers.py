@@ -564,6 +564,10 @@ class ZReportSerializer(serializers.ModelSerializer):
     no float precision is lost. Currency formatting is a presentation
     concern (Session D), not done here."""
 
+    cashier_username = serializers.CharField(
+        source='cashier.username', read_only=True
+    )
+
     class Meta:
         model = ZReport
         fields = '__all__'

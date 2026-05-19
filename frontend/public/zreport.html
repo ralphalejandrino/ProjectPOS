@@ -19,13 +19,12 @@
             .no-print { display: none !important; }
             nav { display: none !important; }
             body { background: white; }
-            .over-short-line { text-decoration: underline; }
         }
     </style>
 </head>
 <body class="bg-gray-50" data-page="zreport" style="visibility:hidden">
     <script>
-        // FLAG-028: hide body until role check passes to prevent flash of manager-only Z-report
+        // FLAG-028: hide body until role check passes
         (function () {
             const t = localStorage.getItem('access_token');
             if (!t) { window.location.replace('login.html'); return; }
@@ -39,537 +38,441 @@
         })();
     </script>
 
-    <!-- NAVIGATION (FEATURE-029: canonical shared nav) -->
     <div id="nav-mount"></div>
     <script>renderNav({ activePage: 'zreport', printSafe: true });</script>
 
-    <!-- MAIN CONTENT -->
     <div class="container mx-auto px-4 py-6 max-w-4xl">
 
-        <!-- SECTION A — Header bar -->
+        <!-- HEADER BAR -->
         <div class="flex items-center justify-between mb-6 no-print">
             <div>
                 <h2 class="text-2xl font-bold text-gray-800">📋 Z-Report</h2>
-                <p class="text-gray-500 text-sm mt-1" id="header-date-subtitle">End-of-day sales summary</p>
+                <p class="text-gray-500 text-sm mt-1" id="header-subtitle">Immutable end-of-shift Z reports</p>
             </div>
-            <div class="flex items-center space-x-2">
-                <input type="date" id="report-date"
-                    class="w-36 border border-gray-300 rounded-lg px-2 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                <button onclick="fetchReport()" class="border border-gray-300 hover:bg-gray-100 text-gray-700 px-3 py-2 rounded-lg text-sm font-medium transition">
-                    Load
-                </button>
-                <button onclick="thermalPrintZReport()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition">
-                    🖨️ Thermal Print
+            <div class="flex items-center space-x-2" id="detail-actions" style="display:none">
+                <a href="zreport.html" class="border border-gray-300 hover:bg-gray-100 text-gray-700 px-3 py-2 rounded-lg text-sm font-medium transition">← All Z-Reports</a>
+                <button onclick="printZ()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition">
+                    🖨️ Print Z
                 </button>
             </div>
         </div>
 
         <!-- CLOSE SHIFT PANEL -->
-        <div class="bg-orange-50 border border-orange-300 rounded-xl p-5 mb-6 no-print">
-            <h3 class="font-bold text-orange-800 mb-3">🔒 Close Current Shift</h3>
-            <div class="flex flex-col sm:flex-row gap-3 items-start sm:items-center flex-wrap">
-                <label class="text-sm text-orange-700 font-medium whitespace-nowrap">Closing Cash (₱):</label>
-                <input type="number" id="closing-cash-input" min="0" step="0.01" placeholder="0.00"
-                    class="border border-orange-300 rounded-lg px-3 py-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-orange-400 w-40">
-                <button onclick="closeShift()"
-                    class="bg-orange-600 hover:bg-orange-700 text-white font-bold px-5 py-2 rounded-lg transition whitespace-nowrap">
-                    🔒 Close Shift
-                </button>
-                <span id="close-shift-error" class="text-red-600 text-sm hidden"></span>
-                <span id="close-shift-success" class="text-green-700 text-sm hidden font-semibold"></span>
+        <div id="close-shift-panel" class="bg-orange-50 border border-orange-300 rounded-xl p-5 mb-6 no-print">
+            <h3 class="font-bold text-orange-800 mb-1">🔒 Close Current Shift</h3>
+            <p class="text-sm text-orange-700 mb-3">Closing a shift finalizes an immutable Z-Report. This cannot be undone.</p>
+            <div id="min-blank-banner" class="hidden bg-red-50 border border-red-300 text-red-700 rounded-lg p-3 mb-3 text-sm">
+                BIR identity not configured — shift close disabled.
+                Configure in <a href="settings.html" class="underline font-semibold">Settings → BIR Compliance</a>.
             </div>
+            <button id="close-shift-btn" onclick="openCloseModal()"
+                class="bg-orange-600 hover:bg-orange-700 text-white font-bold px-5 py-2 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed">
+                🔒 Close Shift
+            </button>
+            <span id="close-shift-msg" class="text-sm ml-3"></span>
         </div>
 
-        <!-- ERROR / EMPTY STATE -->
+        <!-- STATUS / ERROR -->
         <div id="report-error" class="hidden bg-red-50 border border-red-200 text-red-700 rounded-lg p-4 mb-6"></div>
         <div id="no-data-msg" class="hidden bg-yellow-50 border border-yellow-200 text-yellow-800 rounded-lg p-4 mb-6 text-center font-medium"></div>
 
-        <!-- REPORT OUTPUT -->
-        <div id="report-output" class="hidden">
+        <!-- LIST VIEW -->
+        <div id="list-view" class="hidden">
+            <div class="bg-white rounded-lg shadow-lg p-6 mb-4">
+                <div class="flex items-center justify-between mb-4 border-b pb-2 flex-wrap gap-2">
+                    <h3 class="text-lg font-bold text-gray-800">Finalized Z-Reports</h3>
+                    <div class="flex items-center space-x-2">
+                        <input type="date" id="filter-date"
+                            class="w-40 border border-gray-300 rounded-lg px-2 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <button onclick="applyFilter()" class="border border-gray-300 hover:bg-gray-100 text-gray-700 px-3 py-2 rounded-lg text-sm font-medium transition">Filter</button>
+                        <button onclick="clearFilter()" class="border border-gray-300 hover:bg-gray-100 text-gray-700 px-3 py-2 rounded-lg text-sm font-medium transition">Clear</button>
+                    </div>
+                </div>
+                <table class="w-full text-sm">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="text-left py-2 px-3 text-gray-600 font-semibold rounded-tl-lg">Z #</th>
+                            <th class="text-left py-2 px-3 text-gray-600 font-semibold">Business Date</th>
+                            <th class="text-left py-2 px-3 text-gray-600 font-semibold">Cashier</th>
+                            <th class="text-right py-2 px-3 text-gray-600 font-semibold">Net Sales</th>
+                            <th class="text-right py-2 px-3 text-gray-600 font-semibold rounded-tr-lg">Finalized</th>
+                        </tr>
+                    </thead>
+                    <tbody id="list-tbody"></tbody>
+                </table>
+                <div class="flex items-center justify-between mt-4 text-sm">
+                    <button id="prev-page" onclick="changePage(-1)" class="border border-gray-300 hover:bg-gray-100 text-gray-700 px-3 py-1.5 rounded-lg disabled:opacity-40" disabled>← Prev</button>
+                    <span id="page-info" class="text-gray-500"></span>
+                    <button id="next-page" onclick="changePage(1)" class="border border-gray-300 hover:bg-gray-100 text-gray-700 px-3 py-1.5 rounded-lg disabled:opacity-40" disabled>Next →</button>
+                </div>
+            </div>
+        </div>
 
-            <!-- SECTION B — Report header card -->
+        <!-- DETAIL VIEW -->
+        <div id="detail-view" class="hidden">
             <div class="bg-white rounded-lg shadow-lg p-6 mb-4 text-center">
-                <p id="rpt-biz-name" class="text-xl font-bold text-gray-800"></p>
-                <p class="text-lg font-bold text-gray-700 mt-1 tracking-widest">END OF DAY REPORT</p>
-                <div class="mt-3 text-sm text-gray-600 space-y-1">
-                    <p>Date: <span id="rpt-date" class="font-medium text-gray-800"></span>
-                       &nbsp;|&nbsp; Generated: <span id="rpt-generated-at" class="font-medium text-gray-800"></span>
-                       &nbsp;|&nbsp; By: <span id="rpt-generated-by" class="font-medium text-gray-800"></span></p>
-                    <p>Opening Txn #: <span id="rpt-opening-txn" class="font-medium text-gray-800"></span>
-                       &nbsp;|&nbsp; Closing Txn #: <span id="rpt-closing-txn" class="font-medium text-gray-800"></span></p>
-                    <p>First Sale: <span id="rpt-first-time" class="font-medium text-gray-800"></span>
-                       &nbsp;|&nbsp; Last Sale: <span id="rpt-last-time" class="font-medium text-gray-800"></span></p>
+                <p id="z-biz-name" class="text-xl font-bold text-gray-800"></p>
+                <p id="z-biz-address" class="text-sm text-gray-600"></p>
+                <p class="text-sm text-gray-600">TIN: <span id="z-tin" class="font-medium text-gray-800"></span></p>
+                <p class="text-sm text-gray-600">
+                    MIN: <span id="z-min" class="font-medium text-gray-800"></span>
+                    &nbsp;|&nbsp; Serial: <span id="z-serial" class="font-medium text-gray-800"></span>
+                </p>
+                <p class="text-sm text-gray-600">
+                    Accreditation: <span id="z-accr" class="font-medium text-gray-800"></span>
+                    <span id="z-permit-wrap" class="hidden">&nbsp;|&nbsp; Permit: <span id="z-permit" class="font-medium text-gray-800"></span></span>
+                </p>
+                <p class="text-lg font-bold text-gray-700 mt-3 tracking-widest">Z REPORT</p>
+                <div class="mt-2 text-sm text-gray-600 space-y-1">
+                    <p>Z #: <span id="z-counter" class="font-bold text-gray-800"></span>
+                       &nbsp;|&nbsp; Reset #: <span id="z-reset" class="font-medium text-gray-800"></span></p>
+                    <p>Business Date: <span id="z-bdate" class="font-medium text-gray-800"></span></p>
+                    <p>Period: <span id="z-period" class="font-medium text-gray-800"></span></p>
+                    <p>Cashier: <span id="z-cashier" class="font-medium text-gray-800"></span></p>
+                    <p>OR Range: <span id="z-or-range" class="font-medium text-gray-800"></span>
+                       &nbsp;|&nbsp; Voided: <span id="z-voided" class="font-medium text-gray-800"></span></p>
+                    <p id="z-voided-list-wrap" class="hidden text-xs text-gray-500"></p>
                 </div>
             </div>
 
-            <!-- SECTION C — Sales Summary card -->
             <div class="bg-white rounded-lg shadow-lg p-6 mb-4">
                 <h3 class="text-lg font-bold text-gray-800 mb-4 border-b pb-2">Sales Summary</h3>
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                    <div class="space-y-3">
-                        <div class="flex justify-between items-center">
-                            <span class="text-gray-600">Gross Sales</span>
-                            <span id="rpt-gross" class="font-medium text-gray-800"></span>
-                        </div>
-                        <div class="flex justify-between items-center">
-                            <span class="text-gray-600">Total Void Amount</span>
-                            <span id="rpt-void-total" class="font-medium text-red-600"></span>
-                        </div>
-                        <div class="flex justify-between items-center border-t pt-3">
-                            <span class="text-base font-bold text-gray-800">NET SALES</span>
-                            <span id="rpt-net-sales" class="text-xl font-bold text-blue-600"></span>
-                        </div>
-                    </div>
-                    <div class="space-y-3">
-                        <div class="flex justify-between items-center">
-                            <span class="text-gray-600">Total Transactions</span>
-                            <span id="rpt-tx-count" class="font-medium text-gray-800"></span>
-                        </div>
-                        <div class="flex justify-between items-center">
-                            <span class="text-gray-600">Total Items Sold</span>
-                            <span id="rpt-items-sold" class="font-medium text-gray-800"></span>
-                        </div>
-                        <div class="flex justify-between items-center">
-                            <span class="text-gray-600">Average Transaction</span>
-                            <span id="rpt-avg-txn" class="font-medium text-gray-800"></span>
-                        </div>
-                        <div class="flex justify-between items-center">
-                            <span class="text-gray-600">Busiest Hour</span>
-                            <span id="rpt-busiest-hour" class="font-medium text-gray-800"></span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- SECTION D — VAT Breakdown card -->
-            <div class="bg-white rounded-lg shadow-lg p-6 mb-4">
-                <h3 id="rpt-vat-header" class="text-lg font-bold text-gray-800 mb-4 border-b pb-2">VAT Breakdown</h3>
                 <div class="space-y-2 text-sm">
-                    <div class="flex justify-between items-center">
-                        <span class="text-gray-600">Net of VAT (VATable Sales)</span>
-                        <span id="rpt-net-of-vat" class="font-medium text-gray-800"></span>
-                    </div>
-                    <div class="flex justify-between items-center">
-                        <span class="text-gray-600">VAT-Exempt Sales (SC/PWD)</span>
-                        <span id="rpt-vat-exempt" class="font-medium text-gray-800"></span>
-                    </div>
-                    <div class="flex justify-between items-center">
-                        <span id="rpt-vat-amount-label" class="text-gray-600">VAT Amount</span>
-                        <span id="rpt-vat-amount" class="font-medium text-gray-800"></span>
-                    </div>
-                    <div class="flex justify-between items-center border-t pt-2 font-semibold">
-                        <span class="text-gray-800">Gross Sales (Total)</span>
-                        <span id="rpt-gross-vat" class="text-gray-800"></span>
-                    </div>
+                    <div class="flex justify-between"><span class="text-gray-600">Gross Sales</span><span id="z-gross" class="font-medium text-gray-800"></span></div>
+                    <div class="flex justify-between"><span class="text-gray-600">Less Discounts</span><span id="z-disc" class="font-medium text-red-600"></span></div>
+                    <div class="flex justify-between pl-4"><span class="text-gray-500">SC Discount</span><span id="z-disc-sc" class="text-gray-700"></span></div>
+                    <div class="flex justify-between pl-4"><span class="text-gray-500">PWD Discount</span><span id="z-disc-pwd" class="text-gray-700"></span></div>
+                    <div class="flex justify-between pl-4"><span class="text-gray-500">Promo Discount</span><span id="z-disc-promo" class="text-gray-700"></span></div>
+                    <div class="flex justify-between border-t pt-2"><span class="text-base font-bold text-gray-800">Net Sales</span><span id="z-net" class="text-xl font-bold text-blue-600"></span></div>
+                    <div class="flex justify-between"><span class="text-gray-600">Vatable Sales</span><span id="z-vatable" class="font-medium text-gray-800"></span></div>
+                    <div class="flex justify-between"><span class="text-gray-600">Output VAT</span><span id="z-vat" class="font-medium text-gray-800"></span></div>
+                    <div class="flex justify-between"><span class="text-gray-600">VAT-Exempt Sales</span><span id="z-vat-exempt" class="font-medium text-gray-800"></span></div>
+                    <div class="flex justify-between"><span class="text-gray-600">Zero-Rated Sales</span><span id="z-zero" class="font-medium text-gray-800"></span></div>
                 </div>
             </div>
 
-            <!-- SECTION E — Payment Methods card -->
             <div class="bg-white rounded-lg shadow-lg p-6 mb-4">
-                <h3 class="text-lg font-bold text-gray-800 mb-4 border-b pb-2">Payment Methods</h3>
+                <h3 class="text-lg font-bold text-gray-800 mb-4 border-b pb-2">Payments</h3>
                 <table class="w-full text-sm">
-                    <thead class="bg-gray-50">
-                        <tr>
-                            <th class="text-left py-2 px-3 text-gray-600 font-semibold rounded-tl-lg">Method</th>
-                            <th class="text-right py-2 px-3 text-gray-600 font-semibold">Transactions</th>
-                            <th class="text-right py-2 px-3 text-gray-600 font-semibold rounded-tr-lg">Amount</th>
-                        </tr>
-                    </thead>
-                    <tbody id="rpt-by-method"></tbody>
-                    <tfoot id="rpt-method-total" class="border-t-2 border-gray-300 font-bold bg-gray-50"></tfoot>
+                    <tbody id="z-payments"></tbody>
+                    <tfoot class="border-t-2 border-gray-300 font-bold bg-gray-50">
+                        <tr><td class="py-2 px-3 text-gray-800">Total Payments</td><td id="z-pay-total" class="py-2 px-3 text-right text-blue-700"></td></tr>
+                    </tfoot>
                 </table>
             </div>
 
-            <!-- SECTION F — Cash Management card -->
             <div class="bg-white rounded-lg shadow-lg p-6 mb-4">
-                <h3 class="text-lg font-bold text-gray-800 mb-4 border-b pb-2">Cash Management</h3>
-                <div class="space-y-3 text-sm">
-                    <div class="flex justify-between items-center">
-                        <span class="text-gray-600">Cash Expected in Drawer</span>
-                        <span id="rpt-cash-expected" class="font-medium text-gray-800"></span>
-                    </div>
-                    <div class="flex justify-between items-center">
-                        <span class="text-gray-600">Over / Short</span>
-                        <span class="over-short-line inline-block w-36 border-b-2 border-gray-400 text-transparent select-none print:border-gray-600">________</span>
-                    </div>
+                <h3 class="text-lg font-bold text-gray-800 mb-4 border-b pb-2">Cash Reconciliation</h3>
+                <div class="space-y-2 text-sm">
+                    <div class="flex justify-between"><span class="text-gray-600">Opening Cash</span><span id="z-open-cash" class="font-medium text-gray-800"></span></div>
+                    <div class="flex justify-between"><span class="text-gray-600">Cash Collected</span><span id="z-cash-coll" class="font-medium text-gray-800"></span></div>
+                    <div class="flex justify-between"><span class="text-gray-600">Cash Expected</span><span id="z-cash-exp" class="font-medium text-gray-800"></span></div>
+                    <div class="flex justify-between"><span class="text-gray-600">Cash Counted</span><span id="z-cash-cnt" class="font-medium text-gray-800"></span></div>
+                    <div class="flex justify-between border-t pt-2"><span class="font-bold text-gray-800">Over / Short</span><span id="z-over-short" class="font-bold"></span></div>
                 </div>
             </div>
 
-            <!-- SECTION G — Sales by Cashier card -->
-            <div class="bg-white rounded-lg shadow-lg p-6 mb-4">
-                <h3 class="text-lg font-bold text-gray-800 mb-4 border-b pb-2">Sales by Cashier</h3>
-                <table class="w-full text-sm">
-                    <thead class="bg-gray-50">
-                        <tr>
-                            <th class="text-left py-2 px-3 text-gray-600 font-semibold rounded-tl-lg">Cashier</th>
-                            <th class="text-right py-2 px-3 text-gray-600 font-semibold">Sales</th>
-                            <th class="text-right py-2 px-3 text-gray-600 font-semibold">Amount</th>
-                            <th class="text-right py-2 px-3 text-gray-600 font-semibold rounded-tr-lg">Voids</th>
-                        </tr>
-                    </thead>
-                    <tbody id="rpt-by-cashier"></tbody>
-                </table>
+            <div class="bg-white rounded-lg shadow-lg p-6 mb-4 text-center">
+                <p class="text-base font-bold text-gray-800">Grand Total Sales: <span id="z-grand" class="text-blue-700"></span></p>
+                <p class="text-xs text-gray-500 mt-1">Generated <span id="z-generated"></span></p>
             </div>
-
-            <!-- SECTION H — Top Selling Items card -->
-            <div class="bg-white rounded-lg shadow-lg p-6 mb-4">
-                <h3 class="text-lg font-bold text-gray-800 mb-4 border-b pb-2">Top Selling Items</h3>
-                <table class="w-full text-sm">
-                    <thead class="bg-gray-50">
-                        <tr>
-                            <th class="text-left py-2 px-3 text-gray-600 font-semibold rounded-tl-lg">#</th>
-                            <th class="text-left py-2 px-3 text-gray-600 font-semibold">Item</th>
-                            <th class="text-right py-2 px-3 text-gray-600 font-semibold">Units Sold</th>
-                            <th class="text-right py-2 px-3 text-gray-600 font-semibold rounded-tr-lg">Revenue</th>
-                        </tr>
-                    </thead>
-                    <tbody id="rpt-top-items"></tbody>
-                </table>
-            </div>
-
-            <!-- SECTION I — Void Summary card (always shown) -->
-            <div id="rpt-void-section" class="bg-white rounded-lg shadow-lg p-6 mb-4">
-                <div class="flex justify-between items-center mb-4 border-b pb-2">
-                    <h3 class="text-lg font-bold text-gray-800">Void Summary</h3>
-                    <div class="text-sm text-gray-600">
-                        <span id="rpt-void-count" class="font-semibold text-gray-800"></span> void(s) •
-                        <span id="rpt-void-total-i" class="font-semibold text-red-600"></span>
-                    </div>
-                </div>
-                <div id="rpt-void-list-wrap"></div>
-            </div>
-
-            <!-- SECTION J — Discount Summary (shown only when discounts exist) -->
-            <div id="rpt-discount-section" class="bg-white rounded-lg shadow-lg p-6 mb-4 hidden">
-                <div class="flex justify-between items-center mb-4 border-b pb-2">
-                    <h3 class="text-lg font-bold text-gray-800">Discounts Given</h3>
-                    <div id="rpt-discount-total-header" class="text-sm font-semibold text-red-600"></div>
-                </div>
-                <div id="rpt-discount-wrap"></div>
-            </div>
-
         </div>
-        <!-- /report-output -->
 
+    </div>
+
+    <!-- CLOSE SHIFT MODAL -->
+    <div id="close-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center" style="z-index: var(--z-modal);">
+        <div class="bg-white rounded-lg shadow-2xl p-8 max-w-md w-full mx-4">
+            <h3 class="text-2xl font-bold mb-2 text-gray-800">Close Shift</h3>
+            <p class="text-gray-600 mb-4 text-sm">Count the cash in the drawer and enter the total. A final, immutable Z-Report will be generated.</p>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Cash Counted</label>
+            <input type="number" id="cash-counted-input" min="0" step="0.01" placeholder="0.00"
+                class="w-full border border-gray-300 rounded-lg px-3 py-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-orange-400 mb-2">
+            <p id="modal-error" class="hidden text-red-600 text-sm mb-2"></p>
+            <div class="flex space-x-3 mt-4">
+                <button onclick="closeCloseModal()" class="flex-1 bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 rounded-lg transition">Cancel</button>
+                <button id="confirm-close-btn" onclick="submitClose()" class="flex-1 bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 rounded-lg transition">Close Shift</button>
+            </div>
+        </div>
     </div>
 
     <script src="dialogs.js"></script>
     <script>
-        // Role gate: cashiers cannot access this page
+        let zCurrency = 'PHP';
+        let listPage = 1;
+        let listNext = null, listPrev = null;
+        let currentZ = null;
+
+        function fmt(n) { return formatCurrency(parseFloat(n || 0), zCurrency); }
+        function showError(msg) {
+            const el = document.getElementById('report-error');
+            el.textContent = msg; el.classList.remove('hidden');
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
             const role = getUserRole();
             if (role !== 'manager' && role !== 'admin') {
                 window.location.replace('denied.html?from=' + encodeURIComponent(location.pathname));
                 return;
             }
-
-            // Default date to today
-            const today = new Date().toISOString().split('T')[0];
-            document.getElementById('report-date').value = today;
-
             loadSiteName();
             loadColorScheme();
-            // Menu toggle handled by components/nav.js
-            fetchReport();
+            checkBirIdentity();
+
+            const z = new URLSearchParams(location.search).get('z');
+            if (z) {
+                loadDetail(z);
+            } else {
+                document.getElementById('list-view').classList.remove('hidden');
+                loadList();
+            }
         });
 
-        let currentZReportData = null;
-
-        async function thermalPrintZReport() {
-            if (!currentZReportData) return;
+        // --- BIR identity precheck (close-shift gate) ---
+        async function checkBirIdentity() {
             try {
-                const payload = { ...currentZReportData };
-                const closingInput = document.getElementById('closing-cash-input');
-                if (closingInput && closingInput.value.trim() !== '') {
-                    payload.closing_cash = parseFloat(closingInput.value);
+                const res = await authenticatedFetch(`${API_BASE}/business/`);
+                if (!res.ok) return;
+                const bp = await res.json();
+                if (bp.currency) zCurrency = String(bp.currency).toUpperCase();
+                const minBlank = !bp.machine_identification_number;
+                if (minBlank) {
+                    document.getElementById('min-blank-banner').classList.remove('hidden');
+                    document.getElementById('close-shift-btn').disabled = true;
                 }
-                authenticatedFetch(`${API_BASE}/transactions/print_zreport/`, {
-                    method: 'POST',
-                    body: JSON.stringify(payload)
-                });
-            } catch(e) { /* non-fatal */ }
+            } catch (e) { /* non-fatal — leave button enabled, server re-checks */ }
         }
 
-        function fmt(n) {
-            return formatCurrency(parseFloat(n || 0));
+        // --- Close-shift modal flow ---
+        function openCloseModal() {
+            document.getElementById('cash-counted-input').value = '';
+            document.getElementById('modal-error').classList.add('hidden');
+            document.getElementById('close-modal').classList.remove('hidden');
+        }
+        function closeCloseModal() {
+            document.getElementById('close-modal').classList.add('hidden');
+        }
+        function modalErr(msg) {
+            const el = document.getElementById('modal-error');
+            el.textContent = msg; el.classList.remove('hidden');
         }
 
-        function fmtTime(isoStr) {
-            if (!isoStr) return '-';
-            return formatTS(isoStr);
-        }
-
-        function fmtBusiestHour(hour) {
-            if (hour === null || hour === undefined) return '-';
-            const prefs = (() => { try { return JSON.parse(localStorage.getItem('clock_prefs') || '{}'); } catch(e) { return {}; } })();
-            const use12 = prefs.format !== '24h';
-            const start = new Date(2000, 0, 1, hour, 0);
-            const end = new Date(2000, 0, 1, hour + 1, 0);
-            const opts = { hour: 'numeric', minute: '2-digit', hour12: use12 };
-            return start.toLocaleTimeString('en-PH', opts) + ' – ' + end.toLocaleTimeString('en-PH', opts);
-        }
-
-        function methodLabel(m) {
-            return { cash: 'Cash', gcash: 'GCash', maya: 'Maya', card: 'Card' }[m] || m || 'Unknown';
-        }
-
-        async function fetchReport() {
-            const dateInput = document.getElementById('report-date').value;
-            const errorEl = document.getElementById('report-error');
-            const noDataEl = document.getElementById('no-data-msg');
-            const outputEl = document.getElementById('report-output');
-
-            errorEl.classList.add('hidden');
-            noDataEl.classList.add('hidden');
-            outputEl.classList.add('hidden');
-
-            if (!dateInput) {
-                errorEl.textContent = 'Please select a date.';
-                errorEl.classList.remove('hidden');
+        async function submitClose() {
+            const raw = document.getElementById('cash-counted-input').value.trim();
+            const val = parseFloat(raw);
+            if (raw === '' || isNaN(val) || val < 0) {
+                modalErr('Enter a valid cash amount (0 or more).');
                 return;
             }
-
+            const btn = document.getElementById('confirm-close-btn');
+            btn.disabled = true;
             try {
-                const res = await authenticatedFetch(`${API_BASE}/transactions/zreport/?date=${dateInput}`);
-                if (!res.ok) {
-                    const text = await res.text();
-                    let msg = `HTTP ${res.status}`;
-                    try { const j = JSON.parse(text); msg = j.detail || j.error || msg; } catch {}
-                    console.error('zreport raw response:', text.slice(0, 300));
-                    throw new Error(msg);
-                }
-                const data = await res.json();
-
-                if (data.transaction_count === 0) {
-                    noDataEl.textContent = 'No transactions found for this date.';
-                    noDataEl.classList.remove('hidden');
+                // Resolve the current open shift to close.
+                const cur = await authenticatedFetch(`${API_BASE}/shifts/current/`);
+                const curData = await cur.json().catch(() => null);
+                if (!cur.ok || !curData || !curData.id) {
+                    modalErr('No open shift to close.');
+                    btn.disabled = false;
                     return;
                 }
-
-                renderReport(data);
-                document.getElementById('header-date-subtitle').textContent = `End-of-day summary for ${data.date}`;
-                outputEl.classList.remove('hidden');
-            } catch (err) {
-                errorEl.textContent = `Failed to load report: ${err.message}`;
-                errorEl.classList.remove('hidden');
+                const res = await authenticatedFetch(`${API_BASE}/shifts/${curData.id}/close/`, {
+                    method: 'POST',
+                    body: JSON.stringify({ cash_counted: val })
+                });
+                const data = await res.json().catch(() => ({}));
+                if (res.status === 201) {
+                    closeCloseModal();
+                    window.location.href = `zreport.html?z=${data.z_counter}`;
+                    return;
+                }
+                const errMsg = data.error || `Error ${res.status}`;
+                if (res.status === 400 && /MIN/.test(errMsg)) {
+                    closeCloseModal();
+                    document.getElementById('min-blank-banner').classList.remove('hidden');
+                    document.getElementById('close-shift-btn').disabled = true;
+                    const m = document.getElementById('close-shift-msg');
+                    m.textContent = 'BIR identity not configured — see Settings.';
+                    m.className = 'text-sm ml-3 text-red-600';
+                } else {
+                    modalErr(errMsg);
+                }
+                btn.disabled = false;
+            } catch (e) {
+                modalErr('Failed to close shift: ' + e.message);
+                btn.disabled = false;
             }
         }
 
-        function renderReport(data) {
-            currentZReportData = data;
-
-            // Section B — Report header
-            const bizName = (document.getElementById('site-name') || {}).textContent || '';
-            document.getElementById('rpt-biz-name').textContent = bizName;
-            document.getElementById('rpt-date').textContent = data.date;
-            if (data.generated_at) {
-                document.getElementById('rpt-generated-at').textContent = formatTS(data.generated_at);
-            }
-            document.getElementById('rpt-generated-by').textContent = data.generated_by || '-';
-            document.getElementById('rpt-opening-txn').textContent = data.opening_txn_no || '-';
-            document.getElementById('rpt-closing-txn').textContent = data.closing_txn_no || '-';
-            document.getElementById('rpt-first-time').textContent = fmtTime(data.first_txn_time);
-            document.getElementById('rpt-last-time').textContent = fmtTime(data.last_txn_time);
-
-            // Section C — Sales Summary
-            document.getElementById('rpt-gross').textContent = fmt(data.gross_sales);
-            document.getElementById('rpt-void-total').textContent = fmt(data.void_total);
-            document.getElementById('rpt-net-sales').textContent = fmt(data.net_sales);
-            document.getElementById('rpt-tx-count').textContent = data.transaction_count;
-            document.getElementById('rpt-items-sold').textContent = data.total_items_sold;
-            document.getElementById('rpt-avg-txn').textContent = fmt(data.average_transaction);
-            document.getElementById('rpt-busiest-hour').textContent = fmtBusiestHour(data.busiest_hour);
-
-            // Section D — VAT Breakdown
-            const vatMode = data.vat_inclusive === false ? 'Exclusive' : 'Inclusive';
-            const vatLabel = data.vat_rate != null
-                ? `VAT Breakdown (${data.vat_rate}% ${vatMode})`
-                : 'VAT Breakdown';
-            document.getElementById('rpt-vat-header').textContent = vatLabel;
-            const vatAmtLabel = data.vat_rate != null
-                ? `VAT Amount (${data.vat_rate}%)`
-                : 'VAT Amount';
-            document.getElementById('rpt-vat-amount-label').textContent = vatAmtLabel;
-            document.getElementById('rpt-net-of-vat').textContent = fmt(data.net_of_vat);
-            document.getElementById('rpt-vat-exempt').textContent = fmt(data.vat_exempt_sales || 0);
-            document.getElementById('rpt-vat-amount').textContent = fmt(data.vat_amount);
-            document.getElementById('rpt-gross-vat').textContent = fmt(data.gross_sales);
-
-            // Section E — Payment Methods
-            const methodTbody = document.getElementById('rpt-by-method');
-            const methodTfoot = document.getElementById('rpt-method-total');
-            methodTbody.innerHTML = (data.by_method || []).map(row => `
-                <tr class="border-b border-gray-100">
-                    <td class="py-2 px-3 text-gray-800">${methodLabel(row.payment_method)}</td>
-                    <td class="py-2 px-3 text-right text-gray-700">${row.count}</td>
-                    <td class="py-2 px-3 text-right font-medium text-gray-800">${fmt(row.subtotal)}</td>
-                </tr>
-            `).join('');
-            const totalSubtotal = (data.by_method || []).reduce((s, r) => s + (r.subtotal || 0), 0);
-            methodTfoot.innerHTML = `
-                <tr>
-                    <td class="py-2 px-3 text-gray-800">Total</td>
-                    <td class="py-2 px-3 text-right text-gray-800">${data.transaction_count}</td>
-                    <td class="py-2 px-3 text-right text-blue-700">${fmt(totalSubtotal)}</td>
-                </tr>
-            `;
-
-            // Section F — Cash Management
-            document.getElementById('rpt-cash-expected').textContent = fmt(data.cash_expected);
-
-            // Section G — Sales by Cashier
-            const cashierTbody = document.getElementById('rpt-by-cashier');
-            if (!data.by_cashier || data.by_cashier.length === 0) {
-                cashierTbody.innerHTML = '<tr><td colspan="4" class="py-4 text-center text-gray-400">No cashier data</td></tr>';
-            } else {
-                cashierTbody.innerHTML = data.by_cashier.map(row => `
-                    <tr class="border-b border-gray-100">
-                        <td class="py-2 px-3 text-gray-800">${escapeHtml(row.name)}</td>
-                        <td class="py-2 px-3 text-right text-gray-700">${row.count}</td>
-                        <td class="py-2 px-3 text-right font-medium text-gray-800">${fmt(row.subtotal)}</td>
-                        <td class="py-2 px-3 text-right text-red-500">${row.void_count}</td>
-                    </tr>
-                `).join('');
-            }
-
-            // Section H — Top Selling Items
-            const topTbody = document.getElementById('rpt-top-items');
-            if (!data.top_items || data.top_items.length === 0) {
-                topTbody.innerHTML = '<tr><td colspan="4" class="py-4 text-center text-gray-400">No items data</td></tr>';
-            } else {
-                topTbody.innerHTML = data.top_items.map((row, i) => `
-                    <tr class="border-b border-gray-100">
-                        <td class="py-2 px-3 text-gray-500">${i + 1}</td>
-                        <td class="py-2 px-3 text-gray-800">${escapeHtml(row.name)}</td>
-                        <td class="py-2 px-3 text-right text-gray-700">${row.units_sold}</td>
-                        <td class="py-2 px-3 text-right font-medium text-gray-800">${fmt(row.revenue)}</td>
-                    </tr>
-                `).join('');
-            }
-
-            // Section I — Void Summary (always shown)
-            document.getElementById('rpt-void-count').textContent = data.void_count;
-            document.getElementById('rpt-void-total-i').textContent = fmt(data.void_total);
-            const voidWrap = document.getElementById('rpt-void-list-wrap');
-            if (data.void_count > 0) {
-                const rows = (data.void_list || []).map(row => `
-                    <tr class="border-b border-gray-100">
-                        <td class="py-2 px-3 font-mono text-xs text-gray-700">${escapeHtml(row.transaction_no)}</td>
-                        <td class="py-2 px-3 text-right text-red-600 font-medium">${fmt(row.amount)}</td>
-                        <td class="py-2 px-3 text-gray-700">${escapeHtml(row.voided_by)}</td>
-                        <td class="py-2 px-3 text-right text-gray-500">${fmtTime(row.voided_at)}</td>
-                    </tr>`).join('');
-                voidWrap.innerHTML = `
-                    <table class="w-full text-sm">
-                        <thead class="bg-gray-50">
-                            <tr>
-                                <th class="text-left py-2 px-3 text-gray-600 font-semibold rounded-tl-lg">Txn #</th>
-                                <th class="text-right py-2 px-3 text-gray-600 font-semibold">Amount</th>
-                                <th class="text-left py-2 px-3 text-gray-600 font-semibold">Voided By</th>
-                                <th class="text-right py-2 px-3 text-gray-600 font-semibold rounded-tr-lg">Time</th>
-                            </tr>
-                        </thead>
-                        <tbody>${rows}</tbody>
-                    </table>`;
-            } else {
-                voidWrap.innerHTML = '<p class="text-sm text-gray-400 text-center py-2">No voids this shift.</p>';
-            }
-
-            // Section J — Discount Summary (only when discounts exist)
-            const discSection = document.getElementById('rpt-discount-section');
-            const totalDiscountsGiven = parseFloat(data.total_discounts_given) || 0;
-            if (totalDiscountsGiven > 0) {
-                document.getElementById('rpt-discount-total-header').textContent = `-${formatCurrency(totalDiscountsGiven)}`;
-                const discRows = (data.discount_breakdown || []).map(d => `
-                    <tr class="border-b border-gray-100">
-                        <td class="py-2 px-3 text-gray-800">${escapeHtml(d.label)}</td>
-                        <td class="py-2 px-3 text-right text-gray-700">${d.count}</td>
-                        <td class="py-2 px-3 text-right font-medium text-red-600">-${fmt(d.total_discount)}</td>
-                    </tr>`).join('');
-                document.getElementById('rpt-discount-wrap').innerHTML = `
-                    <table class="w-full text-sm">
-                        <thead class="bg-gray-50">
-                            <tr>
-                                <th class="text-left py-2 px-3 text-gray-600 font-semibold rounded-tl-lg">Type</th>
-                                <th class="text-right py-2 px-3 text-gray-600 font-semibold">Count</th>
-                                <th class="text-right py-2 px-3 text-gray-600 font-semibold rounded-tr-lg">Total</th>
-                            </tr>
-                        </thead>
-                        <tbody>${discRows}</tbody>
-                        <tfoot>
-                            <tr class="border-t border-gray-200 font-semibold">
-                                <td class="pt-2 px-3 text-gray-800">Total</td>
-                                <td></td>
-                                <td class="pt-2 px-3 text-right text-red-600">-${fmt(totalDiscountsGiven)}</td>
-                            </tr>
-                        </tfoot>
-                    </table>`;
-                discSection.classList.remove('hidden');
-            } else {
-                discSection.classList.add('hidden');
-            }
+        // --- List view ---
+        function applyFilter() { listPage = 1; loadList(); }
+        function clearFilter() {
+            document.getElementById('filter-date').value = '';
+            listPage = 1; loadList();
+        }
+        function changePage(delta) {
+            const url = delta < 0 ? listPrev : listNext;
+            if (!url) return;
+            loadList(url);
         }
 
-        async function voidTransaction(transactionId) {
+        async function loadList(absoluteUrl) {
+            const bd = document.getElementById('filter-date').value;
+            let url = absoluteUrl;
+            if (!url) {
+                url = `${API_BASE}/z-reports/?page=${listPage}`;
+                if (bd) url += `&business_date=${bd}`;
+            }
             try {
-                const res = await authenticatedFetch(`${API_BASE}/transactions/${transactionId}/void/`, {
+                const res = await authenticatedFetch(url);
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+                const rows = data.results || data;
+                const tbody = document.getElementById('list-tbody');
+                if (!rows.length) {
+                    tbody.innerHTML = '<tr><td colspan="5" class="py-6 text-center text-gray-400">No Z-Reports found.</td></tr>';
+                } else {
+                    tbody.innerHTML = rows.map(r => `
+                        <tr class="border-b border-gray-100 hover:bg-gray-50 cursor-pointer" onclick="location.href='zreport.html?z=${r.z_counter}'">
+                            <td class="py-2 px-3 font-bold text-gray-800">Z-${String(r.z_counter).padStart(4,'0')}</td>
+                            <td class="py-2 px-3 text-gray-700">${escapeHtml(r.business_date)}</td>
+                            <td class="py-2 px-3 text-gray-700">${escapeHtml(r.cashier_username || '-')}</td>
+                            <td class="py-2 px-3 text-right font-medium text-gray-800">${formatCurrency(parseFloat(r.net_sales||0), (r.currency||'PHP'))}</td>
+                            <td class="py-2 px-3 text-right text-gray-500">${formatTS(r.finalized_at)}</td>
+                        </tr>`).join('');
+                }
+                listNext = data.next || null;
+                listPrev = data.previous || null;
+                document.getElementById('next-page').disabled = !listNext;
+                document.getElementById('prev-page').disabled = !listPrev;
+                document.getElementById('page-info').textContent =
+                    data.count != null ? `${data.count} report(s)` : '';
+            } catch (e) {
+                showError('Failed to load Z-Reports: ' + e.message);
+            }
+        }
+
+        // --- Detail view ---
+        async function loadDetail(zCounter) {
+            try {
+                const res = await authenticatedFetch(`${API_BASE}/z-reports/${zCounter}/`);
+                if (res.status === 404) {
+                    const nd = document.getElementById('no-data-msg');
+                    nd.textContent = `Z-Report #${zCounter} not found.`;
+                    nd.classList.remove('hidden');
+                    return;
+                }
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const z = await res.json();
+                renderDetail(z);
+            } catch (e) {
+                showError('Failed to load Z-Report: ' + e.message);
+            }
+        }
+
+        function renderDetail(z) {
+            currentZ = z;
+            zCurrency = (z.currency || 'PHP').toUpperCase();
+            document.getElementById('detail-view').classList.remove('hidden');
+            document.getElementById('detail-actions').style.display = '';
+            document.getElementById('header-subtitle').textContent =
+                `Z-${String(z.z_counter).padStart(4,'0')} • ${z.business_date}`;
+
+            // Header — all from the immutable snapshot, no DOM scraping.
+            document.getElementById('z-biz-name').textContent = z.business_name || '';
+            document.getElementById('z-biz-address').textContent = z.business_address || '';
+            document.getElementById('z-tin').textContent = z.business_tin || '-';
+            document.getElementById('z-min').textContent = z.machine_identification_number || '-';
+            document.getElementById('z-serial').textContent = z.machine_serial_number || '-';
+            document.getElementById('z-accr').textContent = z.pos_accreditation_number || '-';
+            if (z.pos_permit_number) {
+                document.getElementById('z-permit-wrap').classList.remove('hidden');
+                document.getElementById('z-permit').textContent = z.pos_permit_number;
+            }
+            document.getElementById('z-counter').textContent = z.z_counter;
+            document.getElementById('z-reset').textContent = z.reset_counter;
+            document.getElementById('z-bdate').textContent = z.business_date;
+            document.getElementById('z-period').textContent =
+                `${formatTS(z.started_at)} — ${formatTS(z.finalized_at)}`;
+            document.getElementById('z-cashier').textContent =
+                z.cashier_username || z.cashier || '-';
+            document.getElementById('z-or-range').textContent =
+                `${z.first_or_number || '-'} → ${z.last_or_number || '-'}`;
+            document.getElementById('z-voided').textContent = z.voided_count;
+            const vlist = z.voided_or_numbers || [];
+            if (vlist.length) {
+                const w = document.getElementById('z-voided-list-wrap');
+                w.textContent = 'Voided ORs: ' + vlist.join(', ');
+                w.classList.remove('hidden');
+            }
+
+            // Sales summary
+            document.getElementById('z-gross').textContent = fmt(z.gross_sales);
+            document.getElementById('z-disc').textContent = '-' + fmt(z.discount_total);
+            document.getElementById('z-disc-sc').textContent = '-' + fmt(z.sc_discount_total);
+            document.getElementById('z-disc-pwd').textContent = '-' + fmt(z.pwd_discount_total);
+            document.getElementById('z-disc-promo').textContent = '-' + fmt(z.promo_discount_total);
+            document.getElementById('z-net').textContent = fmt(z.net_sales);
+            document.getElementById('z-vatable').textContent = fmt(z.vatable_sales);
+            document.getElementById('z-vat').textContent = fmt(z.output_vat);
+            document.getElementById('z-vat-exempt').textContent = fmt(z.vat_exempt_sales);
+            document.getElementById('z-zero').textContent = fmt(z.zero_rated_sales);
+
+            // Payments — skip zero buckets
+            const labels = { cash: 'Cash', gcash: 'GCash', maya: 'Maya', card: 'Card' };
+            const pb = z.payment_breakdown || {};
+            let total = 0;
+            const rows = Object.keys(pb).map(k => {
+                const amt = parseFloat(pb[k] || 0);
+                if (amt === 0) return '';
+                total += amt;
+                return `<tr class="border-b border-gray-100">
+                    <td class="py-2 px-3 text-gray-700">${labels[k] || k}</td>
+                    <td class="py-2 px-3 text-right font-medium text-gray-800">${fmt(amt)}</td></tr>`;
+            }).join('');
+            document.getElementById('z-payments').innerHTML =
+                rows || '<tr><td colspan="2" class="py-3 text-center text-gray-400">No payments</td></tr>';
+            document.getElementById('z-pay-total').textContent = fmt(total);
+
+            // Cash reconciliation
+            document.getElementById('z-open-cash').textContent = fmt(z.opening_cash);
+            document.getElementById('z-cash-coll').textContent = fmt(z.cash_collected);
+            document.getElementById('z-cash-exp').textContent = fmt(z.cash_expected);
+            document.getElementById('z-cash-cnt').textContent =
+                z.cash_counted != null ? fmt(z.cash_counted) : '—';
+            const osEl = document.getElementById('z-over-short');
+            if (z.over_short != null) {
+                const os = parseFloat(z.over_short);
+                osEl.textContent = (os >= 0 ? '+' : '') + fmt(os);
+                osEl.className = 'font-bold ' + (os < 0 ? 'text-red-600' : 'text-green-700');
+            } else {
+                osEl.textContent = '—';
+                osEl.className = 'font-bold text-gray-500';
+            }
+
+            document.getElementById('z-grand').textContent = fmt(z.grand_total_sales);
+            document.getElementById('z-generated').textContent = formatTS(z.finalized_at);
+        }
+
+        async function printZ() {
+            if (!currentZ) return;
+            const m = document.getElementById('close-shift-msg');
+            try {
+                const res = await authenticatedFetch(`${API_BASE}/z-reports/${currentZ.z_counter}/print/`, {
                     method: 'POST'
                 });
-                if (!res.ok) {
-                    const data = await res.json().catch(() => ({}));
-                    const msg = data.error || data.detail || `Error ${res.status}`;
-                    const errEl = document.getElementById('report-error');
-                    errEl.textContent = 'Void failed: ' + msg;
-                    errEl.classList.remove('hidden');
-                    return;
+                if (res.ok) {
+                    m.textContent = 'Z print queued.';
+                    m.className = 'text-sm ml-3 text-green-700';
+                } else {
+                    m.textContent = 'Print failed.';
+                    m.className = 'text-sm ml-3 text-red-600';
                 }
-                await fetchReport();
             } catch (e) {
-                const errEl = document.getElementById('report-error');
-                errEl.textContent = 'Void failed: ' + e.message;
-                errEl.classList.remove('hidden');
-            }
-        }
-
-        async function closeShift() {
-            const input = document.getElementById('closing-cash-input');
-            const errEl = document.getElementById('close-shift-error');
-            const okEl = document.getElementById('close-shift-success');
-            errEl.classList.add('hidden');
-            okEl.classList.add('hidden');
-
-            const val = input.value.trim();
-            if (val === '' || isNaN(parseFloat(val)) || parseFloat(val) < 0) {
-                errEl.textContent = 'Enter a valid closing cash amount (0 or more).';
-                errEl.classList.remove('hidden');
-                return;
-            }
-
-            try {
-                const res = await authenticatedFetch(`${API_BASE}/shifts/close/`, {
-                    method: 'POST',
-                    body: JSON.stringify({ closing_cash: parseFloat(val) })
-                });
-                const data = await res.json();
-                if (!res.ok) {
-                    errEl.textContent = data.error || `Error ${res.status}`;
-                    errEl.classList.remove('hidden');
-                    return;
-                }
-                okEl.textContent = 'Shift closed. Loading today\'s Z-Report…';
-                okEl.classList.remove('hidden');
-                const today = new Date().toISOString().split('T')[0];
-                document.getElementById('report-date').value = today;
-                await fetchReport();
-            } catch (e) {
-                errEl.textContent = 'Failed to close shift: ' + e.message;
-                errEl.classList.remove('hidden');
+                m.textContent = 'Print failed: ' + e.message;
+                m.className = 'text-sm ml-3 text-red-600';
             }
         }
     </script>
-<script>
-// User info + live clock handled by components/nav.js (FEATURE-029)
-</script>
 <script>
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js')

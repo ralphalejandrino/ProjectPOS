@@ -352,15 +352,6 @@ class PosTransactionViewSet(viewsets.ViewSet):
             target=print_receipt, args=(MockTransaction(),), daemon=True).start()
         return Response({'status': 'ok'})
 
-    @action(detail=False, methods=['post'], permission_classes=[IsManagerOrAbove],
-            url_path='print_zreport')
-    def print_zreport(self, request):
-        """Fire-and-forget ESC/POS print of Z-report summary."""
-        from .receipt_service import print_zreport_summary
-        import threading
-        threading.Thread(target=print_zreport_summary, args=(request.data,), daemon=True).start()
-        return Response({'status': 'print queued'})
-
     @action(detail=False, methods=['post'], permission_classes=[IsCashierOrAbove],
             url_path='print_xreport')
     def print_xreport(self, request):
@@ -369,213 +360,6 @@ class PosTransactionViewSet(viewsets.ViewSet):
         import threading
         threading.Thread(target=print_xreport_summary, args=(request.data,), daemon=True).start()
         return Response({'status': 'print queued'})
-
-    @action(detail=False, methods=['get'], permission_classes=[IsManagerOrAbove])
-    def zreport(self, request):
-        """End-of-day Z-report"""
-        from django.db.models import Sum, Count, Min, Max
-        from django.db.models.functions import ExtractHour
-        import datetime as dt
-
-        date_str = request.query_params.get('date')
-        try:
-            report_date = dt.date.fromisoformat(date_str) if date_str else timezone.now().date()
-        except ValueError:
-            return Response({'error': 'Invalid date format. Use YYYY-MM-DD.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        all_qs = PosTransaction.objects.filter(created_at__date=report_date)
-        completed = all_qs.filter(void=False, status='completed')
-        voided = all_qs.filter(void=True)
-
-        # --- Totals ---
-        _gross_raw = completed.aggregate(total=Sum('total_amount'))['total'] or 0
-        gross = float(_gross_raw)  # float kept for JSON serialisation — Decimal used for VAT math only
-        transaction_count = completed.count()
-        average_transaction = round(gross / transaction_count, 2) if transaction_count else 0
-
-        # --- VAT breakdown (rate read from BusinessProfile) ---
-        from .models import BusinessProfile as _BP
-        from decimal import Decimal, ROUND_HALF_UP
-        _bp = _BP.get_instance()
-        # VAT-exempt sales (BIR: SC/PWD discounted transactions are VAT-exempt)
-        _exempt_raw = completed.filter(discount_type__in=['sc', 'pwd']).aggregate(
-            total=Sum('total_amount')
-        )['total'] or 0
-        vat_exempt_sales = float(_exempt_raw)
-
-        if _bp.vat_enabled:
-            _gross_d = Decimal(str(_gross_raw))
-            _exempt_d = Decimal(str(_exempt_raw))
-            _vatable_gross_d = _gross_d - _exempt_d
-            _vat_rate_d = Decimal(str(_bp.vat_rate))
-            if _bp.vat_inclusive:
-                vat_amount = float(
-                    (_vatable_gross_d * _vat_rate_d / (Decimal('100') + _vat_rate_d))
-                    .quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-                )
-                net_of_vat = float(
-                    (_gross_d - Decimal(str(vat_amount)))
-                    .quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-                )
-            else:
-                vat_amount = float(
-                    (_vatable_gross_d * _vat_rate_d / Decimal('100'))
-                    .quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-                )
-                net_of_vat = gross
-        else:
-            vat_amount = 0.0
-            net_of_vat = gross
-
-        # --- Voids ---
-        void_count = voided.count()
-        void_total = float(voided.aggregate(total=Sum('total_amount'))['total'] or 0)
-
-        # --- Void list with employee info ---
-        void_list = []
-        for txn in voided.select_related('voided_by').order_by('voided_at'):
-            amount = float(txn.total_amount.amount if hasattr(txn.total_amount, 'amount') else txn.total_amount)
-            void_list.append({
-                'transaction_no': txn.transaction_no,
-                'amount': amount,
-                'voided_by': txn.voided_by.get_full_name() or txn.voided_by.username if txn.voided_by else 'Unknown',
-                'voided_at': txn.voided_at.isoformat() if txn.voided_at else '',
-            })
-
-        # --- Discount breakdown ---
-        discount_summary = completed.filter(discount_amount__gt=0).values('discount_type').annotate(
-            count=Count('id'), total_discount=Sum('discount_amount')
-        ).order_by('discount_type')
-        _label_map = {'sc': 'Senior Citizen', 'pwd': 'PWD', 'promo': 'Promo'}
-        discount_breakdown = [
-            {
-                'type': d['discount_type'] if d['discount_type'] not in ('', 'none') else 'other',
-                'label': _label_map.get(d['discount_type'], 'Other') if d['discount_type'] not in ('', 'none') else 'Other',
-                'count': d['count'],
-                'total_discount': float(d['total_discount'] or 0),
-            }
-            for d in discount_summary
-        ]
-        total_discounts_given = float(
-            completed.filter(discount_amount__gt=0).aggregate(total=Sum('discount_amount'))['total'] or 0
-        )
-
-        # --- Net sales (voids already excluded from gross; void_total is informational only) ---
-        net_sales = round(gross, 2)
-
-        # --- By payment method ---
-        by_method_rows = []
-        for method in ['cash', 'gcash', 'maya']:
-            mqs = completed.filter(payment_method=method)
-            by_method_rows.append({
-                'payment_method': method,
-                'count': mqs.count(),
-                'subtotal': float(mqs.aggregate(t=Sum('total_amount'))['t'] or 0),
-            })
-
-        # --- Cash in drawer ---
-        cash_expected = next((r['subtotal'] for r in by_method_rows if r['payment_method'] == 'cash'), 0)
-
-        # --- By cashier (with void count) ---
-        from django.db.models import Q
-        cashier_rows = (
-            all_qs.filter(cashier__isnull=False)
-            .values('cashier__id', 'cashier__username', 'cashier__first_name', 'cashier__last_name')
-            .annotate(
-                count=Count('id', filter=Q(void=False)),
-                subtotal=Sum('total_amount', filter=Q(void=False)),
-                void_count=Count('id', filter=Q(void=True)),
-            )
-            .order_by('cashier__username')
-        )
-        by_cashier = [
-            {
-                'name': (f"{r['cashier__first_name']} {r['cashier__last_name']}".strip()
-                         or r['cashier__username']),
-                'count': r['count'],
-                'subtotal': float(r['subtotal'] or 0),
-                'void_count': r['void_count'],
-            }
-            for r in cashier_rows
-        ]
-
-        # --- Top selling items ---
-        from .models import PosTransactionItem
-        top_items = (
-            PosTransactionItem.objects
-            .filter(pos_transaction__created_at__date=report_date, pos_transaction__void=False)
-            .values('item__name')
-            .annotate(units_sold=Sum('quantity'), revenue=Sum('subtotal'))
-            .order_by('-units_sold')[:5]
-        )
-        top_items_data = [
-            {
-                'name': row['item__name'],
-                'units_sold': row['units_sold'],
-                'revenue': float(row['revenue'] or 0),
-            }
-            for row in top_items
-        ]
-
-        # --- Total items sold ---
-        total_items_sold = int(
-            PosTransactionItem.objects
-            .filter(pos_transaction__created_at__date=report_date, pos_transaction__void=False)
-            .aggregate(total=Sum('quantity'))['total'] or 0
-        )
-
-        # --- Busiest hour ---
-        busiest = (
-            completed.annotate(hour=ExtractHour('created_at'))
-            .values('hour')
-            .annotate(count=Count('id'))
-            .order_by('-count')
-            .first()
-        )
-        busiest_hour = busiest['hour'] if busiest else None
-
-        # --- First / last transaction time ---
-        times = completed.aggregate(first=Min('created_at'), last=Max('created_at'))
-        first_txn_time = times['first'].isoformat() if times['first'] else None
-        last_txn_time = times['last'].isoformat() if times['last'] else None
-
-        # --- Opening / closing transaction numbers ---
-        ordered = completed.order_by('created_at')
-        opening_txn = ordered.first()
-        closing_txn = ordered.last()
-
-        # --- Report metadata ---
-        generated_by = request.user.get_full_name() or request.user.username
-
-        return Response({
-            'date': str(report_date),
-            'generated_at': timezone.now().isoformat(),
-            'generated_by': generated_by,
-            'transaction_count': transaction_count,
-            'total_items_sold': total_items_sold,
-            'gross_sales': gross,
-            'void_count': void_count,
-            'void_total': void_total,
-            'net_sales': net_sales,
-            'vat_rate': float(_bp.vat_rate) if _bp.vat_enabled else None,
-            'vat_inclusive': bool(_bp.vat_inclusive) if _bp.vat_enabled else None,
-            'vat_amount': vat_amount,
-            'vat_exempt_sales': vat_exempt_sales,
-            'net_of_vat': net_of_vat,
-            'average_transaction': average_transaction,
-            'cash_expected': cash_expected,
-            'first_txn_time': first_txn_time,
-            'last_txn_time': last_txn_time,
-            'opening_txn_no': opening_txn.transaction_no if opening_txn else None,
-            'closing_txn_no': closing_txn.transaction_no if closing_txn else None,
-            'busiest_hour': busiest_hour,
-            'by_method': by_method_rows,
-            'by_cashier': by_cashier,
-            'top_items': top_items_data,
-            'void_list': void_list,
-            'discount_breakdown': discount_breakdown,
-            'total_discounts_given': total_discounts_given,
-        })
 
     @action(detail=False, methods=['get'], permission_classes=[IsCashierOrAbove])
     def xreport(self, request):
@@ -1414,45 +1198,6 @@ class ShiftViewSet(viewsets.ModelViewSet):
         
         return Response(ShiftSerializer(shift).data, status=status.HTTP_201_CREATED)
 
-    @action(detail=False, methods=['post'], url_path='close', permission_classes=[IsCashierOrAbove])
-    def close_shift(self, request):
-        """Close the current open shift for the user"""
-        closing_cash = request.data.get('closing_cash')
-        if closing_cash is None:
-            return Response({'error': 'closing_cash is required'}, status=status.HTTP_400_BAD_REQUEST)
-
-        try:
-            with db_transaction.atomic():
-                shift = Shift.objects.select_for_update().get(
-                    cashier=request.user,
-                    is_open=True
-                )
-
-                # Guard against race: another request already closed it
-                if shift.closed_at:
-                    return Response(
-                        {'error': 'Shift is already closed.'},
-                        status=status.HTTP_409_CONFLICT
-                    )
-
-                # Ownership guard — admins may force-close any shift
-                if shift.cashier != request.user and not (
-                    request.user.is_superuser or request.user.role == 'admin'
-                ):
-                    return Response(
-                        {'error': 'You can only close your own shift.'},
-                        status=status.HTTP_403_FORBIDDEN
-                    )
-
-                shift.closing_cash = closing_cash
-                shift.closed_at = timezone.now()
-                shift.is_open = False
-                shift.save()
-
-                return Response(ShiftSerializer(shift).data)
-        except Shift.DoesNotExist:
-            return Response({'error': 'No open shift found for this user.'}, status=status.HTTP_404_NOT_FOUND)
-
     @action(detail=False, methods=['get'], url_path='current', permission_classes=[IsCashierOrAbove])
     def current(self, request):
         """Return the currently open shift, or null if none."""
@@ -1464,10 +1209,10 @@ class ShiftViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'], url_path='close',
             permission_classes=[IsCashierOrAbove])
     def close(self, request, pk=None):
-        """FEATURE-011-C: finalize this shift into an immutable ZReport.
+        """FEATURE-011-D: finalize this shift into an immutable ZReport.
 
-        Body: {"cash_counted": <decimal>} (optional). Cashiers may only
-        close their own shift; managers/admins may close any.
+        Body: {"cash_counted": <decimal>} (required, >= 0). Cashiers may
+        only close their own shift; managers/admins may close any.
         """
         from decimal import Decimal, InvalidOperation
         from django.core.exceptions import ValidationError as DjangoValidationError
@@ -1484,13 +1229,17 @@ class ShiftViewSet(viewsets.ModelViewSet):
                             status=status.HTTP_403_FORBIDDEN)
 
         raw = request.data.get('cash_counted')
-        cash_counted = None
-        if raw is not None and raw != '':
-            try:
-                cash_counted = Decimal(str(raw))
-            except (InvalidOperation, ValueError):
-                return Response({'error': 'cash_counted must be a decimal.'},
-                                status=status.HTTP_400_BAD_REQUEST)
+        if raw is None or raw == '':
+            return Response({'error': 'cash_counted is required.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        try:
+            cash_counted = Decimal(str(raw))
+        except (InvalidOperation, ValueError):
+            return Response({'error': 'cash_counted must be a decimal.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        if cash_counted < 0:
+            return Response({'error': 'cash_counted must be >= 0.'},
+                            status=status.HTTP_400_BAD_REQUEST)
 
         try:
             z_report = close_shift_and_finalize_z(
@@ -1528,6 +1277,23 @@ class ZReportViewSet(viewsets.ReadOnlyModelViewSet):
         if business_date:
             qs = qs.filter(business_date=business_date)
         return qs
+
+    @action(detail=True, methods=['post'])
+    def print(self, request, z_counter=None):
+        """FEATURE-011-D: thermal-print this immutable Z.
+
+        Idempotent — the ZReport is already frozen; this only triggers
+        the printer. A read-side mutation-free POST is acceptable here.
+        Fire-and-forget so a slow/offline printer never blocks the API.
+        """
+        z_report = self.get_object()
+        from .receipt_service import print_z_report
+        import threading
+        threading.Thread(
+            target=print_z_report, args=(z_report,), daemon=True
+        ).start()
+        return Response({'status': 'print queued',
+                         'z_counter': z_report.z_counter})
 
 
 @api_view(['GET'])
