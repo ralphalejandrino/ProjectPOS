@@ -390,3 +390,173 @@ def create_pos_transaction(items_data, payment_method, cashier=None, **kwargs):
         threading.Thread(target=print_receipt, args=(transaction,), daemon=True).start()
         threading.Thread(target=kick_cash_drawer, daemon=True).start()
         return transaction
+
+
+_Z_CENTS = Decimal('0.01')
+
+
+def _zsum(queryset, field):
+    """Decimal sum of a frozen PosTransaction column, 2dp, never None."""
+    from django.db.models import Sum
+    total = queryset.aggregate(_s=Sum(field))['_s']
+    return (Decimal(str(total)) if total is not None else Decimal('0')).quantize(
+        _Z_CENTS, rounding=ROUND_HALF_UP
+    )
+
+
+@db_transaction.atomic
+def close_shift_and_finalize_z(shift_id, cash_counted, cashier_user):
+    """Finalize a shift into an immutable Z report.
+
+    Locks the Shift + ZCounter, aggregates the frozen PosTransaction
+    columns (read-only), snapshots BusinessProfile identity, creates the
+    ZReport, marks the shift closed. Returns the new ZReport.
+
+    Raises:
+      - Shift.DoesNotExist if shift_id not found
+      - ValidationError if the shift is already closed
+      - ValidationError if BusinessProfile.machine_identification_number
+        is blank (BIR-required; cannot finalize without it)
+    """
+    from django.utils import timezone as dj_tz
+    from .models import (
+        BusinessProfile, PosTransaction, Shift, ZCounter, ZReport,
+    )
+
+    # Lock the shift row first.
+    shift = Shift.objects.select_for_update().get(pk=shift_id)
+    if shift.closed_at or not shift.is_open:
+        raise ValidationError("Shift is already closed.")
+
+    # BIR identity gate — cannot finalize a Z without a MIN.
+    bp = BusinessProfile.objects.first()
+    if not bp or not bp.machine_identification_number:
+        raise ValidationError(
+            "Cannot finalize Z: BusinessProfile MIN is blank. Configure BIR "
+            "identity fields in settings before closing shift."
+        )
+
+    non_voided = PosTransaction.objects.filter(
+        shift=shift, voided_at__isnull=True
+    )
+    voided = PosTransaction.objects.filter(
+        shift=shift, voided_at__isnull=False
+    )
+
+    gross_sales = _zsum(non_voided, 'gross_total')
+    discount_total = _zsum(non_voided, 'discount_total')
+    net_sales = _zsum(non_voided, 'net_total')
+    vatable_sales = _zsum(non_voided, 'vatable_sales')
+    vat_exempt_sales = _zsum(non_voided, 'vat_exempt_amount')
+    zero_rated_sales = _zsum(non_voided, 'zero_rated_sales')
+
+    # output_vat = sum(net_total - vatable_sales) over non-exempt rows
+    # (a row is "exempt" when it carries a vat_exempt_amount).
+    non_exempt = non_voided.filter(vat_exempt_amount=Decimal('0'))
+    output_vat = (
+        _zsum(non_exempt, 'net_total') - _zsum(non_exempt, 'vatable_sales')
+    ).quantize(_Z_CENTS, rounding=ROUND_HALF_UP)
+
+    sc_discount_total = _zsum(
+        non_voided.filter(discount_type='sc'), 'discount_total'
+    )
+    pwd_discount_total = _zsum(
+        non_voided.filter(discount_type='pwd'), 'discount_total'
+    )
+    promo_discount_total = _zsum(
+        non_voided.filter(discount_type='promo'), 'discount_total'
+    )
+
+    payment_breakdown = {}
+    for method in ['cash', 'gcash', 'maya', 'card']:
+        payment_breakdown[method] = str(
+            _zsum(non_voided.filter(payment_method=method), 'net_total')
+        )
+
+    cash_collected = _zsum(
+        non_voided.filter(payment_method='cash'), 'net_total'
+    )
+    opening_cash = (
+        Decimal(str(shift.opening_cash or 0))
+    ).quantize(_Z_CENTS, rounding=ROUND_HALF_UP)
+    cash_expected = (opening_cash + cash_collected).quantize(
+        _Z_CENTS, rounding=ROUND_HALF_UP
+    )
+    counted = (
+        Decimal(str(cash_counted)).quantize(_Z_CENTS, rounding=ROUND_HALF_UP)
+        if cash_counted is not None else None
+    )
+    over_short = (
+        (counted - cash_expected).quantize(_Z_CENTS, rounding=ROUND_HALF_UP)
+        if counted is not None else None
+    )
+
+    # OR range within the shift.
+    ordered = non_voided.order_by('created_at')
+    first_txn = ordered.first()
+    last_txn = ordered.last()
+    voided_or_numbers = [
+        n for n in voided.order_by('created_at').values_list(
+            'transaction_no', flat=True
+        ) if n
+    ]
+
+    # Gapless Z numbering + running grand total (locked singleton).
+    counter, _ = ZCounter.objects.select_for_update().get_or_create(pk=1)
+    next_z = counter.z_counter + 1
+    next_reset = counter.reset_counter
+    if next_z > 9999:
+        next_z = 1
+        next_reset = counter.reset_counter + 1
+    counter.z_counter = next_z
+    counter.reset_counter = next_reset
+    counter.grand_total = (
+        Decimal(str(counter.grand_total or 0)) + gross_sales
+    ).quantize(_Z_CENTS, rounding=ROUND_HALF_UP)
+    counter.save()
+
+    z_report = ZReport.objects.create(
+        z_counter=next_z,
+        reset_counter=next_reset,
+        business_date=dj_tz.localdate(shift.opened_at),
+        started_at=shift.opened_at,
+        shift=shift,
+        business_name=bp.business_name or '',
+        business_tin=bp.tin or '',
+        business_address=bp.address or '',
+        machine_identification_number=bp.machine_identification_number or '',
+        machine_serial_number=bp.machine_serial_number or '',
+        pos_accreditation_number=bp.pos_accreditation_number or '',
+        pos_permit_number=bp.pos_permit_number or '',
+        first_or_number=(first_txn.transaction_no if first_txn else ''),
+        last_or_number=(last_txn.transaction_no if last_txn else ''),
+        voided_or_numbers=voided_or_numbers,
+        transaction_count=non_voided.count(),
+        voided_count=voided.count(),
+        gross_sales=gross_sales,
+        discount_total=discount_total,
+        net_sales=net_sales,
+        vatable_sales=vatable_sales,
+        vat_exempt_sales=vat_exempt_sales,
+        zero_rated_sales=zero_rated_sales,
+        output_vat=output_vat,
+        sc_discount_total=sc_discount_total,
+        pwd_discount_total=pwd_discount_total,
+        promo_discount_total=promo_discount_total,
+        payment_breakdown=payment_breakdown,
+        opening_cash=opening_cash,
+        cash_collected=cash_collected,
+        cash_expected=cash_expected,
+        cash_counted=counted,
+        over_short=over_short,
+        grand_total_sales=counter.grand_total,
+        cashier=cashier_user,
+    )
+
+    shift.closed_at = dj_tz.now()
+    if counted is not None:
+        shift.closing_cash = counted
+    shift.is_open = False
+    shift.save()
+
+    return z_report

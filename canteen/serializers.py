@@ -28,6 +28,7 @@ from .models import (
     IngredientRestockLog,
     RecipeIngredient,
     BusinessProfile,
+    ZReport,
 )
 
 
@@ -552,3 +553,18 @@ class BusinessProfileSerializer(serializers.ModelSerializer):
             'pos_permit_number',
             'pos_accreditation_valid_until',
         ]
+
+
+# ============================================================================
+# Z-REPORT SERIALIZER (FEATURE-011-C — read-only snapshot)
+# ============================================================================
+
+class ZReportSerializer(serializers.ModelSerializer):
+    """Read-only. ZReport is immutable; Decimals serialize as strings so
+    no float precision is lost. Currency formatting is a presentation
+    concern (Session D), not done here."""
+
+    class Meta:
+        model = ZReport
+        fields = '__all__'
+        read_only_fields = [f.name for f in ZReport._meta.fields]

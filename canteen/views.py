@@ -5,12 +5,15 @@ from rest_framework.exceptions import ValidationError
 from django.db import transaction as db_transaction
 from django.utils import timezone
 from django.shortcuts import get_object_or_404
-from .services import create_pos_transaction, _restore_ingredients
+from .services import (
+    create_pos_transaction, _restore_ingredients,
+    close_shift_and_finalize_z,
+)
 from .models import (
     ItemCategory, Item, ItemLog, PosTransaction, PosTransactionItem, Shift,
     VariantGroup, VariantOption, CategoryVariantGroup, ProductVariantGroup,
     TransactionItemVariant, BusinessProfile, RecipeIngredient, Ingredient,
-    IngredientUnit, Supplier, IngredientRestockLog,
+    IngredientUnit, Supplier, IngredientRestockLog, ZReport,
 )
 from .serializers import (
     ItemCategorySerializer,
@@ -28,6 +31,7 @@ from .serializers import (
     IngredientRestockLogSerializer,
     RecipeIngredientSerializer,
     ItemLogSerializer,
+    ZReportSerializer,
 )
 from django.db.models import Sum, Count, F, FloatField
 from django.db.models.functions import TruncDate
@@ -1456,6 +1460,74 @@ class ShiftViewSet(viewsets.ModelViewSet):
         if shift:
             return Response(ShiftSerializer(shift).data)
         return Response(False, status=200)
+
+    @action(detail=True, methods=['post'], url_path='close',
+            permission_classes=[IsCashierOrAbove])
+    def close(self, request, pk=None):
+        """FEATURE-011-C: finalize this shift into an immutable ZReport.
+
+        Body: {"cash_counted": <decimal>} (optional). Cashiers may only
+        close their own shift; managers/admins may close any.
+        """
+        from decimal import Decimal, InvalidOperation
+        from django.core.exceptions import ValidationError as DjangoValidationError
+
+        try:
+            shift = Shift.objects.get(pk=pk)
+        except Shift.DoesNotExist:
+            return Response({'error': 'Shift not found.'},
+                            status=status.HTTP_404_NOT_FOUND)
+
+        role = getattr(request.user, 'role', '')
+        if role not in ('manager', 'admin') and shift.cashier_id != request.user.id:
+            return Response({'error': 'You can only close your own shift.'},
+                            status=status.HTTP_403_FORBIDDEN)
+
+        raw = request.data.get('cash_counted')
+        cash_counted = None
+        if raw is not None and raw != '':
+            try:
+                cash_counted = Decimal(str(raw))
+            except (InvalidOperation, ValueError):
+                return Response({'error': 'cash_counted must be a decimal.'},
+                                status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            z_report = close_shift_and_finalize_z(
+                shift.id, cash_counted, request.user
+            )
+        except DjangoValidationError as e:
+            return Response({'error': '; '.join(e.messages)},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(ZReportSerializer(z_report).data,
+                        status=status.HTTP_201_CREATED)
+
+
+class ZReportPagination(PageNumberPagination):
+    page_size = 25
+    page_size_query_param = 'page_size'
+    max_page_size = 200
+
+
+class ZReportViewSet(viewsets.ReadOnlyModelViewSet):
+    """FEATURE-011-C: read-only access to immutable Z reports.
+
+    No create/update/delete is exposed (ReadOnlyModelViewSet) and the
+    model itself rejects re-saves; manager/admin only. Lookup by the
+    gapless z_counter, not the surrogate pk.
+    """
+    permission_classes = [IsManagerOrAbove]
+    serializer_class = ZReportSerializer
+    pagination_class = ZReportPagination
+    lookup_field = 'z_counter'
+
+    def get_queryset(self):
+        qs = ZReport.objects.all().order_by('-z_counter')
+        business_date = self.request.query_params.get('business_date')
+        if business_date:
+            qs = qs.filter(business_date=business_date)
+        return qs
 
 
 @api_view(['GET'])

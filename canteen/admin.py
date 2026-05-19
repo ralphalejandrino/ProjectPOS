@@ -13,6 +13,8 @@ from .models import (
     Attendance,
     PaymentGatewayConfig,
     BusinessProfile,
+    ZReport,
+    ZCounter,
 )
 
 @admin.register(ItemCategory)
@@ -106,3 +108,35 @@ class BusinessProfileAdmin(admin.ModelAdmin):
             ),
         }),
     )
+
+
+@admin.register(ZReport)
+class ZReportAdmin(admin.ModelAdmin):
+    list_display = ['z_counter', 'business_date', 'finalized_at', 'cashier',
+                    'gross_sales', 'net_sales']
+    list_filter = ['business_date', 'cashier']
+    readonly_fields = [f.name for f in ZReport._meta.fields]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(ZCounter)
+class ZCounterAdmin(admin.ModelAdmin):
+    list_display = ['id', 'z_counter', 'reset_counter', 'grand_total']
+    readonly_fields = [f.name for f in ZCounter._meta.fields]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False

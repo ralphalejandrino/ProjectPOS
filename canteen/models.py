@@ -7,6 +7,7 @@ from django.core.files.base import ContentFile
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.utils import timezone as dj_tz
 from djmoney.models.fields import MoneyField
 
@@ -845,6 +846,103 @@ class Shift(models.Model):
 
     def __str__(self):
         return f"Shift {self.id} — {self.cashier.username} ({'open' if self.is_open else 'closed'})"
+
+
+# ============================================================================
+# FEATURE-011-C: Z-REPORT (BIR end-of-shift finalization)
+# ============================================================================
+
+class ZCounter(models.Model):
+    """Singleton (pk=1) for gapless Z numbering + BIR running grand total."""
+    z_counter = models.PositiveIntegerField(default=0)
+    reset_counter = models.PositiveIntegerField(default=0)  # wraps at 9999
+    grand_total = models.DecimalField(max_digits=16, decimal_places=2, default=0)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(check=models.Q(pk=1), name='zcounter_singleton'),
+        ]
+
+    def __str__(self):
+        return f"ZCounter(z={self.z_counter}, reset={self.reset_counter})"
+
+
+class ZReport(models.Model):
+    """Immutable end-of-shift Z snapshot. Built once by
+    services.close_shift_and_finalize_z from frozen PosTransaction columns;
+    never updated (see save())."""
+
+    z_counter = models.PositiveIntegerField(unique=True)
+    reset_counter = models.PositiveIntegerField(default=0)
+    business_date = models.DateField()                   # PHT-localdate of opened_at
+    started_at = models.DateTimeField()                  # = shift.opened_at
+    finalized_at = models.DateTimeField(auto_now_add=True)
+    shift = models.OneToOneField(
+        'Shift', on_delete=models.PROTECT, related_name='z_report'
+    )
+
+    # Frozen identity — copied from BusinessProfile at finalize time
+    business_name = models.CharField(max_length=255)
+    business_tin = models.CharField(max_length=64, blank=True, default='')
+    business_address = models.CharField(max_length=512, blank=True, default='')
+    machine_identification_number = models.CharField(max_length=64, blank=True, default='')
+    machine_serial_number = models.CharField(max_length=64, blank=True, default='')
+    pos_accreditation_number = models.CharField(max_length=64, blank=True, default='')
+    pos_permit_number = models.CharField(max_length=64, blank=True, default='')
+
+    # OR range (within-shift)
+    first_or_number = models.CharField(max_length=32, blank=True, default='')
+    last_or_number = models.CharField(max_length=32, blank=True, default='')
+    voided_or_numbers = models.JSONField(default=list)
+
+    # Counts
+    transaction_count = models.PositiveIntegerField(default=0)
+    voided_count = models.PositiveIntegerField(default=0)
+
+    # Sales totals (sum of PosTransaction frozen columns over non-voided rows)
+    gross_sales = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    discount_total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    net_sales = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    vatable_sales = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    vat_exempt_sales = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    zero_rated_sales = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    output_vat = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+    # Discount breakdown
+    sc_discount_total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    pwd_discount_total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    promo_discount_total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+    # Payment breakdown — fixes ISSUE-081 (card payments dropped)
+    payment_breakdown = models.JSONField(default=dict)
+
+    # Cash reconciliation — fixes ISSUE-078 (opening float exclusion)
+    opening_cash = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    cash_collected = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    cash_expected = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    cash_counted = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    over_short = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+
+    grand_total_sales = models.DecimalField(max_digits=16, decimal_places=2, default=0)
+
+    cashier = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='z_reports'
+    )
+
+    class Meta:
+        ordering = ['-z_counter']
+        indexes = [
+            models.Index(fields=['business_date']),
+            models.Index(fields=['finalized_at']),
+        ]
+
+    def __str__(self):
+        return f"Z-{self.z_counter:04d} ({self.business_date})"
+
+    def save(self, *args, **kwargs):
+        if self.pk:
+            raise ValidationError("ZReport is immutable")
+        super().save(*args, **kwargs)
 
 
 # ============================================================================
