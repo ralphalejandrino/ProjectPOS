@@ -1,7 +1,8 @@
 // v62: ISSUE-105 — unofficial Z mode (pre-BIR-accreditation support)
 // v63: ISSUE-106 + 107 + 104 — persistent shift indicator,
 // open-shift modal, sale-without-shift enforcement
-const CACHE_NAME = 'tarsierpos-v63'; // canonical cache version
+// v64: ISSUE-108 — cashier role exception for zreport.html?close=1
+const CACHE_NAME = 'tarsierpos-v64'; // canonical cache version
 const ASSETS = [
   'index.html',
   'login.html',

@@ -25,12 +25,18 @@
 <body class="bg-gray-50" data-page="zreport" style="visibility:hidden">
     <script>
         // FLAG-028: hide body until role check passes
+        // ISSUE-108: cashier may load this page only with ?close=1 (close-modal-only mode).
         (function () {
             const t = localStorage.getItem('access_token');
             if (!t) { window.location.replace('login.html'); return; }
             let role = null;
             try { role = JSON.parse(atob(t.split('.')[1])).role || null; } catch (e) {}
-            if (!role || role === 'cashier') {
+            const closeOnly = new URLSearchParams(location.search).get('close') === '1';
+            if (!role) {
+                window.location.replace('denied.html?from=' + encodeURIComponent(location.pathname));
+                return;
+            }
+            if (role === 'cashier' && !closeOnly) {
                 window.location.replace('denied.html?from=' + encodeURIComponent(location.pathname));
                 return;
             }
@@ -218,7 +224,17 @@
 
         document.addEventListener('DOMContentLoaded', () => {
             const role = getUserRole();
+            const params = new URLSearchParams(location.search);
+            const closeOnly = params.get('close') === '1';
+            // ISSUE-108: cashier is allowed only in close-modal-only mode.
             if (role !== 'manager' && role !== 'admin') {
+                if (role === 'cashier' && closeOnly) {
+                    loadSiteName();
+                    loadColorScheme();
+                    checkBirIdentity();
+                    openCloseModal();
+                    return;
+                }
                 window.location.replace('denied.html?from=' + encodeURIComponent(location.pathname));
                 return;
             }
@@ -226,7 +242,6 @@
             loadColorScheme();
             checkBirIdentity();
 
-            const params = new URLSearchParams(location.search);
             const z = params.get('z');
             if (z) {
                 loadDetail(z);
@@ -236,7 +251,7 @@
             }
             // ISSUE-106: POS header "Close Shift" routes here with ?close=1
             // to land straight on the counted-cash modal (existing flow).
-            if (params.get('close') === '1') {
+            if (closeOnly) {
                 openCloseModal();
             }
         });
@@ -295,7 +310,13 @@
                 const data = await res.json().catch(() => ({}));
                 if (res.status === 201) {
                     closeCloseModal();
-                    window.location.href = `zreport.html?z=${data.z_counter}`;
+                    // ISSUE-108: cashier returns to POS index; manager/admin sees Z detail.
+                    const role = getUserRole();
+                    if (role === 'cashier') {
+                        window.location.href = '/';
+                    } else {
+                        window.location.href = `zreport.html?z=${data.z_counter}`;
+                    }
                     return;
                 }
                 // ISSUE-105: MIN is no longer a close-shift blocker.
