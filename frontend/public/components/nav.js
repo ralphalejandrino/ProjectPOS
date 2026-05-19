@@ -97,6 +97,12 @@
               <p class="text-sm font-bold text-white leading-tight" id="userName"></p>
               <p class="text-[10px] text-blue-200 uppercase tracking-widest font-black leading-tight" id="userRole"></p>
             </div>
+            <!-- FEATURE-036: shift indicator (hydrated by renderShiftIndicator) -->
+            <button id="shift-indicator" type="button"
+              class="hidden sm:inline-flex items-center font-semibold rounded-lg transition"
+              style="min-height: 44px; padding: 0 var(--space-3); background: rgba(255,255,255,0.12); color: #fff; font-size: var(--text-sm);">
+              <span id="shift-indicator-text">…</span>
+            </button>
             <div class="relative">
               <button id="menu-button" type="button" aria-label="Menu" aria-expanded="false"
                 class="bg-blue-700 hover:bg-blue-800 px-4 py-2 rounded-lg font-medium transition flex items-center space-x-2">
@@ -105,6 +111,7 @@
               </button>
               <div id="dropdown-menu" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl" style="z-index: var(--z-dropdown);">
                 ${linksHTML}
+                <a href="#" id="nav-close-shift" class="hidden block px-4 py-3 text-orange-700 hover:bg-orange-50 border-t border-gray-100">🔒 Close Shift</a>
                 <a href="#" id="nav-logout" class="block px-4 py-3 text-red-600 hover:bg-red-50 rounded-b-lg">🚪 Logout</a>
               </div>
             </div>
@@ -165,7 +172,90 @@
     tickClock();
     if (window.__navClockInterval) clearInterval(window.__navClockInterval);
     window.__navClockInterval = setInterval(tickClock, 1000);
+
+    // FEATURE-036: shift indicator + dropdown Close Shift wiring
+    wireShiftSurface();
+    fetchAndRenderShift();
   }
+
+  // --- FEATURE-036: shift surface (header indicator + dropdown item) ---
+
+  function _fmtTime(iso) {
+    try {
+      return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } catch (e) { return ''; }
+  }
+
+  function renderShiftIndicator(shift) {
+    const btn = document.getElementById('shift-indicator');
+    const txt = document.getElementById('shift-indicator-text');
+    const closeItem = document.getElementById('nav-close-shift');
+    if (!btn || !txt) return;
+    if (shift && shift.id) {
+      txt.textContent = `🟢 Shift #${shift.id} · ${_fmtTime(shift.opened_at)}`;
+      btn.style.background = 'rgba(34,197,94,0.25)';
+      btn.dataset.state = 'open';
+      if (closeItem) closeItem.classList.remove('hidden');
+    } else {
+      txt.textContent = '⊘ No active shift';
+      btn.style.background = 'rgba(255,255,255,0.12)';
+      btn.dataset.state = 'closed';
+      if (closeItem) closeItem.classList.add('hidden');
+    }
+  }
+
+  function wireShiftSurface() {
+    const btn = document.getElementById('shift-indicator');
+    if (btn) {
+      btn.addEventListener('click', () => {
+        // Active shift: indicator is informational only (Close Shift lives
+        // in the dropdown). No active shift: open the shift modal if this
+        // page hosts it (POS index), otherwise no-op.
+        if (btn.dataset.state === 'closed' && typeof window.showOpenShiftModal === 'function') {
+          window.showOpenShiftModal();
+        }
+      });
+    }
+    const closeItem = document.getElementById('nav-close-shift');
+    if (closeItem) {
+      closeItem.addEventListener('click', (e) => {
+        e.preventDefault();
+        window.location.href = 'zreport.html?close=1';
+      });
+    }
+  }
+
+  async function fetchAndRenderShift() {
+    // If app.js already fetched and stashed the shift, use it.
+    if (window.currentShift !== undefined && window.currentShift !== null) {
+      renderShiftIndicator(window.currentShift);
+      return;
+    }
+    try {
+      if (typeof authenticatedFetch !== 'function' || typeof API_BASE === 'undefined') {
+        renderShiftIndicator(null);
+        return;
+      }
+      const res = await authenticatedFetch(`${API_BASE}/shifts/current/`);
+      if (res.status === 204) {
+        window.currentShift = null;
+        renderShiftIndicator(null);
+        return;
+      }
+      if (res.ok) {
+        const shift = await res.json().catch(() => null);
+        const s = (shift && shift.id) ? shift : null;
+        window.currentShift = s;
+        renderShiftIndicator(s);
+      } else {
+        renderShiftIndicator(null);
+      }
+    } catch (e) {
+      renderShiftIndicator(null);
+    }
+  }
+
+  window.renderShiftIndicator = renderShiftIndicator;
 
   window.renderNav = renderNav;
 })();

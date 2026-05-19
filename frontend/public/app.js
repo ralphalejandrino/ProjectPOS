@@ -728,27 +728,11 @@ function _fmtPeso(v) {
     return sym + n.toFixed(2);
 }
 
+// FEATURE-036: shift surface lives in the nav header (indicator + dropdown).
+// Delegate rendering to nav.js so it stays consistent across pages.
 function renderShiftBar() {
-    const bar = document.getElementById('shift-bar');
-    const noneEl = document.getElementById('shift-bar-none');
-    const openEl = document.getElementById('shift-bar-open');
-    if (!bar || !noneEl || !openEl) return;
-
-    if (currentShift) {
-        const name = currentShift.cashier_name || 'Cashier';
-        const info = `⏱ Shift #${currentShift.id} · ${name} · Opened `
-            + `${_fmtShiftTime(currentShift.opened_at)} · Float `
-            + `${_fmtPeso(currentShift.opening_cash)}`;
-        document.getElementById('shift-bar-info').textContent = info;
-        openEl.classList.remove('hidden');
-        noneEl.classList.add('hidden');
-        bar.style.background = 'var(--color-primary-light)';
-        bar.style.color = 'var(--color-primary-hover)';
-    } else {
-        openEl.classList.add('hidden');
-        noneEl.classList.remove('hidden');
-        bar.style.background = 'var(--color-surface-alt)';
-        bar.style.color = 'var(--color-ink)';
+    if (typeof window.renderShiftIndicator === 'function') {
+        window.renderShiftIndicator(currentShift);
     }
 }
 

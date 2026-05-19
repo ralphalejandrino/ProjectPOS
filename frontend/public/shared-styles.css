@@ -62,8 +62,10 @@
 
     /* z-index ladder — raw 9999/99999 banned (FLAG-060) */
     --z-base:           0;
-    --z-dropdown:       1000;
     --z-sticky:         1010;
+    /* FEATURE-036: dropdown must paint above sticky siblings (e.g. cart
+       column with its own stacking context) — raised above --z-sticky. */
+    --z-dropdown:       1020;
     --z-modal-backdrop: 1040;
     --z-modal:          1050;
     --z-toast:          1060;

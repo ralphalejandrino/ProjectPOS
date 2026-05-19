@@ -45,39 +45,11 @@
     <div id="nav-mount"></div>
     <script>renderNav({ activePage: 'pos' });</script>
 
-    <!-- ISSUE-106: PERSISTENT SHIFT STATUS INDICATOR (POS-specific) -->
-    <div id="shift-bar"
-         style="position: sticky; top: 0; z-index: var(--z-sticky);
-                display: flex; align-items: center; justify-content: space-between;
-                gap: var(--space-3); padding: var(--space-2) var(--space-4);
-                border-bottom: 1px solid var(--color-border);
-                background: var(--color-surface-alt); color: var(--color-ink);
-                font-size: var(--text-sm);">
-        <!-- NO active shift -->
-        <div id="shift-bar-none" class="flex items-center justify-between w-full" style="gap: var(--space-3);">
-            <span style="color: var(--color-ink-muted);">⊘&nbsp; No active shift — sales disabled</span>
-            <button onclick="showOpenShiftModal()" class="touch-target-pos"
-                    style="padding: 0 var(--space-4); border-radius: var(--radius-sm);
-                           font-weight: 700; color: var(--color-surface);
-                           background: var(--color-primary);">
-                + Open Shift
-            </button>
-        </div>
-        <!-- Active shift -->
-        <div id="shift-bar-open" class="hidden flex items-center justify-between w-full"
-             style="gap: var(--space-3);">
-            <span id="shift-bar-info" style="font-weight: 600;"></span>
-            <button onclick="window.location.href='zreport.html?close=1'" class="touch-target-pos"
-                    style="padding: 0 var(--space-4); border-radius: var(--radius-sm);
-                           font-weight: 700; color: var(--color-surface);
-                           background: var(--color-warning);">
-                Close Shift
-            </button>
-        </div>
-    </div>
+    <!-- FEATURE-036: shift status moved into header indicator + ☰ dropdown;
+         sticky shift-bar removed (state lives in nav.js). -->
 
     <!-- MAIN LAYOUT -->
-    <div class="flex" style="height: calc(100vh - 73px - 49px);">
+    <div class="flex" style="height: calc(100vh - 73px);">
         
         <!-- LEFT SIDEBAR: SEARCH & CATEGORIES -->
         <div id="left-sidebar" class="bg-white border-r border-gray-200 overflow-y-auto flex-shrink-0 transition-all duration-200" style="width:256px;">
