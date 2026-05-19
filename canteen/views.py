@@ -1486,6 +1486,15 @@ def get_business_profile(request):
         'pwd_discount_rate': float(profile.pwd_discount_rate),
         'promo_discount_enabled': profile.promo_discount_enabled,
         'track_inventory': profile.track_inventory,
+        # FEATURE-011-B: BIR identity (display-only; Session C/D consume these)
+        'machine_identification_number': profile.machine_identification_number,
+        'machine_serial_number': profile.machine_serial_number,
+        'pos_accreditation_number': profile.pos_accreditation_number,
+        'pos_permit_number': profile.pos_permit_number,
+        'pos_accreditation_valid_until': (
+            profile.pos_accreditation_valid_until.isoformat()
+            if profile.pos_accreditation_valid_until else None
+        ),
     }
     # Only expose printer network details to managers/admins
     if request.user.is_staff or getattr(request.user, 'role', '') in ('manager', 'admin'):
@@ -1499,10 +1508,29 @@ def get_business_profile(request):
 def update_business_profile(request):
     from .models import BusinessProfile
     profile = BusinessProfile.get_instance()
-    fields = ['business_name', 'tagline', 'contact_number', 'email', 'address', 'tin', 'receipt_header', 'receipt_footer', 'low_stock_threshold', 'printer_ip', 'printer_port', 'printer_enabled', 'color_scheme', 'logo', 'vat_enabled', 'vat_rate', 'vat_inclusive', 'currency', 'sc_discount_enabled', 'sc_discount_rate', 'pwd_discount_enabled', 'pwd_discount_rate', 'promo_discount_enabled', 'track_inventory']
+    fields = ['business_name', 'tagline', 'contact_number', 'email', 'address', 'tin', 'receipt_header', 'receipt_footer', 'low_stock_threshold', 'printer_ip', 'printer_port', 'printer_enabled', 'color_scheme', 'logo', 'vat_enabled', 'vat_rate', 'vat_inclusive', 'currency', 'sc_discount_enabled', 'sc_discount_rate', 'pwd_discount_enabled', 'pwd_discount_rate', 'promo_discount_enabled', 'track_inventory',
+              # FEATURE-011-B: BIR identity fields
+              'machine_identification_number', 'machine_serial_number',
+              'pos_accreditation_number', 'pos_permit_number',
+              'pos_accreditation_valid_until']
+    from django.utils.dateparse import parse_date
     for field in fields:
         if field in request.data:
-            setattr(profile, field, request.data[field])
+            value = request.data[field]
+            if field == 'pos_accreditation_valid_until':
+                # Empty means "not set" -> NULL (never '' on the DateField).
+                if not value:
+                    value = None
+                else:
+                    parsed = parse_date(str(value))
+                    if parsed is None:
+                        return Response(
+                            {'error': 'pos_accreditation_valid_until must be '
+                                      'an ISO date (YYYY-MM-DD).'},
+                            status=400,
+                        )
+                    value = parsed
+            setattr(profile, field, value)
     profile.save()
     return Response({'success': True, 'business_name': profile.business_name, 'tagline': profile.tagline})
 

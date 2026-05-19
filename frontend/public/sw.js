@@ -1,4 +1,4 @@
-const CACHE_NAME = 'tarsierpos-v59'; // canonical cache version (v59: BATCH 4 — ISSUE-079 currency formatter, ISSUE-082 dashboard today tile fix, FLAG-064 receipt parity, stray dashboard.js removed)
+const CACHE_NAME = 'tarsierpos-v60'; // canonical cache version (v60: FEATURE-011-B — BusinessProfile BIR identity fields + Settings "BIR Compliance" card)
 const ASSETS = [
   'index.html',
   'login.html',

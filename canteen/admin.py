@@ -11,7 +11,8 @@ from .models import (
     User,
     EmployeeProfile,
     Attendance,
-    PaymentGatewayConfig
+    PaymentGatewayConfig,
+    BusinessProfile,
 )
 
 @admin.register(ItemCategory)
@@ -59,3 +60,49 @@ class CartAdmin(admin.ModelAdmin):
 @admin.register(CartItem)
 class CartItemAdmin(admin.ModelAdmin):
     list_display = ['cart', 'item', 'quantity']
+
+
+@admin.register(BusinessProfile)
+class BusinessProfileAdmin(admin.ModelAdmin):
+    list_display = ['business_name', 'tin', 'currency', 'updated_at']
+
+    fieldsets = (
+        ('Business Information', {
+            'fields': (
+                'business_name', 'tagline', 'logo', 'contact_number',
+                'email', 'address', 'tin',
+            ),
+        }),
+        ('Receipt', {
+            'fields': ('receipt_header', 'receipt_footer'),
+        }),
+        ('Printer', {
+            'fields': (
+                'printer_enabled', 'printer_ip', 'printer_port',
+            ),
+        }),
+        ('Rate Configuration', {
+            'fields': (
+                'currency', 'vat_enabled', 'vat_rate', 'vat_inclusive',
+                'sc_discount_enabled', 'sc_discount_rate',
+                'pwd_discount_enabled', 'pwd_discount_rate',
+                'promo_discount_enabled', 'discounts_enabled',
+            ),
+        }),
+        ('BIR Compliance', {
+            'description': 'BIR-issued machine and accreditation identifiers '
+                           '(display-only on receipts/Z reports).',
+            'fields': (
+                'machine_identification_number',
+                'machine_serial_number',
+                'pos_accreditation_number',
+                'pos_permit_number',
+                'pos_accreditation_valid_until',
+            ),
+        }),
+        ('Inventory & Misc', {
+            'fields': (
+                'track_inventory', 'low_stock_threshold', 'color_scheme',
+            ),
+        }),
+    )

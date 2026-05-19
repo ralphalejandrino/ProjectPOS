@@ -27,6 +27,7 @@ from .models import (
     Ingredient,
     IngredientRestockLog,
     RecipeIngredient,
+    BusinessProfile,
 )
 
 
@@ -529,3 +530,25 @@ class RecipeIngredientSerializer(serializers.ModelSerializer):
     class Meta:
         model = RecipeIngredient
         fields = ['id', 'item', 'variant', 'ingredient', 'ingredient_detail', 'quantity_used']
+
+
+# ============================================================================
+# BUSINESS PROFILE SERIALIZER
+# ============================================================================
+
+class BusinessProfileSerializer(serializers.ModelSerializer):
+    """FEATURE-011-B: read + write for BusinessProfile, including the BIR
+    machine/accreditation identity fields. No special validation yet —
+    Session C/D consume these for receipt/Z rendering."""
+
+    class Meta:
+        model = BusinessProfile
+        fields = [
+            'id', 'business_name', 'tin',
+            # BIR identity (Session B)
+            'machine_identification_number',
+            'machine_serial_number',
+            'pos_accreditation_number',
+            'pos_permit_number',
+            'pos_accreditation_valid_until',
+        ]

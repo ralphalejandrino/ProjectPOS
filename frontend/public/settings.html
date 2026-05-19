@@ -113,6 +113,44 @@
                 </form>
             </div>
 
+            <!-- BIR COMPLIANCE (FEATURE-011-B) -->
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h3 class="text-xl font-bold text-gray-800 mb-1">🧾 BIR Compliance</h3>
+                <p class="text-xs text-gray-400 mb-4">BIR-issued machine &amp; accreditation identifiers. Display-only on receipts and Z reports.</p>
+                <form class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Machine Identification Number (MIN)</label>
+                        <input type="text" id="machine-identification-number" placeholder="BIR-issued MIN"
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Machine Serial Number</label>
+                        <input type="text" id="machine-serial-number" placeholder="POS machine serial"
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">POS Accreditation Number</label>
+                            <input type="text" id="pos-accreditation-number" placeholder="Accreditation no."
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">POS Permit Number</label>
+                            <input type="text" id="pos-permit-number" placeholder="Permit no."
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">POS Accreditation Valid Until</label>
+                        <input type="date" id="pos-accreditation-valid-until"
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <button type="button" onclick="saveBirCompliance()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition">
+                        Save BIR Compliance
+                    </button>
+                </form>
+            </div>
+
             <!-- SYSTEM PREFERENCES -->
             <div class="bg-white rounded-lg shadow-lg p-6">
                 <h3 class="text-xl font-bold text-gray-800 mb-4">🔧 System Preferences</h3>
@@ -703,6 +741,12 @@
                 document.getElementById('email').value = data.email || '';
                 document.getElementById('address').value = data.address || '';
                 document.getElementById('tin').value = data.tin || '';
+                // FEATURE-011-B: BIR Compliance fields
+                document.getElementById('machine-identification-number').value = data.machine_identification_number || '';
+                document.getElementById('machine-serial-number').value = data.machine_serial_number || '';
+                document.getElementById('pos-accreditation-number').value = data.pos_accreditation_number || '';
+                document.getElementById('pos-permit-number').value = data.pos_permit_number || '';
+                document.getElementById('pos-accreditation-valid-until').value = data.pos_accreditation_valid_until || '';
                 document.getElementById('receipt-header').value = data.receipt_header || '';
                 document.getElementById('receipt-footer').value = data.receipt_footer || '';
                 document.getElementById('low-stock-threshold').value = data.low_stock_threshold ?? 10;
@@ -831,6 +875,31 @@
                 }
             } catch (e) {
                 window.alertDialog({title: 'Notice', message: 'Error saving business info: ' + e.message});
+            }
+        }
+
+        // FEATURE-011-B: persist BIR machine/accreditation identity fields.
+        async function saveBirCompliance() {
+            const payload = {
+                machine_identification_number: document.getElementById('machine-identification-number').value.trim(),
+                machine_serial_number: document.getElementById('machine-serial-number').value.trim(),
+                pos_accreditation_number: document.getElementById('pos-accreditation-number').value.trim(),
+                pos_permit_number: document.getElementById('pos-permit-number').value.trim(),
+                pos_accreditation_valid_until: document.getElementById('pos-accreditation-valid-until').value || null,
+            };
+            try {
+                const response = await authenticatedFetch(`${API_BASE}/business/update/`, {
+                    method: 'PATCH',
+                    body: JSON.stringify(payload)
+                });
+                const data = await response.json();
+                if (data.success) {
+                    showSuccessModal();
+                    // Invalidate full cache so next load re-fetches fresh values
+                    localStorage.removeItem('biz_profile');
+                }
+            } catch (e) {
+                window.alertDialog({title: 'Notice', message: 'Error saving BIR compliance: ' + e.message});
             }
         }
 

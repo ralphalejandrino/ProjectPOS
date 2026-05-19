@@ -793,6 +793,30 @@ class BusinessProfile(models.Model):
     )
     promo_discount_enabled = models.BooleanField(default=False, verbose_name='Promo Discount Enabled')
 
+    # FEATURE-011-B: BIR machine/accreditation identity (display-only on
+    # receipts/Z later — Session C/D consume these; no business logic here).
+    machine_identification_number = models.CharField(
+        max_length=64, blank=True, default='',
+        verbose_name='Machine Identification Number (MIN)',
+        help_text='BIR-issued Machine Identification Number',
+    )
+    machine_serial_number = models.CharField(
+        max_length=64, blank=True, default='',
+        verbose_name='Machine Serial Number',
+    )
+    pos_accreditation_number = models.CharField(
+        max_length=64, blank=True, default='',
+        verbose_name='POS Accreditation Number',
+    )
+    pos_permit_number = models.CharField(
+        max_length=64, blank=True, default='',
+        verbose_name='POS Permit Number',
+    )
+    pos_accreditation_valid_until = models.DateField(
+        null=True, blank=True,
+        verbose_name='POS Accreditation Valid Until',
+    )
+
     @classmethod
     def get_instance(cls):
         instance = cls.objects.first()
