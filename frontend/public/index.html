@@ -12,6 +12,7 @@
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="shared-styles.css">
     <script src="config.js"></script>
+    <script src="components/format.js"></script>
     <script src="components/nav.js"></script>
     <style>
         .product-card:hover {
@@ -109,7 +110,7 @@
                     </button>
                     <div class="flex justify-between items-center text-2xl font-bold py-2">
                         <span>TOTAL:</span>
-                        <span id="cart-total" class="text-blue-600">₱0.00</span>
+                        <span id="cart-total" class="text-blue-600">0.00</span>
                     </div>
                 </div>
 
@@ -144,7 +145,7 @@
 
             <div class="mb-6">
                 <label class="block text-sm font-medium text-gray-700 mb-2">Total Amount:</label>
-                <div class="text-3xl font-bold text-blue-600" id="cash-total">₱0.00</div>
+                <div class="text-3xl font-bold text-blue-600" id="cash-total">0.00</div>
             </div>
 
             <div class="mb-4">
@@ -154,13 +155,20 @@
                        placeholder="0.00" step="0.01" oninput="calculateChange()">
             </div>
 
-            <div class="grid grid-cols-5 gap-2 mb-4">
-                <button onclick="addCashAmount(20)" class="touch-target-pos bg-gray-100 hover:bg-gray-200 py-2 rounded font-medium text-sm">₱20</button>
-                <button onclick="addCashAmount(50)" class="touch-target-pos bg-gray-100 hover:bg-gray-200 py-2 rounded font-medium text-sm">₱50</button>
-                <button onclick="addCashAmount(100)" class="touch-target-pos bg-gray-100 hover:bg-gray-200 py-2 rounded font-medium text-sm">₱100</button>
-                <button onclick="addCashAmount(500)" class="touch-target-pos bg-gray-100 hover:bg-gray-200 py-2 rounded font-medium text-sm">₱500</button>
-                <button onclick="addCashAmount(1000)" class="touch-target-pos bg-gray-100 hover:bg-gray-200 py-2 rounded font-medium text-sm">₱1000</button>
+            <div id="cash-quick-buttons" class="grid grid-cols-5 gap-2 mb-4">
+                <button onclick="addCashAmount(20)" class="touch-target-pos bg-gray-100 hover:bg-gray-200 py-2 rounded font-medium text-sm" data-amount="20">20</button>
+                <button onclick="addCashAmount(50)" class="touch-target-pos bg-gray-100 hover:bg-gray-200 py-2 rounded font-medium text-sm" data-amount="50">50</button>
+                <button onclick="addCashAmount(100)" class="touch-target-pos bg-gray-100 hover:bg-gray-200 py-2 rounded font-medium text-sm" data-amount="100">100</button>
+                <button onclick="addCashAmount(500)" class="touch-target-pos bg-gray-100 hover:bg-gray-200 py-2 rounded font-medium text-sm" data-amount="500">500</button>
+                <button onclick="addCashAmount(1000)" class="touch-target-pos bg-gray-100 hover:bg-gray-200 py-2 rounded font-medium text-sm" data-amount="1000">1000</button>
             </div>
+            <script>
+                (function(){
+                    document.querySelectorAll('#cash-quick-buttons button[data-amount]').forEach(btn => {
+                        btn.textContent = (window.currencySymbol ? currencySymbol() : '₱') + btn.dataset.amount;
+                    });
+                })();
+            </script>
 
             <div id="cash-insufficient" class="hidden bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
                 ⚠️ Insufficient cash received!
@@ -168,7 +176,7 @@
 
             <div id="cash-change-display" class="hidden bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
                 <div class="text-sm font-medium">Change:</div>
-                <div class="text-2xl font-bold" id="cash-change">₱0.00</div>
+                <div class="text-2xl font-bold" id="cash-change">0.00</div>
             </div>
 
             <!-- DISCOUNT SECTION -->
@@ -299,7 +307,7 @@
             }
             initModalDiscount('cash');
             document.getElementById('cash-modal').classList.remove('hidden');
-            document.getElementById('cash-total').textContent = `₱${window.cart.total.toFixed(2)}`;
+            document.getElementById('cash-total').textContent = `${formatCurrency(window.cart.total)}`;
             document.getElementById('cash-received').value = '';
             document.getElementById('cash-change-display').classList.add('hidden');
             document.getElementById('cash-insufficient').classList.add('hidden');
@@ -334,7 +342,7 @@
             } else {
                 changeDisplay.classList.remove('hidden');
                 insufficientWarning.classList.add('hidden');
-                document.getElementById('cash-change').textContent = `₱${change.toFixed(2)}`;
+                document.getElementById('cash-change').textContent = `${formatCurrency(change)}`;
             }
         }
 
@@ -347,7 +355,7 @@
                 const itemsHtml = itemsList.map(item => `
                     <div class="flex justify-between text-sm text-gray-700">
                         <span>${item.quantity} x ${escapeHtml(item.name)}</span>
-                        <span>₱${parseFloat(item.price).toFixed(2)}</span>
+                        <span>${formatCurrency(parseFloat(item.price))}</span>
                     </div>
                 `).join('');
 
@@ -385,13 +393,13 @@
                             </div>
                             
                             <div class="flex justify-between font-bold text-gray-800 text-lg mt-2">
-                                <span>Subtotal:</span>
-                                <span>₱${subtotal.toFixed(2)}</span>
+                                <span>${(() => { try { const bp = JSON.parse(localStorage.getItem('biz_profile') || '{}'); return bp.vat_inclusive ? 'Subtotal (VAT-inc):' : 'Subtotal:'; } catch (e) { return 'Subtotal:'; } })()}</span>
+                                <span>${formatCurrency(subtotal)}</span>
                             </div>
                             ${(window.cart.discountAmount > 0) ? `
                             <div class="flex justify-between text-sm text-red-600 mb-1">
                                 <span>${escapeHtml(window.cart.discountLabel || 'Discount')}</span>
-                                <span>-₱${parseFloat(window.cart.discountAmount).toFixed(2)}</span>
+                                <span>-${formatCurrency(parseFloat(window.cart.discountAmount))}</span>
                             </div>
                             ${(window.cart.discountIdNumber && ['sc','pwd'].includes(window.cart.discountType))
                                 ? `<div class="text-xs text-gray-500 mb-1">${window.cart.discountType === 'sc' ? 'OSCA' : 'PWD'} ID: ${escapeHtml(window.cart.discountIdNumber)}</div>`
@@ -399,21 +407,21 @@
                             ` : ''}
                             <div class="flex justify-between font-bold text-gray-800 text-xl mb-2">
                                 <span>TOTAL:</span>
-                                <span>₱${totalAmount.toFixed(2)}</span>
+                                <span>${formatCurrency(totalAmount)}</span>
                             </div>
 
                             ${transactionData.payment_method === 'cash' ? `
                                 <div class="flex justify-between text-sm text-gray-700">
                                     <span>Cash Received:</span>
-                                    <span>₱${cashReceived.toFixed(2)}</span>
+                                    <span>${formatCurrency(cashReceived)}</span>
                                 </div>
                                 <div class="flex justify-between text-sm text-gray-700 mb-2">
                                     <span>Change:</span>
-                                    <span>₱${changeGiven.toFixed(2)}</span>
+                                    <span>${formatCurrency(changeGiven)}</span>
                                 </div>
                             ` : ''}
                             
-                            <p class="text-xs text-gray-500 text-center mt-4">Thank you for your purchase!</p>
+                            <p class="text-xs text-gray-500 text-center mt-4">${(() => { try { const bp = JSON.parse(localStorage.getItem('biz_profile') || '{}'); return escapeHtml(bp.receipt_header || 'Thank you for your purchase!'); } catch (e) { return 'Thank you for your purchase!'; } })()}</p>
                         </div>
                         <div class="flex gap-2 mt-4 justify-center">
                             <button id="thermal-print-btn" onclick="thermalPrint()"
@@ -533,7 +541,7 @@
                 window.alertDialog({title: 'Cart Empty', message: 'Please add items before payment'}); return;
             }
             initModalDiscount('gcash');
-            document.getElementById('gcash-total').textContent = window.cart.total.toFixed(2);
+            document.getElementById('gcash-total').textContent = formatCurrency(window.cart.total);
             document.getElementById('gcash-reference').value = '';
             try {
                 const response = await authenticatedFetch(`${PAYMENTS_API}/config/gcash/`);
@@ -604,7 +612,7 @@
                 window.alertDialog({title: 'Cart Empty', message: 'Please add items before payment'}); return;
             }
             initModalDiscount('maya');
-            document.getElementById('maya-total').textContent = window.cart.total.toFixed(2);
+            document.getElementById('maya-total').textContent = formatCurrency(window.cart.total);
             document.getElementById('maya-reference').value = '';
             try {
                 const response = await authenticatedFetch(`${PAYMENTS_API}/config/maya/`);
@@ -911,7 +919,7 @@
                 <img id="gcash-qr-display" src="" alt="GCash QR" class="w-48 h-48 object-contain mx-auto border rounded hidden">
                 <p id="gcash-qr-missing" class="text-red-500 text-sm">No QR uploaded. Go to Settings to upload.</p>
             </div>
-            <p class="text-2xl font-black mb-4" style="color:#1973fa">₱<span id="gcash-total">0.00</span></p>
+            <p class="text-2xl font-black mb-4" style="color:#1973fa"><span id="gcash-total">0.00</span></p>
             <input type="tel" id="gcash-customer-phone" placeholder="Customer phone number (optional)"
                 class="w-full border rounded-lg p-2 mb-3 text-center">
             <input type="text" id="gcash-reference" placeholder="Enter GCash reference number"
@@ -981,7 +989,7 @@
                 <img id="maya-qr-display" src="" alt="Maya QR" class="w-48 h-48 object-contain mx-auto border rounded hidden">
                 <p id="maya-qr-missing" class="text-red-500 text-sm">No QR uploaded. Go to Settings to upload.</p>
             </div>
-            <p class="text-2xl font-black text-emerald-600 mb-4">₱<span id="maya-total">0.00</span></p>
+            <p class="text-2xl font-black text-emerald-600 mb-4"><span id="maya-total">0.00</span></p>
             <input type="tel" id="maya-customer-phone" placeholder="Customer phone number (optional)"
                 class="w-full border rounded-lg p-2 mb-3 text-center">
             <input type="text" id="maya-reference" placeholder="Enter Maya reference number"
