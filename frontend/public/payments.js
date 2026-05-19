@@ -188,7 +188,7 @@ const PaymentSystem = {
                     <p class="text-lg font-bold mb-2">Scan QR Code</p>
                     <div class="bg-white p-4 rounded inline-block">
                         <div class="w-48 h-48 bg-gray-800 flex items-center justify-center text-white text-xs">
-                            MOCK QR CODE<br/>₱${data.amount}<br/>${data.maya_reference}
+                            MOCK QR CODE<br/>${formatCurrency(data.amount)}<br/>${data.maya_reference}
                         </div>
                     </div>
                     <p class="text-sm text-gray-500 mt-4">
@@ -209,9 +209,9 @@ const PaymentSystem = {
             const itemsHtml = cart.items.map(item => `
                 <div class="flex justify-between text-sm mb-1">
                     <span>${item.name} x${item.quantity}</span>
-                    <span class="font-mono">₱${(item.price * item.quantity).toFixed(2)}</span>
+                    <span class="font-mono">${formatCurrency(item.price * item.quantity)}</span>
                 </div>
-                <div class="text-xs text-gray-500 mb-2 ml-2">@ ₱${item.price.toFixed(2)} each</div>
+                <div class="text-xs text-gray-500 mb-2 ml-2">@ ${formatCurrency(item.price)} each</div>
             `).join('');
 
             modal.querySelector('.payment-message').innerHTML = `
@@ -230,16 +230,16 @@ const PaymentSystem = {
                     <div class="mb-4 border-b border-dashed pb-4">
                         <div class="flex justify-between font-bold text-lg">
                             <span>TOTAL</span>
-                            <span class="font-mono">₱${parseFloat(cart.total).toFixed(2)}</span>
+                            <span class="font-mono">${formatCurrency(cart.total)}</span>
                         </div>
                         <div class="flex justify-between text-sm mt-2">
                             <span>Paid via ${method}</span>
-                            <span class="font-mono">₱${parseFloat(data.amount || cart.total).toFixed(2)}</span>
+                            <span class="font-mono">${formatCurrency(data.amount || cart.total)}</span>
                         </div>
                         ${data.change_due ? `
                         <div class="flex justify-between text-sm mt-1 font-bold text-blue-600">
                             <span>Change Due</span>
-                            <span class="font-mono">₱${parseFloat(data.change_due).toFixed(2)}</span>
+                            <span class="font-mono">${formatCurrency(data.change_due)}</span>
                         </div>` : ''}
                     </div>
 

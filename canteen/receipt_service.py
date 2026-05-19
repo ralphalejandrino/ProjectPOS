@@ -2,6 +2,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from django.conf import settings
 from escpos.printer import File
 from .models import BusinessProfile
+from .utils.currency import format_currency
 import logging
 
 # ISSUE-095: USB printer device auto-detect
@@ -45,6 +46,7 @@ def print_receipt(transaction):
         if not ip:
             return {'success': False, 'message': 'Printer not configured. Set up Business Profile in Settings.'}
 
+        ccode = profile.currency if profile else 'PHP'
         p = File(_get_usb_device_path() or '/dev/usb/lp1')
         p.set(font='b', align='left')
         try:
@@ -119,9 +121,9 @@ def print_receipt(transaction):
                 for vs in item.variant_selections.all():
                     mod = float(vs.price_modifier or 0)
                     if mod > 0:
-                        modifier_str = f' +{mod:.2f}'
+                        modifier_str = ' +' + format_currency(mod, ccode)
                     elif mod < 0:
-                        modifier_str = f' {mod:.2f}'  # native '-' sign (ISSUE-074)
+                        modifier_str = ' ' + format_currency(mod, ccode)  # native '-' sign (ISSUE-074)
                     else:
                         modifier_str = ''
                     p.text(f'  {vs.group_name}: {vs.option_name}{modifier_str}\n')
@@ -135,8 +137,9 @@ def print_receipt(transaction):
             stored_vat_amount = float(getattr(transaction, 'vat_amount', 0) or 0)
             disc_type = getattr(transaction, 'discount_type', '')
 
-            subtotal_label = 'Subtotal (VAT-inc):' if (profile and profile.vat_enabled) or is_vat_exempt else 'Subtotal:'
-            subtotal_val = f'PHP {subtotal_sum:.2f}'
+            vat_inclusive = bool(profile and getattr(profile, 'vat_inclusive', False))
+            subtotal_label = 'Subtotal (VAT-inc):' if vat_inclusive else 'Subtotal:'
+            subtotal_val = format_currency(subtotal_sum, ccode)
             subtotal_padding = RECEIPT_WIDTH - len(subtotal_label) - len(subtotal_val)
             p.text(subtotal_label + ' ' * max(subtotal_padding, 1) + subtotal_val + '\n')
 
@@ -144,7 +147,7 @@ def print_receipt(transaction):
             if is_vat_exempt and stored_vat_amount > 0:
                 vat_pct = int(profile.vat_rate) if profile and hasattr(profile, 'vat_rate') else 12
                 vat_rem_label = f'VAT ({vat_pct}%) Removed:'
-                vat_rem_val = f'-PHP {stored_vat_amount:.2f}'
+                vat_rem_val = format_currency(-stored_vat_amount, ccode)
                 vat_rem_padding = RECEIPT_WIDTH - len(vat_rem_label) - len(vat_rem_val)
                 p.text(vat_rem_label + ' ' * max(vat_rem_padding, 1) + vat_rem_val + '\n')
 
@@ -162,7 +165,7 @@ def print_receipt(transaction):
                 else:
                     disc_label = 'Discount:'
 
-                disc_val = f'-PHP {discount:.2f}'
+                disc_val = format_currency(-discount, ccode)
                 disc_padding = RECEIPT_WIDTH - len(disc_label) - len(disc_val)
                 p.text(disc_label + ' ' * max(disc_padding, 1) + disc_val + '\n')
 
@@ -174,7 +177,7 @@ def print_receipt(transaction):
 
             p.set(bold=True)
             total_label = 'TOTAL:'
-            total_val = f'PHP {total:.2f}'
+            total_val = format_currency(total, ccode)
             total_padding = RECEIPT_WIDTH - len(total_label) - len(total_val)
             p.text(total_label + ' ' * max(total_padding, 1) + total_val + '\n')
             p.set(bold=False)
@@ -184,7 +187,7 @@ def print_receipt(transaction):
                 vat_rate = float(profile.vat_rate)
                 vat_amount = total * vat_rate / (100 + vat_rate)
                 vat_label = f'Incl. VAT ({vat_rate:.0f}%):'
-                vat_val = f'PHP {vat_amount:.2f}'
+                vat_val = format_currency(vat_amount, ccode)
                 vat_padding = RECEIPT_WIDTH - len(vat_label) - len(vat_val)
                 p.text(vat_label + ' ' * max(vat_padding, 1) + vat_val + '\n')
 
@@ -205,7 +208,7 @@ def print_receipt(transaction):
                 total_dec = Decimal(str(total))
                 change_dec = (cash_dec - total_dec).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
                 # 32-char layout — see docs/receipt-design.html (cash sample).
-                p.text(f'Cash: PHP {cash_dec:.2f}  Change: {change_dec:.2f}\n')
+                p.text(f'Cash: {format_currency(cash_dec, ccode)}  Change: {format_currency(change_dec, ccode)}\n')
             elif transaction.payment_method in ('gcash', 'maya'):
                 ref = transaction.gcash_reference or transaction.maya_reference or 'N/A'
                 p.text(f'Ref#: {ref}\n')
@@ -236,6 +239,7 @@ def print_zreport_summary(data):
         ip, port, profile = _get_printer()
         if not ip:
             return {'success': False, 'message': 'Printer not configured.'}
+        ccode = profile.currency if profile else 'PHP'
         p = File(_get_usb_device_path() or '/dev/usb/lp1')
         p.set(font='b', align='left')
         try:
@@ -259,10 +263,10 @@ def print_zreport_summary(data):
                 pad = RECEIPT_WIDTH - len(label) - len(val)
                 return label + ' ' * max(pad, 1) + val + '\n'
 
-            p.text(rrow('Gross Sales:', f"PHP {float(data.get('gross_sales', 0)):.2f}"))
-            p.text(rrow('Voids:', f"PHP {float(data.get('void_total', 0)):.2f}"))
+            p.text(rrow('Gross Sales:', format_currency(data.get('gross_sales', 0), ccode)))
+            p.text(rrow('Voids:', format_currency(data.get('void_total', 0), ccode)))
             p.set(bold=True)
-            p.text(rrow('Net Sales:', f"PHP {float(data.get('net_sales', 0)):.2f}"))
+            p.text(rrow('Net Sales:', format_currency(data.get('net_sales', 0), ccode)))
             p.set(bold=False)
             p.text(rrow('Transactions:', str(data.get('transaction_count', 0))))
             p.text('-' * RECEIPT_WIDTH + '\n')
@@ -270,7 +274,7 @@ def print_zreport_summary(data):
                 method = {'cash': 'Cash', 'gcash': 'GCash', 'maya': 'Maya'}.get(
                     row.get('payment_method', ''), row.get('payment_method', 'Other'))
                 p.text(rrow(f"  {method} ({row.get('count', 0)}):",
-                            f"PHP {float(row.get('subtotal', 0)):.2f}"))
+                            format_currency(row.get('subtotal', 0), ccode)))
             discount_breakdown = data.get('discount_breakdown', [])
             if discount_breakdown:
                 p.text('-' * RECEIPT_WIDTH + '\n')
@@ -278,18 +282,20 @@ def print_zreport_summary(data):
                 for d in discount_breakdown:
                     label = d.get('label', d.get('type', 'Discount'))[:16]
                     amount = float(d.get('total_discount', 0))
-                    p.text(f"{label:<16}-PHP {amount:>10.2f}\n")
+                    p.text(rrow(label, format_currency(-amount, ccode)))
                 total_disc = float(data.get('total_discounts_given', 0))
-                p.text(f"{'Total':<16}-PHP {total_disc:>10.2f}\n")
+                p.text(rrow('Total', format_currency(-total_disc, ccode)))
             p.text('-' * RECEIPT_WIDTH + '\n')
             cash_expected = float(data.get('cash_expected', 0))
-            p.text(rrow('Cash Expected:', f"PHP {cash_expected:.2f}"))
+            p.text(rrow('Cash Expected:', format_currency(cash_expected, ccode)))
             if data.get('closing_cash') is not None:
                 closing_cash = float(data['closing_cash'])
                 over_short = closing_cash - cash_expected
-                sign = '+' if over_short >= 0 else ''
-                p.text(rrow('Closing Cash:', f"PHP {closing_cash:.2f}"))
-                p.text(rrow('Over/Short:', f"PHP {sign}{over_short:.2f}"))
+                p.text(rrow('Closing Cash:', format_currency(closing_cash, ccode)))
+                over_short_val = format_currency(over_short, ccode)
+                if over_short >= 0:
+                    over_short_val = '+' + over_short_val
+                p.text(rrow('Over/Short:', over_short_val))
             else:
                 p.text('Over/Short: ________________\n')
             p.text('-' * RECEIPT_WIDTH + '\n')
@@ -311,6 +317,7 @@ def print_xreport_summary(data):
         ip, port, profile = _get_printer()
         if not ip:
             return {'success': False, 'message': 'Printer not configured.'}
+        ccode = profile.currency if profile else 'PHP'
         p = File(_get_usb_device_path() or '/dev/usb/lp1')
         p.set(font='b', align='left')
         try:
@@ -335,10 +342,10 @@ def print_xreport_summary(data):
                 pad = RECEIPT_WIDTH - len(label) - len(val)
                 return label + ' ' * max(pad, 1) + val + '\n'
 
-            p.text(rrow('Gross Sales:', f"PHP {float(data.get('gross_sales', 0)):.2f}"))
-            p.text(rrow('Voids:', f"PHP {float(data.get('void_total', 0)):.2f}"))
+            p.text(rrow('Gross Sales:', format_currency(data.get('gross_sales', 0), ccode)))
+            p.text(rrow('Voids:', format_currency(data.get('void_total', 0), ccode)))
             p.set(bold=True)
-            p.text(rrow('Net Sales:', f"PHP {float(data.get('net_sales', 0)):.2f}"))
+            p.text(rrow('Net Sales:', format_currency(data.get('net_sales', 0), ccode)))
             p.set(bold=False)
             p.text(rrow('Transactions:', str(data.get('transaction_count', 0))))
             p.text('-' * RECEIPT_WIDTH + '\n')
@@ -346,7 +353,7 @@ def print_xreport_summary(data):
                 method = {'cash': 'Cash', 'gcash': 'GCash', 'maya': 'Maya'}.get(
                     row.get('payment_method', ''), row.get('payment_method', 'Other'))
                 p.text(rrow(f"  {method} ({row.get('count', 0)}):",
-                            f"PHP {float(row.get('subtotal', 0)):.2f}"))
+                            format_currency(row.get('subtotal', 0), ccode)))
             p.text('-' * RECEIPT_WIDTH + '\n')
             p.set(align='center')
             if profile and profile.receipt_footer:

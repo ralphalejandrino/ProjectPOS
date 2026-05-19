@@ -13,6 +13,7 @@
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="shared-styles.css">
     <script src="config.js"></script>
+    <script src="components/format.js"></script>
     <script src="components/nav.js"></script>
 </head>
 <body class="bg-gray-50" data-page="inventory" style="visibility:hidden">
@@ -78,15 +79,15 @@
                     </div>
                     <div class="bg-white rounded-lg shadow p-4 border-l-4 border-purple-500">
                         <h3 class="text-xs font-semibold text-gray-600 mb-1">Inventory Value</h3>
-                        <p id="stat-inventory-value" class="text-2xl font-bold text-purple-600">₱0</p>
+                        <p id="stat-inventory-value" class="text-2xl font-bold text-purple-600">0</p>
                     </div>
                     <div class="bg-white rounded-lg shadow p-4 border-l-4 border-orange-500">
                         <h3 class="text-xs font-semibold text-gray-600 mb-1">Total Cost</h3>
-                        <p id="stat-total-cost" class="text-2xl font-bold text-orange-600">₱0</p>
+                        <p id="stat-total-cost" class="text-2xl font-bold text-orange-600">0</p>
                     </div>
                     <div class="bg-white rounded-lg shadow p-4 border-l-4 border-teal-500">
                         <h3 class="text-xs font-semibold text-gray-600 mb-1">Potential Profit</h3>
-                        <p id="stat-potential-profit" class="text-2xl font-bold text-teal-600">₱0</p>
+                        <p id="stat-potential-profit" class="text-2xl font-bold text-teal-600">0</p>
                     </div>
                 </div>
 
@@ -450,9 +451,9 @@
                 document.getElementById('stat-low-stock').textContent = data.low_stock_count;
                 document.getElementById('stat-avg-margin').textContent =
                     data.average_profit_margin != null ? `${Number(data.average_profit_margin).toFixed(1)}%` : 'N/A';
-                document.getElementById('stat-inventory-value').textContent = `₱${Number(data.total_inventory_value || 0).toFixed(2)}`;
-                document.getElementById('stat-total-cost').textContent = `₱${Number(data.total_cost_value || 0).toFixed(2)}`;
-                document.getElementById('stat-potential-profit').textContent = `₱${Number(data.potential_profit || 0).toFixed(2)}`;
+                document.getElementById('stat-inventory-value').textContent = `${formatCurrency(Number(data.total_inventory_value || 0))}`;
+                document.getElementById('stat-total-cost').textContent = `${formatCurrency(Number(data.total_cost_value || 0))}`;
+                document.getElementById('stat-potential-profit').textContent = `${formatCurrency(Number(data.potential_profit || 0))}`;
             } catch (error) {
                 // Analytics failure is non-fatal — products still load
             }
@@ -494,8 +495,8 @@
                             <span class="text-xs">${escapeHtml(item.bar_code || '-')}</span>
                         </td>
                         <td class="px-4 py-3 text-sm">${escapeHtml(item.category_name || 'General')}</td>
-                        <td class="px-4 py-3">₱${parseFloat(item.purchase_price || 0).toFixed(2)}</td>
-                        <td class="px-4 py-3 font-medium">₱${parseFloat(item.price).toFixed(2)}</td>
+                        <td class="px-4 py-3">${formatCurrency(parseFloat(item.purchase_price || 0))}</td>
+                        <td class="px-4 py-3 font-medium">${formatCurrency(parseFloat(item.price))}</td>
                         <td class="px-4 py-3 font-medium ${marginClass}">${item.profit_margin != null ? item.profit_margin.toFixed(1) + '%' : 'N/A'}</td>
                         <td class="px-4 py-3 font-medium ${stockClass}">${item.stock}</td>
                         <td class="px-4 py-3">
@@ -895,7 +896,7 @@
                                 : (g.options || []).map(opt => `
                                 <div class="flex items-center gap-2 p-2 bg-white border border-gray-100 rounded" id="vg-opt-row-${opt.id}">
                                     <span class="flex-1 text-sm text-gray-700">${escapeHtml(opt.name)}</span>
-                                    <span class="text-xs text-gray-500">${parseFloat(opt.price_modifier) !== 0 ? (parseFloat(opt.price_modifier) > 0 ? '+₱' : '-₱') + Math.abs(parseFloat(opt.price_modifier)).toFixed(2) : 'no charge'}</span>
+                                    <span class="text-xs text-gray-500">${parseFloat(opt.price_modifier) !== 0 ? (parseFloat(opt.price_modifier) > 0 ? '+' : '') + formatCurrency(parseFloat(opt.price_modifier)) : 'no charge'}</span>
                                     <span class="text-xs text-gray-400">sort:${opt.sort_order}</span>
                                     <button onclick="openEditOptionModal('${g.id}','${opt.id}')" class="text-blue-500 hover:text-blue-700 text-xs">✏️</button>
                                     <button onclick="deleteOption('${g.id}','${opt.id}','${escapeHtml(opt.name).replace(/'/g, "\\'")}')" class="text-red-500 hover:text-red-700 text-xs">🗑️</button>

@@ -251,8 +251,12 @@ async function loadSiteName() {
             pwd_discount_enabled: data.pwd_discount_enabled !== false,
             pwd_discount_rate: data.pwd_discount_rate || 20,
             promo_discount_enabled: !!data.promo_discount_enabled,
-            track_inventory: data.track_inventory !== false
+            track_inventory: data.track_inventory !== false,
+            currency: data.currency || 'PHP',
+            vat_inclusive: !!data.vat_inclusive,
+            receipt_header: data.receipt_header || ''
         }));
+        window.__currency = (data.currency || 'PHP').toUpperCase();
     } catch (e) {}
 }
 

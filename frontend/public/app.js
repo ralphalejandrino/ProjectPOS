@@ -182,7 +182,7 @@ function displayProducts(products) {
                 <div class="absolute bottom-0 left-0 right-0 px-2 pb-2 flex justify-between items-end">
                     <span class="text-white font-bold text-base leading-tight drop-shadow">${escapeHtml(product.name)}</span>
                     <div class="text-right">
-                        <div class="text-white font-bold text-base drop-shadow">₱${parseFloat(product.price).toFixed(2)}</div>
+                        <div class="text-white font-bold text-base drop-shadow">${formatCurrency(parseFloat(product.price))}</div>
                         ${stockText ? `<div class="text-xs ${stockClass} font-medium drop-shadow">${stockText}</div>` : ''}
                     </div>
                 </div>
@@ -322,7 +322,7 @@ function showVariantPicker(item) {
             const inputType = g.selection_type === 'multi' ? 'checkbox' : 'radio';
             const inputName = `vg_${g.id}`;
             const pm = parseFloat(opt.price_modifier);
-            const priceLabel = pm > 0 ? `+₱${pm.toFixed(2)}` : pm < 0 ? `-₱${Math.abs(pm).toFixed(2)}` : '';
+            const priceLabel = pm > 0 ? `+${formatCurrency(pm)}` : pm < 0 ? `-${formatCurrency(Math.abs(pm))}` : '';
             const row = document.createElement('label');
             row.className = 'flex items-center gap-2 cursor-pointer text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200';
             row.innerHTML = `<input type="${inputType}" name="${inputName}" value="${opt.id}" data-group="${g.id}" data-price="${opt.price_modifier}" class="variant-input"> ${escapeHtml(opt.name)}${priceLabel ? ' <span class="text-indigo-500">' + escapeHtml(priceLabel) + '</span>' : ''}`;
@@ -344,7 +344,7 @@ function updateVariantPrice() {
     document.querySelectorAll('.variant-input:checked').forEach(input => {
         total += parseFloat(input.dataset.price || 0);
     });
-    document.getElementById('variant-modal-price').textContent = `₱${total.toFixed(2)}`;
+    document.getElementById('variant-modal-price').textContent = `${formatCurrency(total)}`;
 }
 
 function closeVariantModal() {
@@ -421,7 +421,7 @@ function updateCart() {
     cartCount.textContent = totalItems;
 
     // Update total display
-    cartTotal.textContent = `₱${parseFloat(window.cart.total || 0).toFixed(2)}`;
+    cartTotal.textContent = `${formatCurrency(parseFloat(window.cart.total || 0))}`;
     
     // Update items
     if (window.cart.items.length === 0) {
@@ -437,7 +437,7 @@ function updateCart() {
                     <div class="flex-1">
                         <div class="font-bold text-gray-800">${escapeHtml(item.emoji)} ${escapeHtml(item.baseName || item.name)}</div>
                         ${variantSubtitle}
-                        <div class="text-sm text-gray-600">₱${parseFloat(item.price || 0).toFixed(2)} each</div>
+                        <div class="text-sm text-gray-600">${formatCurrency(parseFloat(item.price || 0))} each</div>
                     </div>
                     <button onclick="removeFromCart('${item.cartKey}')" class="text-red-500 hover:text-red-700 font-bold">
                         ✕
@@ -449,7 +449,7 @@ function updateCart() {
                         <span class="w-12 text-center font-bold">${item.quantity}</span>
                         <button onclick="updateQuantity('${item.cartKey}', 1)" class="bg-blue-600 hover:bg-blue-700 text-white w-8 h-8 rounded font-bold">+</button>
                     </div>
-                    <div class="font-bold text-blue-600">₱${parseFloat((item.price * item.quantity) || 0).toFixed(2)}</div>
+                    <div class="font-bold text-blue-600">${formatCurrency(parseFloat((item.price * item.quantity) || 0))}</div>
                 </div>
             </div>
         `}).join('');
@@ -597,7 +597,7 @@ function applyModalDiscount(prefix) {
     // Update the modal total display
     if (prefix === 'cash') {
         const cashTotalEl = document.getElementById('cash-total');
-        if (cashTotalEl) cashTotalEl.textContent = '₱' + newTotal.toFixed(2);
+        if (cashTotalEl) cashTotalEl.textContent = formatCurrency(newTotal);
     } else {
         const spanEl = document.getElementById(prefix + '-total');
         if (spanEl) spanEl.textContent = newTotal.toFixed(2);
@@ -605,7 +605,7 @@ function applyModalDiscount(prefix) {
 
     const display = document.getElementById(prefix + '-discount-display');
     if (display) {
-        display.textContent = discountLabel + ': -₱' + discountAmount.toFixed(2);
+        display.textContent = discountLabel + ': ' + formatCurrency(-discountAmount);
         display.classList.remove('hidden');
     }
 
@@ -627,7 +627,7 @@ function clearModalDiscount(prefix) {
     const subtotal = window.cart.items.reduce((sum, i) => sum + (parseFloat(i.price) * i.quantity), 0);
     if (prefix === 'cash') {
         const cashTotalEl = document.getElementById('cash-total');
-        if (cashTotalEl) cashTotalEl.textContent = '₱' + subtotal.toFixed(2);
+        if (cashTotalEl) cashTotalEl.textContent = formatCurrency(subtotal);
     } else {
         const spanEl = document.getElementById(prefix + '-total');
         if (spanEl) spanEl.textContent = subtotal.toFixed(2);

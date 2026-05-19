@@ -11,6 +11,7 @@ from django.utils import timezone as dj_tz
 from djmoney.models.fields import MoneyField
 
 from .fields import FernetEncryptedField
+from .utils.currency import format_currency
 
 from .validators import (
     validate_non_negative_price,
@@ -517,7 +518,7 @@ class PosTransactionItem(BaseModelWithUUID):
         super().save(*args, **kwargs)
 
     def __str__(self):
-        return f"{self.item.name} x{self.quantity} = ₱{self.subtotal}"
+        return f"{self.item.name} x{self.quantity} = {format_currency(self.subtotal)}"
 
 
 class TransactionItemVariant(models.Model):
@@ -583,7 +584,7 @@ class CartItem(BaseModelWithUUID):
         return self.price * self.quantity
 
     def __str__(self):
-        return f"{self.item.name} x{self.quantity} = ₱{self.subtotal}"
+        return f"{self.item.name} x{self.quantity} = {format_currency(self.subtotal)}"
 
 
 # ============================================================================

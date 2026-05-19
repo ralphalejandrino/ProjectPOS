@@ -12,6 +12,7 @@
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="shared-styles.css">
     <script src="config.js"></script>
+    <script src="components/format.js"></script>
     <script src="components/nav.js"></script>
     <style>
         @media print {
@@ -290,7 +291,7 @@
         }
 
         function fmt(n) {
-            return '₱' + parseFloat(n || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            return formatCurrency(parseFloat(n || 0));
         }
 
         function fmtTime(isoStr) {
@@ -478,7 +479,7 @@
             const discSection = document.getElementById('rpt-discount-section');
             const totalDiscountsGiven = parseFloat(data.total_discounts_given) || 0;
             if (totalDiscountsGiven > 0) {
-                document.getElementById('rpt-discount-total-header').textContent = `-₱${totalDiscountsGiven.toFixed(2)}`;
+                document.getElementById('rpt-discount-total-header').textContent = `-${formatCurrency(totalDiscountsGiven)}`;
                 const discRows = (data.discount_breakdown || []).map(d => `
                     <tr class="border-b border-gray-100">
                         <td class="py-2 px-3 text-gray-800">${escapeHtml(d.label)}</td>
@@ -539,7 +540,7 @@
 
             const val = input.value.trim();
             if (val === '' || isNaN(parseFloat(val)) || parseFloat(val) < 0) {
-                errEl.textContent = 'Enter a valid closing cash amount (₱0 or more).';
+                errEl.textContent = 'Enter a valid closing cash amount (0 or more).';
                 errEl.classList.remove('hidden');
                 return;
             }

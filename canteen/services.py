@@ -4,6 +4,7 @@ from django.db.models import F
 from django.core.exceptions import ValidationError
 from rest_framework.exceptions import ValidationError as DRFValidationError
 from djmoney.money import Money
+from .utils.currency import format_currency
 from .models import (
     Item, PosTransaction, PosTransactionItem, Shift,
     VariantGroup, VariantOption,
@@ -213,9 +214,10 @@ def create_pos_transaction(items_data, payment_method, cashier=None, **kwargs):
         _sc_pwd_vat_amount = Decimal('0.00')
         _is_vat_exempt = False
 
+        _ccode = _bp.currency if _bp else 'PHP'
         if discount_decimal > total:
             raise DRFValidationError(
-                f"Discount (₱{discount_decimal}) cannot exceed order total (₱{total})"
+                f"Discount ({format_currency(discount_decimal, _ccode)}) cannot exceed order total ({format_currency(total, _ccode)})"
             )
 
         # Re-derive expected discount from BusinessProfile rates
@@ -249,8 +251,8 @@ def create_pos_transaction(items_data, payment_method, cashier=None, **kwargs):
                 expected = Decimal('0.00')
             if discount_decimal - expected > Decimal('0.01'):
                 raise DRFValidationError(
-                    f"Discount amount (₱{discount_decimal}) exceeds the allowed maximum "
-                    f"(₱{expected}) for discount type '{discount_type}'."
+                    f"Discount amount ({format_currency(discount_decimal, _ccode)}) exceeds the allowed maximum "
+                    f"({format_currency(expected, _ccode)}) for discount type '{discount_type}'."
                 )
 
         # Require a non-empty ID number for SC/PWD discounts

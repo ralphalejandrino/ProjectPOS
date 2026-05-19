@@ -46,6 +46,7 @@
 <!-- NAVIGATION (FEATURE-029: canonical shared nav) -->
 <div id="nav-mount"></div>
 <script src="config.js"></script>
+    <script src="components/format.js"></script>
 <script src="components/nav.js"></script>
 <script>renderNav({ activePage: 'ingredients' });</script>
 
@@ -647,7 +648,7 @@ function renderIngredients(list) {
       ? `<span class="px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">Low Stock</span>`
       : `<span class="px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">OK</span>`;
     const unitAbbr = i.unit_detail?.abbreviation || i.unit_detail?.name || '—';
-    const cost     = i.cost_per_unit != null ? '₱' + parseFloat(i.cost_per_unit).toFixed(2) : '—';
+    const cost     = i.cost_per_unit != null ? formatCurrency(parseFloat(i.cost_per_unit)) : '—';
     return `
       <tr class="${low ? 'low-stock-row' : ''} border-b border-gray-50 hover:bg-gray-50 transition">
         <td class="px-4 py-3 font-medium text-gray-800">${esc(i.name)}</td>
@@ -768,7 +769,7 @@ async function loadRestockLog() {
       const ing  = ingredients.find(i => i.id === l.ingredient) || {};
       const unit = ing.unit_detail?.abbreviation || '—';
       const date = l.date ? new Date(l.date).toLocaleDateString('en-PH', { year:'numeric', month:'short', day:'numeric' }) : '—';
-      const cost = l.cost_per_unit != null ? '₱' + parseFloat(l.cost_per_unit).toFixed(2) : '—';
+      const cost = l.cost_per_unit != null ? formatCurrency(parseFloat(l.cost_per_unit)) : '—';
       return `
         <tr class="border-b border-gray-50 hover:bg-gray-50">
           <td class="px-4 py-3 text-gray-500 whitespace-nowrap">${date}</td>
