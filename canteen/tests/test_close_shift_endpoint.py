@@ -79,16 +79,16 @@ class CloseShiftEndpointTests(APITestCase):
         shift.refresh_from_db()
         self.assertTrue(shift.is_open)
 
-    def test_min_blank_returns_400_with_min_message(self):
-        """8. MIN blank -> 400 with the specific MIN message."""
+    def test_min_blank_returns_201_unofficial(self):
+        """8. ISSUE-105: MIN blank -> 201 with is_official=False."""
         self.bp.machine_identification_number = ''
         self.bp.save()
         shift = self._open_and_sell()
         self.client.force_authenticate(self.cashier)
         res = self.client.post(self._url(shift),
                                 {'cash_counted': '200.00'}, format='json')
-        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('MIN', res.data['error'])
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        self.assertFalse(res.data['is_official'])
 
     def test_wrong_cashier_returns_403(self):
         """9. not own shift, not manager/admin -> 403."""

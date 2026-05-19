@@ -415,8 +415,10 @@ def close_shift_and_finalize_z(shift_id, cash_counted, cashier_user):
     Raises:
       - Shift.DoesNotExist if shift_id not found
       - ValidationError if the shift is already closed
-      - ValidationError if BusinessProfile.machine_identification_number
-        is blank (BIR-required; cannot finalize without it)
+
+    ISSUE-105: a blank BusinessProfile MIN no longer blocks finalize.
+    The resulting Z is flagged is_official=False (UNOFFICIAL) so
+    pre-BIR-accreditation cafes can still close shifts.
     """
     from django.utils import timezone as dj_tz
     from .models import (
@@ -428,13 +430,9 @@ def close_shift_and_finalize_z(shift_id, cash_counted, cashier_user):
     if shift.closed_at or not shift.is_open:
         raise ValidationError("Shift is already closed.")
 
-    # BIR identity gate — cannot finalize a Z without a MIN.
+    # ISSUE-105: no MIN gate. A blank MIN yields an UNOFFICIAL Z.
     bp = BusinessProfile.objects.first()
-    if not bp or not bp.machine_identification_number:
-        raise ValidationError(
-            "Cannot finalize Z: BusinessProfile MIN is blank. Configure BIR "
-            "identity fields in settings before closing shift."
-        )
+    is_official = bool(bp and (bp.machine_identification_number or '').strip())
 
     non_voided = PosTransaction.objects.filter(
         shift=shift, voided_at__isnull=True
@@ -551,6 +549,7 @@ def close_shift_and_finalize_z(shift_id, cash_counted, cashier_user):
         over_short=over_short,
         grand_total_sales=counter.grand_total,
         currency=(bp.currency or 'PHP'),
+        is_official=is_official,
         cashier=cashier_user,
     )
 

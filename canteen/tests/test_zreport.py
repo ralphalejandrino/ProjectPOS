@@ -114,6 +114,7 @@ class ImmutabilityTests(ZReportTestBase):
         shift = Shift.objects.get(cashier=self.user, is_open=True)
         z = close_shift_and_finalize_z(shift.id, Decimal('200.00'), self.user)
         z.business_name = 'tampered'
+        z.is_official = not z.is_official  # ISSUE-105: also immutable
         with self.assertRaises(ValidationError):
             z.save()
 
@@ -216,15 +217,25 @@ class PaymentBreakdownTests(ZReportTestBase):
 
 
 class MinValidationTests(ZReportTestBase):
-    def test_blank_min_blocks_finalize(self):
-        """9. Blank BusinessProfile MIN → ValidationError."""
+    def test_blank_min_finalizes_unofficial(self):
+        """9. ISSUE-105: blank MIN → succeeds, is_official=False."""
         _bp(machine_identification_number='')
         self._open_shift()
         self._sell('cash')
         shift = Shift.objects.get(cashier=self.user, is_open=True)
-        with self.assertRaises(ValidationError) as ctx:
-            close_shift_and_finalize_z(shift.id, Decimal('200.00'), self.user)
-        self.assertIn('MIN', '; '.join(ctx.exception.messages))
+        z = close_shift_and_finalize_z(shift.id, Decimal('200.00'), self.user)
+        self.assertFalse(z.is_official)
+        self.assertEqual(z.machine_identification_number, '')
+
+    def test_nonblank_min_finalizes_official(self):
+        """9b. ISSUE-105: non-blank MIN → is_official=True."""
+        _bp(machine_identification_number='MIN-001')
+        self._open_shift()
+        self._sell('cash')
+        shift = Shift.objects.get(cashier=self.user, is_open=True)
+        z = close_shift_and_finalize_z(shift.id, Decimal('200.00'), self.user)
+        self.assertTrue(z.is_official)
+        self.assertEqual(z.machine_identification_number, 'MIN-001')
 
 
 class ShiftClosureSideEffectTests(ZReportTestBase):

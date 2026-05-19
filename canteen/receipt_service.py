@@ -263,7 +263,22 @@ def print_z_report(z_report):
         def money(val):
             return format_currency(val, ccode)
 
+        official = z_report.is_official
+
         try:
+            # --- ISSUE-105: UNOFFICIAL top banner ---
+            if not official:
+                p.set(align='center', bold=True)
+                p.text('=' * RECEIPT_WIDTH + '\n')
+                p.set(align='center', bold=True,
+                      double_height=True, double_width=False)
+                p.text('*** UNOFFICIAL ***\n')
+                p.text('NOT FOR BIR SUBMISSION\n')
+                p.set(align='center', bold=True,
+                      double_height=False, double_width=False)
+                p.text('=' * RECEIPT_WIDTH + '\n')
+                p.set(align='left', bold=False)
+
             # --- Header (frozen identity) ---
             p.set(align='center', bold=True, double_height=True, double_width=True)
             p.text((z_report.business_name or 'Z-REPORT') + '\n')
@@ -275,14 +290,17 @@ def print_z_report(z_report):
                         p.text(line + '\n')
             if z_report.business_tin:
                 p.text(f'TIN: {z_report.business_tin}\n')
-            if z_report.machine_identification_number:
-                p.text(f'MIN: {z_report.machine_identification_number}\n')
-            if z_report.machine_serial_number:
-                p.text(f'Serial: {z_report.machine_serial_number}\n')
-            if z_report.pos_accreditation_number:
-                p.text(f'Accreditation: {z_report.pos_accreditation_number}\n')
-            if z_report.pos_permit_number:
-                p.text(f'Permit: {z_report.pos_permit_number}\n')
+            # Identity rows only on official Zs — printing blank labels on
+            # an unofficial Z looks like a redaction (ISSUE-105).
+            if official:
+                if z_report.machine_identification_number:
+                    p.text(f'MIN: {z_report.machine_identification_number}\n')
+                if z_report.machine_serial_number:
+                    p.text(f'Serial: {z_report.machine_serial_number}\n')
+                if z_report.pos_accreditation_number:
+                    p.text(f'Accreditation: {z_report.pos_accreditation_number}\n')
+                if z_report.pos_permit_number:
+                    p.text(f'Permit: {z_report.pos_permit_number}\n')
 
             # --- Z block ---
             p.text('-' * RECEIPT_WIDTH + '\n')
@@ -358,6 +376,12 @@ def print_z_report(z_report):
                         money(z_report.grand_total_sales)))
             p.set(bold=False, align='center')
             p.text(f'Generated {finalized}\n')
+            if not official:
+                p.set(align='center', bold=True)
+                p.text('=' * RECEIPT_WIDTH + '\n')
+                p.text('*** UNOFFICIAL Z REPORT ***\n')
+                p.text('=' * RECEIPT_WIDTH + '\n')
+                p.set(align='center', bold=False)
             p.cut()
         finally:
             p.close()

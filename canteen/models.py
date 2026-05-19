@@ -931,6 +931,11 @@ class ZReport(models.Model):
     # changes. Display-only, but kept immutable for self-containment.
     currency = models.CharField(max_length=8, default='PHP')
 
+    # ISSUE-105: False when finalized without a BusinessProfile MIN
+    # (pre-BIR-accreditation). Drives the UNOFFICIAL stamp on print and
+    # the conditional identity rows in the HTML/thermal Z.
+    is_official = models.BooleanField(default=False)
+
     cashier = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='z_reports'
     )

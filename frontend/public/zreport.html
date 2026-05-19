@@ -61,9 +61,10 @@
         <div id="close-shift-panel" class="bg-orange-50 border border-orange-300 rounded-xl p-5 mb-6 no-print">
             <h3 class="font-bold text-orange-800 mb-1">🔒 Close Current Shift</h3>
             <p class="text-sm text-orange-700 mb-3">Closing a shift finalizes an immutable Z-Report. This cannot be undone.</p>
-            <div id="min-blank-banner" class="hidden bg-red-50 border border-red-300 text-red-700 rounded-lg p-3 mb-3 text-sm">
-                BIR identity not configured — shift close disabled.
-                Configure in <a href="settings.html" class="underline font-semibold">Settings → BIR Compliance</a>.
+            <div id="min-blank-banner" class="hidden bg-orange-100 border border-orange-300 text-orange-800 rounded-lg p-3 mb-3 text-sm">
+                BIR identity not configured — Z reports will be marked
+                <span class="font-semibold">UNOFFICIAL</span> until MIN is set in
+                <a href="settings.html" class="underline font-semibold">Settings → BIR Compliance</a>.
             </div>
             <button id="close-shift-btn" onclick="openCloseModal()"
                 class="bg-orange-600 hover:bg-orange-700 text-white font-bold px-5 py-2 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed">
@@ -110,18 +111,24 @@
 
         <!-- DETAIL VIEW -->
         <div id="detail-view" class="hidden">
+            <div id="z-unofficial-banner" class="hidden bg-red-50 border border-red-300 text-red-700 rounded-lg p-3 mb-4 text-sm font-semibold text-center no-print-bg">
+                UNOFFICIAL Z REPORT — NOT FOR BIR SUBMISSION.
+                This Z was generated while BIR identity was not configured.
+            </div>
             <div class="bg-white rounded-lg shadow-lg p-6 mb-4 text-center">
                 <p id="z-biz-name" class="text-xl font-bold text-gray-800"></p>
                 <p id="z-biz-address" class="text-sm text-gray-600"></p>
                 <p class="text-sm text-gray-600">TIN: <span id="z-tin" class="font-medium text-gray-800"></span></p>
-                <p class="text-sm text-gray-600">
-                    MIN: <span id="z-min" class="font-medium text-gray-800"></span>
-                    &nbsp;|&nbsp; Serial: <span id="z-serial" class="font-medium text-gray-800"></span>
-                </p>
-                <p class="text-sm text-gray-600">
-                    Accreditation: <span id="z-accr" class="font-medium text-gray-800"></span>
-                    <span id="z-permit-wrap" class="hidden">&nbsp;|&nbsp; Permit: <span id="z-permit" class="font-medium text-gray-800"></span></span>
-                </p>
+                <div id="z-identity-block">
+                    <p class="text-sm text-gray-600">
+                        MIN: <span id="z-min" class="font-medium text-gray-800"></span>
+                        &nbsp;|&nbsp; Serial: <span id="z-serial" class="font-medium text-gray-800"></span>
+                    </p>
+                    <p class="text-sm text-gray-600">
+                        Accreditation: <span id="z-accr" class="font-medium text-gray-800"></span>
+                        <span id="z-permit-wrap" class="hidden">&nbsp;|&nbsp; Permit: <span id="z-permit" class="font-medium text-gray-800"></span></span>
+                    </p>
+                </div>
                 <p class="text-lg font-bold text-gray-700 mt-3 tracking-widest">Z REPORT</p>
                 <div class="mt-2 text-sm text-gray-600 space-y-1">
                     <p>Z #: <span id="z-counter" class="font-bold text-gray-800"></span>
@@ -235,10 +242,10 @@
                 if (!res.ok) return;
                 const bp = await res.json();
                 if (bp.currency) zCurrency = String(bp.currency).toUpperCase();
+                // ISSUE-105: informational only — close stays enabled.
                 const minBlank = !bp.machine_identification_number;
                 if (minBlank) {
                     document.getElementById('min-blank-banner').classList.remove('hidden');
-                    document.getElementById('close-shift-btn').disabled = true;
                 }
             } catch (e) { /* non-fatal — leave button enabled, server re-checks */ }
         }
@@ -285,17 +292,9 @@
                     window.location.href = `zreport.html?z=${data.z_counter}`;
                     return;
                 }
+                // ISSUE-105: MIN is no longer a close-shift blocker.
                 const errMsg = data.error || `Error ${res.status}`;
-                if (res.status === 400 && /MIN/.test(errMsg)) {
-                    closeCloseModal();
-                    document.getElementById('min-blank-banner').classList.remove('hidden');
-                    document.getElementById('close-shift-btn').disabled = true;
-                    const m = document.getElementById('close-shift-msg');
-                    m.textContent = 'BIR identity not configured — see Settings.';
-                    m.className = 'text-sm ml-3 text-red-600';
-                } else {
-                    modalErr(errMsg);
-                }
+                modalErr(errMsg);
                 btn.disabled = false;
             } catch (e) {
                 modalErr('Failed to close shift: ' + e.message);
@@ -333,7 +332,7 @@
                 } else {
                     tbody.innerHTML = rows.map(r => `
                         <tr class="border-b border-gray-100 hover:bg-gray-50 cursor-pointer" onclick="location.href='zreport.html?z=${r.z_counter}'">
-                            <td class="py-2 px-3 font-bold text-gray-800">Z-${String(r.z_counter).padStart(4,'0')}</td>
+                            <td class="py-2 px-3 font-bold text-gray-800">Z-${String(r.z_counter).padStart(4,'0')}${r.is_official === false ? ' <span class="ml-2 align-middle text-[10px] font-semibold uppercase tracking-wide bg-gray-200 text-gray-600 rounded-full px-2 py-0.5">Unofficial</span>' : ''}</td>
                             <td class="py-2 px-3 text-gray-700">${escapeHtml(r.business_date)}</td>
                             <td class="py-2 px-3 text-gray-700">${escapeHtml(r.cashier_username || '-')}</td>
                             <td class="py-2 px-3 text-right font-medium text-gray-800">${formatCurrency(parseFloat(r.net_sales||0), (r.currency||'PHP'))}</td>
@@ -381,12 +380,21 @@
             document.getElementById('z-biz-name').textContent = z.business_name || '';
             document.getElementById('z-biz-address').textContent = z.business_address || '';
             document.getElementById('z-tin').textContent = z.business_tin || '-';
-            document.getElementById('z-min').textContent = z.machine_identification_number || '-';
-            document.getElementById('z-serial').textContent = z.machine_serial_number || '-';
-            document.getElementById('z-accr').textContent = z.pos_accreditation_number || '-';
-            if (z.pos_permit_number) {
-                document.getElementById('z-permit-wrap').classList.remove('hidden');
-                document.getElementById('z-permit').textContent = z.pos_permit_number;
+
+            // ISSUE-105: identity rows + banner depend on is_official.
+            const official = z.is_official === true;
+            document.getElementById('z-unofficial-banner')
+                .classList.toggle('hidden', official);
+            document.getElementById('z-identity-block')
+                .classList.toggle('hidden', !official);
+            if (official) {
+                document.getElementById('z-min').textContent = z.machine_identification_number || '-';
+                document.getElementById('z-serial').textContent = z.machine_serial_number || '-';
+                document.getElementById('z-accr').textContent = z.pos_accreditation_number || '-';
+                if (z.pos_permit_number) {
+                    document.getElementById('z-permit-wrap').classList.remove('hidden');
+                    document.getElementById('z-permit').textContent = z.pos_permit_number;
+                }
             }
             document.getElementById('z-counter').textContent = z.z_counter;
             document.getElementById('z-reset').textContent = z.reset_counter;

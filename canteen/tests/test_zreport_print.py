@@ -181,6 +181,51 @@ class StreamLayoutTests(ZPrintTestBase):
             format_currency(z.vat_exempt_sales, z.currency), out
         )
 
+    def test_official_z_includes_identity_lines(self):
+        """6. ISSUE-105: official Z prints MIN/Serial/Accreditation."""
+        z = self._finalize()
+        self.assertTrue(z.is_official)
+        ok, out = self._print(z)
+        self.assertTrue(ok)
+        self.assertIn('MIN: MIN-001', out)
+        self.assertIn('Serial: SN-001', out)
+        self.assertIn('Accreditation: ACCR-9', out)
+        self.assertNotIn('UNOFFICIAL', out)
+
+
+class UnofficialZPrintTests(ZPrintTestBase):
+    def setUp(self):
+        super().setUp()
+        self.bp = _bp(machine_identification_number='')
+
+    def test_unofficial_banners_top_and_bottom(self):
+        """7. ISSUE-105: UNOFFICIAL banner at top and bottom."""
+        z = self._finalize()
+        self.assertFalse(z.is_official)
+        ok, out = self._print(z)
+        self.assertTrue(ok)
+        self.assertIn('NOT FOR BIR SUBMISSION', out)
+        self.assertIn('*** UNOFFICIAL Z REPORT ***', out)
+        # top banner precedes the business name; bottom follows the footer
+        self.assertLess(out.find('UNOFFICIAL'), out.find('Test Canteen'))
+        self.assertLess(out.find('Generated '),
+                        out.find('*** UNOFFICIAL Z REPORT ***'))
+
+    def test_unofficial_omits_identity_lines(self):
+        """8. ISSUE-105: no MIN/Serial/Accreditation/Permit rows."""
+        z = self._finalize()
+        ok, out = self._print(z)
+        self.assertTrue(ok)
+        self.assertNotIn('MIN:', out)
+        self.assertNotIn('Serial:', out)
+        self.assertNotIn('Accreditation:', out)
+        self.assertNotIn('Permit:', out)
+        # rest still renders
+        self.assertIn('Test Canteen', out)
+        self.assertIn('Gross Sales:', out)
+
+
+class PrinterErrorTests(ZPrintTestBase):
     def test_printer_offline_returns_false(self):
         """5. Printer error -> False, logged, never raised."""
         z = self._finalize()

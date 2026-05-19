@@ -1,4 +1,5 @@
-const CACHE_NAME = 'tarsierpos-v61'; // canonical cache version (v61: FEATURE-011-D — Z-report rendering, close-shift UI, new endpoint switchover)
+// v62: ISSUE-105 — unofficial Z mode (pre-BIR-accreditation support)
+const CACHE_NAME = 'tarsierpos-v62'; // canonical cache version
 const ASSETS = [
   'index.html',
   'login.html',
