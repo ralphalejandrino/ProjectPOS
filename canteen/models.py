@@ -433,6 +433,47 @@ class PosTransaction(Transaction):
         default=Decimal('0.00'),
         help_text='VAT amount removed from transaction total (0.00 for non-exempt or VAT-disabled)',
     )
+    # FEATURE-012: frozen totals — single source of truth from migration 0023
+    # forward. Written once at commit in services.create_pos_transaction();
+    # never mutated afterwards (the void path must not touch these).
+    gross_total = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text='Frozen pre-discount total (VAT-inclusive when BusinessProfile.vat_inclusive)',
+    )
+    discount_total = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        help_text='Frozen discount applied to this transaction',
+    )
+    vat_exempt_amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        help_text='Frozen VAT-exempt sales (net of removed VAT for SC/PWD)',
+    )
+    vatable_sales = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        help_text='Frozen VAT-exclusive sales subject to output VAT',
+    )
+    zero_rated_sales = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        help_text='Frozen zero-rated sales (no zero-rated item flag exists yet — always 0.00)',
+    )
+    net_total = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text='Frozen final charged amount (equals total_amount at commit)',
+    )
     shift = models.ForeignKey(
         'Shift',
         blank=True,

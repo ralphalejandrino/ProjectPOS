@@ -263,7 +263,13 @@ class PosTransactionViewSet(viewsets.ViewSet):
                 transaction.status = 'void'
                 transaction.voided_by = request.user
                 transaction.purpose_of_void = request.data.get('reason', 'No reason provided')
-                transaction.save()
+                # FEATURE-012: void must NOT mutate the frozen totals. Restrict
+                # the write to void bookkeeping fields only so the frozen
+                # columns can never be re-persisted from a stale instance.
+                transaction.save(update_fields=[
+                    'void', 'voided_at', 'status', 'voided_by',
+                    'purpose_of_void', 'updated_at',
+                ])
 
                 return Response({'success': True, 'message': 'Transaction voided successfully'})
         except PosTransaction.DoesNotExist:

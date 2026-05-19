@@ -268,6 +268,45 @@ def create_pos_transaction(items_data, payment_method, cashier=None, **kwargs):
         else:
             final_total = total - discount_decimal
 
+        # FEATURE-012: freeze totals at commit. Single source of truth from
+        # this point forward. gross_total carries VAT-inclusive semantics only
+        # when BusinessProfile.vat_inclusive (it is just the pre-discount sum
+        # of line subtotals — the prices already embed VAT in inclusive mode).
+        _q = Decimal('0.01')
+        _frozen_gross = total.quantize(_q, rounding=ROUND_HALF_UP)
+        _frozen_discount = discount_decimal.quantize(_q, rounding=ROUND_HALF_UP)
+        _frozen_net = final_total.quantize(_q, rounding=ROUND_HALF_UP)
+        # No zero-rated item flag exists in the schema yet (see FEATURE-012
+        # note); this bucket is structurally always 0.00 until one is added.
+        _frozen_zero_rated = Decimal('0.00')
+        _vat_enabled = bool(_bp and _bp.vat_enabled)
+        # Null-aware VAT rate read from BusinessProfile — never a literal 12 / 0.12.
+        _vat_rate = (
+            Decimal(str(_bp.vat_rate)) if (_bp is not None and _bp.vat_rate is not None)
+            else Decimal('0')
+        )
+        if _is_vat_exempt:
+            # SC/PWD: VAT was removed (_sc_pwd_vat_amount); the charged amount
+            # is entirely VAT-exempt sales.
+            _frozen_vat_exempt = _frozen_net
+            _frozen_vatable = Decimal('0.00')
+        elif _vat_enabled and _vat_rate > 0:
+            _frozen_vat_exempt = Decimal('0.00')
+            _vat_inclusive = bool(_bp and _bp.vat_inclusive)
+            if _vat_inclusive:
+                _output_vat = (
+                    _frozen_net * _vat_rate / (Decimal('100') + _vat_rate)
+                ).quantize(_q, rounding=ROUND_HALF_UP)
+                _frozen_vatable = (_frozen_net - _output_vat).quantize(
+                    _q, rounding=ROUND_HALF_UP
+                )
+            else:
+                _frozen_vatable = _frozen_net
+        else:
+            # VAT disabled — no VAT breakdown applies.
+            _frozen_vat_exempt = Decimal('0.00')
+            _frozen_vatable = Decimal('0.00')
+
         # Attach the currently open shift, if any
         current_shift = Shift.objects.filter(
             cashier=cashier, is_open=True
@@ -287,6 +326,12 @@ def create_pos_transaction(items_data, payment_method, cashier=None, **kwargs):
             discount_id_number=kwargs.get('discount_id_number', ''),
             vat_exempt=_is_vat_exempt,
             vat_amount=_sc_pwd_vat_amount,
+            gross_total=_frozen_gross,
+            discount_total=_frozen_discount,
+            vat_exempt_amount=_frozen_vat_exempt,
+            vatable_sales=_frozen_vatable,
+            zero_rated_sales=_frozen_zero_rated,
+            net_total=_frozen_net,
             status='completed',
             payment_method=payment_method,
             cash_received=cash_received_amount,
