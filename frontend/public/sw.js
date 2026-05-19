@@ -1,5 +1,7 @@
 // v62: ISSUE-105 — unofficial Z mode (pre-BIR-accreditation support)
-const CACHE_NAME = 'tarsierpos-v62'; // canonical cache version
+// v63: ISSUE-106 + 107 + 104 — persistent shift indicator,
+// open-shift modal, sale-without-shift enforcement
+const CACHE_NAME = 'tarsierpos-v63'; // canonical cache version
 const ASSETS = [
   'index.html',
   'login.html',

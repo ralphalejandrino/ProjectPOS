@@ -844,6 +844,18 @@ class Shift(models.Model):
     closing_cash = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
     is_open = models.BooleanField(default=True)
 
+    class Meta:
+        constraints = [
+            # ISSUE-104: at most one open shift per cashier (per-cashier
+            # model, futureproof for multi-cashier). Partial unique — closed
+            # shifts are unconstrained, so close-then-reopen always works.
+            models.UniqueConstraint(
+                fields=['cashier'],
+                condition=models.Q(is_open=True),
+                name='one_open_shift_per_cashier',
+            ),
+        ]
+
     def __str__(self):
         return f"Shift {self.id} — {self.cashier.username} ({'open' if self.is_open else 'closed'})"
 

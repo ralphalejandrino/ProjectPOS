@@ -11,8 +11,11 @@ from decimal import Decimal
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from django.core.exceptions import ValidationError
+from rest_framework.exceptions import ValidationError as DRFValidationError
+
 from canteen.models import (
-    BusinessProfile, Item, PosTransaction, User,
+    BusinessProfile, Item, PosTransaction, Shift, User,
 )
 from canteen.services import create_pos_transaction
 
@@ -45,6 +48,14 @@ class FrozenTotalsBase(APITestCase):
         self.admin = User.objects.create_user(
             username='admin', password='x', role='admin'
         )
+        # ISSUE-104: sales now require an open shift. Give the base a
+        # cashier with one open shift so existing assertions stay valid.
+        self.cashier = User.objects.create_user(
+            username='cashier', password='x', role='cashier'
+        )
+        self.shift = Shift.objects.create(
+            cashier=self.cashier, opening_cash=Decimal('0.00'), is_open=True
+        )
         self.item_a = Item.objects.create(name='Coffee', price=Decimal('100.00'), stock=1000)
         self.item_b = Item.objects.create(name='Donut', price=Decimal('50.00'), stock=1000)
 
@@ -53,7 +64,8 @@ class FrozenTotalsBase(APITestCase):
             {'item_id': self.item_a.id, 'quantity': 2},
             {'item_id': self.item_b.id, 'quantity': 1},
         ])
-        return create_pos_transaction(items_data, payment_method, cashier=None, **kwargs)
+        kwargs.setdefault('cashier', self.cashier)
+        return create_pos_transaction(items_data, payment_method, **kwargs)
 
 
 class NewTransactionMathTests(FrozenTotalsBase):
@@ -187,3 +199,43 @@ class ZeroRatedSalesTests(FrozenTotalsBase):
             '0.00 until such a flag is introduced; covered as 0.00 by the '
             'other tests.'
         )
+
+
+class ShiftEnforcementTests(FrozenTotalsBase):
+    """ISSUE-104: create_pos_transaction requires an open shift and binds
+    the transaction to it; voiding must not unbind it."""
+
+    def _items(self):
+        return [{'item_id': self.item_a.id, 'quantity': 1}]
+
+    def test_no_open_shift_raises(self):
+        """8. Cashier with no open shift -> ValidationError."""
+        loner = User.objects.create_user(
+            username='no_shift', password='x', role='cashier'
+        )
+        with self.assertRaises((ValidationError, DRFValidationError)):
+            create_pos_transaction(self._items(), 'cash', cashier=loner)
+
+    def test_open_shift_binds_transaction(self):
+        """9. Cashier with an open shift -> success, txn.shift == shift."""
+        txn = create_pos_transaction(
+            self._items(), 'cash', cashier=self.cashier
+        )
+        txn.refresh_from_db()
+        self.assertEqual(txn.shift_id, self.shift.id)
+
+    def test_void_keeps_shift_binding(self):
+        """10. Voiding a transaction does not change its shift binding."""
+        txn = create_pos_transaction(
+            self._items(), 'cash', cashier=self.cashier,
+            cash_received=Decimal('500.00'),
+        )
+        self.client.force_authenticate(self.admin)
+        resp = self.client.post(
+            f'/api/canteen/transactions/{txn.pk}/void/',
+            {'reason': 'test void'}, format='json',
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        txn.refresh_from_db()
+        self.assertTrue(txn.void)
+        self.assertEqual(txn.shift_id, self.shift.id)

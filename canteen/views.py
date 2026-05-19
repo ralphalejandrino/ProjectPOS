@@ -1180,31 +1180,41 @@ class ShiftViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'], url_path='open', permission_classes=[IsCashierOrAbove])
     def open_shift(self, request):
-        """Open a new shift for the current user"""
-        # Check if user already has an open shift
-        existing_shift = Shift.objects.filter(cashier=request.user, is_open=True).first()
-        if existing_shift:
-            return Response({
-                'error': 'You already have an open shift. Close it before opening a new one.'
-            }, status=status.HTTP_400_BAD_REQUEST)
+        """ISSUE-107: open a new shift for the requesting user (own shift).
 
-        opening_cash = request.data.get('opening_cash', 0)
-        
-        shift = Shift.objects.create(
-            cashier=request.user,
-            opening_cash=opening_cash,
-            is_open=True
-        )
-        
-        return Response(ShiftSerializer(shift).data, status=status.HTTP_201_CREATED)
+        400 on negative/invalid opening_cash, or if the cashier already has
+        an open shift (the partial unique constraint surfaces as
+        IntegrityError inside the service and is returned friendly).
+        """
+        from decimal import Decimal, InvalidOperation
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        from .services import open_shift as open_shift_service
+
+        raw = request.data.get('opening_cash', 0)
+        try:
+            opening_cash = Decimal(str(raw))
+        except (InvalidOperation, ValueError, TypeError):
+            return Response({'error': 'opening_cash must be a valid decimal.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            shift = open_shift_service(request.user, opening_cash)
+        except DjangoValidationError as e:
+            return Response({'error': '; '.join(e.messages)},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(ShiftSerializer(shift).data,
+                        status=status.HTTP_201_CREATED)
 
     @action(detail=False, methods=['get'], url_path='current', permission_classes=[IsCashierOrAbove])
     def current(self, request):
-        """Return the currently open shift, or null if none."""
-        shift = Shift.objects.filter(cashier=request.user, is_open=True).order_by('-opened_at').first()
+        """Return the requesting user's open shift, or 204 if none."""
+        shift = Shift.objects.filter(
+            cashier=request.user, is_open=True
+        ).order_by('-opened_at').first()
         if shift:
             return Response(ShiftSerializer(shift).data)
-        return Response(False, status=200)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=True, methods=['post'], url_path='close',
             permission_classes=[IsCashierOrAbove])

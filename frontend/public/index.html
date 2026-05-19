@@ -45,8 +45,39 @@
     <div id="nav-mount"></div>
     <script>renderNav({ activePage: 'pos' });</script>
 
+    <!-- ISSUE-106: PERSISTENT SHIFT STATUS INDICATOR (POS-specific) -->
+    <div id="shift-bar"
+         style="position: sticky; top: 0; z-index: var(--z-sticky);
+                display: flex; align-items: center; justify-content: space-between;
+                gap: var(--space-3); padding: var(--space-2) var(--space-4);
+                border-bottom: 1px solid var(--color-border);
+                background: var(--color-surface-alt); color: var(--color-ink);
+                font-size: var(--text-sm);">
+        <!-- NO active shift -->
+        <div id="shift-bar-none" class="flex items-center justify-between w-full" style="gap: var(--space-3);">
+            <span style="color: var(--color-ink-muted);">⊘&nbsp; No active shift — sales disabled</span>
+            <button onclick="showOpenShiftModal()" class="touch-target-pos"
+                    style="padding: 0 var(--space-4); border-radius: var(--radius-sm);
+                           font-weight: 700; color: var(--color-surface);
+                           background: var(--color-primary);">
+                + Open Shift
+            </button>
+        </div>
+        <!-- Active shift -->
+        <div id="shift-bar-open" class="hidden flex items-center justify-between w-full"
+             style="gap: var(--space-3);">
+            <span id="shift-bar-info" style="font-weight: 600;"></span>
+            <button onclick="window.location.href='zreport.html?close=1'" class="touch-target-pos"
+                    style="padding: 0 var(--space-4); border-radius: var(--radius-sm);
+                           font-weight: 700; color: var(--color-surface);
+                           background: var(--color-warning);">
+                Close Shift
+            </button>
+        </div>
+    </div>
+
     <!-- MAIN LAYOUT -->
-    <div class="flex h-[calc(100vh-73px)]">
+    <div class="flex" style="height: calc(100vh - 73px - 49px);">
         
         <!-- LEFT SIDEBAR: SEARCH & CATEGORIES -->
         <div id="left-sidebar" class="bg-white border-r border-gray-200 overflow-y-auto flex-shrink-0 transition-all duration-200" style="width:256px;">
@@ -243,16 +274,20 @@
         Shift opened successfully
     </div>
 
-    <!-- MODAL: OPEN SHIFT PROMPT -->
+    <!-- MODAL: OPEN SHIFT (ISSUE-107) -->
     <div id="shift-modal" data-modal data-modal-close="closeShiftModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center" style="z-index: var(--z-modal);">
         <div class="bg-white rounded-lg shadow-2xl p-8 max-w-md w-full mx-4">
-            <h3 class="text-2xl font-bold mb-4 text-gray-800">Open Shift</h3>
-            <p class="text-gray-600 mb-6">No active shift found. Open a shift to start taking orders, or continue without one.</p>
-            <div class="flex space-x-3">
-                <button onclick="window.closeShiftModal()" class="flex-1 bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 rounded-lg transition">
-                    Continue Anyway
+            <h3 class="text-2xl font-bold mb-2 text-gray-800">Open Shift</h3>
+            <p class="text-gray-600 mb-4 text-sm">Enter the opening cash float in the drawer to start ringing sales.</p>
+            <label class="block text-sm font-medium text-gray-700 mb-1" for="opening-cash-input">Opening cash (₱)</label>
+            <input type="number" id="opening-cash-input" min="0" step="0.01" placeholder="0.00" required
+                   class="w-full border border-gray-300 rounded-lg px-3 py-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-400 mb-2">
+            <p id="shift-modal-error" class="hidden text-red-600 text-sm mb-2"></p>
+            <div class="flex space-x-3 mt-4">
+                <button onclick="window.closeShiftModal()" class="touch-target-pos flex-1 bg-gray-500 hover:bg-gray-600 text-white font-bold rounded-lg transition">
+                    Cancel
                 </button>
-                <button onclick="openShift()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition">
+                <button id="confirm-open-shift-btn" onclick="openShift()" class="touch-target-pos flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition">
                     Open Shift
                 </button>
             </div>
@@ -301,6 +336,7 @@
     <script>
         // Cash Payment Functions
         function showCashModal() {
+            if (!window.currentShift) { window.requireOpenShift(); return; }
             if (window.cart.items.length === 0) {
                 window.alertDialog({title: 'Cart Empty', message: 'Please add items to cart before checkout'});
                 return;
@@ -537,6 +573,7 @@
 
         // GCash Modal Functions
         async function showGCashModal() {
+            if (!window.currentShift) { window.requireOpenShift(); return; }
             if (!window.cart || !window.cart.items || window.cart.items.length === 0) {
                 window.alertDialog({title: 'Cart Empty', message: 'Please add items before payment'}); return;
             }
@@ -608,6 +645,7 @@
 
         // Maya Modal Functions
         async function showMayaModal() {
+            if (!window.currentShift) { window.requireOpenShift(); return; }
             if (!window.cart || !window.cart.items || window.cart.items.length === 0) {
                 window.alertDialog({title: 'Cart Empty', message: 'Please add items before payment'}); return;
             }

@@ -1,5 +1,6 @@
 from decimal import Decimal, ROUND_HALF_UP
 from django.db import transaction as db_transaction
+from django.db import IntegrityError
 from django.db.models import F
 from django.core.exceptions import ValidationError
 from rest_framework.exceptions import ValidationError as DRFValidationError
@@ -83,6 +84,32 @@ def _restore_ingredients(item, transaction_item, quantity):
             )
 
 
+@db_transaction.atomic
+def open_shift(cashier_user, opening_cash):
+    """ISSUE-107: open a new shift for the cashier.
+
+    Raises ValidationError if opening_cash < 0, or if the cashier already
+    has an open shift (the one_open_shift_per_cashier partial unique
+    constraint surfaces as IntegrityError and is translated to a friendly
+    message). Decimal in, never float.
+    """
+    if not isinstance(opening_cash, Decimal):
+        opening_cash = Decimal(str(opening_cash))
+    if opening_cash < 0:
+        raise ValidationError("Opening cash cannot be negative.")
+    try:
+        return Shift.objects.create(
+            cashier=cashier_user,
+            opening_cash=opening_cash,
+            is_open=True,
+        )
+    except IntegrityError:
+        raise ValidationError(
+            "You already have an open shift. "
+            "Close it before opening a new one."
+        )
+
+
 def create_pos_transaction(items_data, payment_method, cashier=None, **kwargs):
     """
     Service function to create a POS transaction, its items, and update inventory.
@@ -91,6 +118,16 @@ def create_pos_transaction(items_data, payment_method, cashier=None, **kwargs):
     with db_transaction.atomic():
         if not items_data:
             raise DRFValidationError("Transaction must contain at least one item.")
+
+        # ISSUE-104: enforce open-shift requirement before any sale work.
+        # Defense-in-depth backstop; the frontend prompts first.
+        _enforced_shift = Shift.objects.filter(
+            cashier=cashier, is_open=True
+        ).order_by('-opened_at').first() if cashier else None
+        if not _enforced_shift:
+            raise DRFValidationError(
+                "No open shift. Open a shift before ringing sales."
+            )
         from .models import BusinessProfile
         _bp = BusinessProfile.objects.first()
         _track_inventory = not _bp or _bp.track_inventory
@@ -307,10 +344,9 @@ def create_pos_transaction(items_data, payment_method, cashier=None, **kwargs):
             _frozen_vat_exempt = Decimal('0.00')
             _frozen_vatable = Decimal('0.00')
 
-        # Attach the currently open shift, if any
-        current_shift = Shift.objects.filter(
-            cashier=cashier, is_open=True
-        ).order_by('-opened_at').first() if cashier else None
+        # Bind the transaction to the open shift enforced at the top of
+        # this atomic block (ISSUE-104).
+        current_shift = _enforced_shift
 
         # Create transaction
         cash_received = kwargs.get('cash_received')

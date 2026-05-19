@@ -226,12 +226,18 @@
             loadColorScheme();
             checkBirIdentity();
 
-            const z = new URLSearchParams(location.search).get('z');
+            const params = new URLSearchParams(location.search);
+            const z = params.get('z');
             if (z) {
                 loadDetail(z);
             } else {
                 document.getElementById('list-view').classList.remove('hidden');
                 loadList();
+            }
+            // ISSUE-106: POS header "Close Shift" routes here with ?close=1
+            // to land straight on the counted-cash modal (existing flow).
+            if (params.get('close') === '1') {
+                openCloseModal();
             }
         });
 

@@ -241,6 +241,11 @@ let _variantPickerItem = null;
 let _variantSelections = {};
 
 function addToCart(product) {
+    // ISSUE-104: no ringing without an open shift (friendly path).
+    if (!window.currentShift) {
+        requireOpenShift();
+        return;
+    }
     const _biz2 = (() => { try { return JSON.parse(localStorage.getItem('biz_profile') || '{}'); } catch(e) { return {}; } })();
     const trackInventory = _biz2.track_inventory !== false;
 
@@ -703,59 +708,137 @@ function updateProductStock(productId, delta) {
 }
 
 // ============================================
-// SHIFT PROMPT (bug-024)
+// SHIFT INDICATOR + OPEN-SHIFT MODAL
+// (ISSUE-106 persistent indicator, ISSUE-107 open modal)
 // ============================================
-async function checkOpenShift() {
+
+// Module-level cache of the requesting user's open shift (null = none).
+let currentShift = null;
+window.currentShift = null;
+
+function _fmtShiftTime(iso) {
     try {
-        const response = await authenticatedFetch(`${API_BASE}/shifts/current/`);
-        if (response.ok) {
-            const shift = await response.json();
-            if (!shift) {
-                showShiftPrompt();
-            }
-        }
-    } catch (e) {
-        // Silently fail — never block the POS if shift check errors
+        return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } catch (e) { return ''; }
+}
+
+function _fmtPeso(v) {
+    const n = parseFloat(v || 0);
+    const sym = (typeof currencySymbol === 'function') ? currencySymbol() : '₱';
+    return sym + n.toFixed(2);
+}
+
+function renderShiftBar() {
+    const bar = document.getElementById('shift-bar');
+    const noneEl = document.getElementById('shift-bar-none');
+    const openEl = document.getElementById('shift-bar-open');
+    if (!bar || !noneEl || !openEl) return;
+
+    if (currentShift) {
+        const name = currentShift.cashier_name || 'Cashier';
+        const info = `⏱ Shift #${currentShift.id} · ${name} · Opened `
+            + `${_fmtShiftTime(currentShift.opened_at)} · Float `
+            + `${_fmtPeso(currentShift.opening_cash)}`;
+        document.getElementById('shift-bar-info').textContent = info;
+        openEl.classList.remove('hidden');
+        noneEl.classList.add('hidden');
+        bar.style.background = 'var(--color-primary-light)';
+        bar.style.color = 'var(--color-primary-hover)';
+    } else {
+        openEl.classList.add('hidden');
+        noneEl.classList.remove('hidden');
+        bar.style.background = 'var(--color-surface-alt)';
+        bar.style.color = 'var(--color-ink)';
     }
 }
 
-function showShiftPrompt() {
+// Refetch /shifts/current/ and re-render the header. Called on POS mount
+// and after any explicit open/close action — never polled.
+async function checkOpenShift() {
+    try {
+        const response = await authenticatedFetch(`${API_BASE}/shifts/current/`);
+        if (response.status === 204) {
+            currentShift = null;
+        } else if (response.ok) {
+            const shift = await response.json().catch(() => null);
+            currentShift = (shift && shift.id) ? shift : null;
+        }
+    } catch (e) {
+        // Never block the POS if the shift check errors.
+    }
+    window.currentShift = currentShift;
+    renderShiftBar();
+}
+
+function showOpenShiftModal() {
     const modal = document.getElementById('shift-modal');
-    if (modal) modal.classList.remove('hidden');
+    if (!modal) return;
+    const input = document.getElementById('opening-cash-input');
+    const err = document.getElementById('shift-modal-error');
+    if (input) input.value = '';
+    if (err) err.classList.add('hidden');
+    modal.classList.remove('hidden');
+    if (input) setTimeout(() => input.focus(), 0);
+}
+
+function _shiftModalErr(msg) {
+    const err = document.getElementById('shift-modal-error');
+    if (err) { err.textContent = msg; err.classList.remove('hidden'); }
 }
 
 async function openShift() {
+    const input = document.getElementById('opening-cash-input');
+    const raw = (input ? input.value : '').trim();
+    const val = parseFloat(raw);
+    if (raw === '' || isNaN(val) || val < 0) {
+        _shiftModalErr('Enter a valid opening cash amount (0 or more).');
+        return;
+    }
+    const btn = document.getElementById('confirm-open-shift-btn');
+    if (btn) btn.disabled = true;
     try {
         const response = await authenticatedFetch(`${API_BASE}/shifts/open/`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ opening_cash: 0 })
+            body: JSON.stringify({ opening_cash: val })
         });
-        const modal = document.getElementById('shift-modal');
-        if (modal) modal.classList.add('hidden');
-        if (response.ok) {
+        if (response.status === 201) {
+            const modal = document.getElementById('shift-modal');
+            if (modal) modal.classList.add('hidden');
             const successBanner = document.getElementById('shift-success-banner');
             if (successBanner) {
                 successBanner.classList.remove('hidden');
                 setTimeout(() => successBanner.classList.add('hidden'), 3500);
             }
-            // Refresh header identity after shift opens
-            try {
-                const tok = localStorage.getItem('access_token');
-                if (tok) {
-                    const p = JSON.parse(atob(tok.split('.')[1]));
-                    const uEl = document.getElementById('userName');
-                    const rEl = document.getElementById('userRole');
-                    if (uEl) uEl.textContent = p.username || 'User';
-                    if (rEl) rEl.textContent = (p.role || 'user').toUpperCase();
-                }
-            } catch (_) {}
+            await checkOpenShift();   // refresh indicator from server
+        } else {
+            const data = await response.json().catch(() => ({}));
+            _shiftModalErr(data.error || `Error ${response.status}`);
         }
     } catch (e) {
-        // Silently fail
+        _shiftModalErr('Failed to open shift: ' + e.message);
+    } finally {
+        if (btn) btn.disabled = false;
     }
 }
 
+// ISSUE-104 friendly path: block the action and offer to open a shift.
+// Returns true if a shift is open, false (and prompts) otherwise.
+async function requireOpenShift() {
+    if (currentShift) return true;
+    const proceed = await window.confirmDialog({
+        title: 'No active shift',
+        message: 'Open a shift to start ringing sales.',
+        okLabel: 'Open Shift',
+        cancelLabel: 'Cancel',
+    });
+    if (proceed) showOpenShiftModal();
+    return false;
+}
+
+window.checkOpenShift = checkOpenShift;
+window.showOpenShiftModal = showOpenShiftModal;
+window.requireOpenShift = requireOpenShift;
 window.openShift = openShift;
 window.closeShiftModal = function() {
     const modal = document.getElementById('shift-modal');
