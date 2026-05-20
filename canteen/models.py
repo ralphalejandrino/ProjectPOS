@@ -771,7 +771,24 @@ class BusinessProfile(models.Model):
     low_stock_threshold = models.PositiveIntegerField(default=10, verbose_name='Low Stock Alert Level')
     printer_ip = models.GenericIPAddressField(blank=True, null=True, verbose_name='Receipt Printer IP')
     printer_port = models.PositiveIntegerField(default=9100, verbose_name='Printer Port')
-    printer_enabled = models.BooleanField(default=False, verbose_name='Printer Enabled')
+    # ISSUE-099: transport mode supersedes the printer_enabled boolean and the
+    # IP-as-enable-flag workaround. 'disabled' = no receipts; 'usb' uses the
+    # local /dev/usb/lp* device (no IP needed); 'network' uses printer_ip:port.
+    printer_mode = models.CharField(
+        max_length=10,
+        choices=[('usb', 'USB'), ('network', 'Network'), ('disabled', 'Disabled')],
+        default='disabled', verbose_name='Printer Mode',
+    )
+    paper_width = models.CharField(
+        max_length=10,
+        choices=[('58mm', '58mm'), ('80mm', '80mm')],
+        default='58mm', verbose_name='Paper Width',
+    )
+    printer_font = models.CharField(
+        max_length=2,
+        choices=[('A', 'Font A (wide)'), ('B', 'Font B (narrow)')],
+        default='B', verbose_name='Printer Font',
+    )
     color_scheme = models.CharField(max_length=7, default='#1d4ed8')
     updated_at = models.DateTimeField(auto_now=True)
     # Migration 0002
