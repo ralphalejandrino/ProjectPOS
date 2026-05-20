@@ -29,3 +29,32 @@ systemctl status tarsierpos.service | head -5
 
 After any commit, `systemctl status tarsierpos.service` should show an
 `Active: active (running) since ...` timestamp within seconds of the commit.
+
+## FLAG-067: gunicorn --preload
+
+A systemd drop-in adds `--preload` to gunicorn so the WSGI app is imported in
+the master process before forking workers. Import errors then crash the unit at
+service-start time instead of on the first request after a worker death.
+
+### Install
+
+```sh
+sudo mkdir -p /etc/systemd/system/tarsierpos.service.d/
+sudo install -m 0644 -o root -g root \
+  scripts/systemd/tarsierpos.service.d/preload.conf \
+  /etc/systemd/system/tarsierpos.service.d/preload.conf
+sudo systemd-analyze verify tarsierpos.service   # no warnings expected
+sudo systemctl daemon-reload
+sudo systemctl restart tarsierpos.service
+```
+
+Verify the drop-in is merged with `systemctl cat tarsierpos.service` (the
+effective `ExecStart` should end with `--preload`).
+
+### Revert
+
+```sh
+sudo rm /etc/systemd/system/tarsierpos.service.d/preload.conf
+sudo systemctl daemon-reload
+sudo systemctl restart tarsierpos.service
+```
