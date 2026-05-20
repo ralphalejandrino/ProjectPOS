@@ -19,7 +19,7 @@ def _bp(**overrides):
     bp.vat_enabled = True
     bp.vat_inclusive = True
     bp.vat_rate = Decimal('12.00')
-    bp.printer_enabled = False
+    bp.printer_mode = 'disabled'
     bp.track_inventory = True
     bp.machine_identification_number = 'MIN-001'
     bp.business_name = 'Test Canteen'

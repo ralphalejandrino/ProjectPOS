@@ -43,7 +43,7 @@ class FrozenTotalsBase(APITestCase):
             sc_discount_rate=Decimal('20.00'),
             pwd_discount_rate=Decimal('20.00'),
             track_inventory=True,
-            printer_enabled=False,
+            printer_mode='disabled',
         )
         self.admin = User.objects.create_user(
             username='admin', password='x', role='admin'

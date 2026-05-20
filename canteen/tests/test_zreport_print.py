@@ -49,7 +49,7 @@ def _bp(**overrides):
     bp.sc_discount_rate = Decimal('20.00')
     bp.promo_discount_enabled = True
     bp.track_inventory = True
-    bp.printer_enabled = True
+    bp.printer_mode = 'usb'
     bp.machine_identification_number = 'MIN-001'
     bp.machine_serial_number = 'SN-001'
     bp.pos_accreditation_number = 'ACCR-9'

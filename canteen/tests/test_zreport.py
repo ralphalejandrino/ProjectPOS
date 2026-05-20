@@ -25,7 +25,7 @@ def _bp(**overrides):
     bp.sc_discount_rate = Decimal('20.00')
     bp.promo_discount_enabled = True
     bp.track_inventory = True
-    bp.printer_enabled = False
+    bp.printer_mode = 'disabled'
     bp.machine_identification_number = 'MIN-001'
     bp.machine_serial_number = 'SN-001'
     bp.business_name = 'Test Canteen'
