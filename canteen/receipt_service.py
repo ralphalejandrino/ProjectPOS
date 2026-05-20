@@ -1,6 +1,6 @@
 from decimal import Decimal, ROUND_HALF_UP
 from django.conf import settings
-from escpos.printer import File
+from escpos.printer import File, Network
 from .models import BusinessProfile
 from .utils.currency import format_currency
 import logging
@@ -24,31 +24,56 @@ def _get_usb_device_path():
     return None
 logger = logging.getLogger(__name__)
 
-RECEIPT_WIDTH = 32  # 58mm thermal paper @ ESC/POS Font B (384 dots / 12)
-                    # Visual contract: docs/receipt-design.html (FEATURE-034)
+RECEIPT_WIDTH = 32  # default fallback: 58mm @ Font B (384 dots / 12).
+                    # Per-print column count comes from _receipt_cols(profile);
+                    # visual contract: docs/receipt-design.html (FEATURE-034).
+
+# ISSUE-099: printable columns per paper width / ESC/POS font. 58mm/Font B
+# (32 cols) is the empirically calibrated baseline (FIX-PENDING-14); the
+# others are the design contract and may need on-device tuning.
+WIDTH_FONT_COLS = {
+    ('58mm', 'B'): 32,
+    ('58mm', 'A'): 24,
+    ('80mm', 'B'): 56,
+    ('80mm', 'A'): 42,
+}
 
 def _truncate(text, max_len):
     """Truncate text with ellipsis if it exceeds max_len."""
     return text[:max_len - 3] + '...' if len(text) > max_len else text
 
-def _get_printer():
-    """Returns (transport, port, profile) if printing is enabled, else (None, None, None).
-    Print transport is the local USB device /dev/usb/lp1; network printer_ip is optional."""
-    profile = BusinessProfile.objects.first()
-    if not profile or not profile.printer_enabled:
-        return None, None, None
-    return (profile.printer_ip or 'usb'), (profile.printer_port or 9100), profile
+def _is_printer_enabled(profile):
+    """True when a transport is configured (USB or network)."""
+    return bool(profile) and profile.printer_mode in ('usb', 'network')
+
+def _get_transport(profile):
+    """ESC/POS transport for the profile's mode, or None when disabled."""
+    if profile.printer_mode == 'usb':
+        return File(_get_usb_device_path() or '/dev/usb/lp1')
+    elif profile.printer_mode == 'network':
+        return Network(profile.printer_ip, port=profile.printer_port or 9100)
+    return None
+
+def _receipt_cols(profile):
+    """Printable column count for the profile's paper width + font."""
+    return WIDTH_FONT_COLS.get(
+        (profile.paper_width, profile.printer_font), RECEIPT_WIDTH)
+
+def _escpos_font(profile):
+    """Map BusinessProfile printer_font (A/B) to escpos font ('a'/'b')."""
+    return 'a' if profile.printer_font == 'A' else 'b'
 
 def print_receipt(transaction):
     """ESC/POS receipt print. Returns status dict. Never raises."""
     try:
-        ip, port, profile = _get_printer()
-        if not ip:
+        profile = BusinessProfile.objects.first()
+        if not _is_printer_enabled(profile):
             return {'success': False, 'message': 'Printer not configured. Set up Business Profile in Settings.'}
 
         ccode = profile.currency if profile else 'PHP'
-        p = File(_get_usb_device_path() or '/dev/usb/lp1')
-        p.set(font='b', align='left')
+        RECEIPT_WIDTH = _receipt_cols(profile)
+        p = _get_transport(profile)
+        p.set(font=_escpos_font(profile), align='left')
         try:
             # Header — business name (large, bold, centered)
             p.set(align='center', bold=True, double_height=True, double_width=True)
@@ -245,16 +270,19 @@ def print_z_report(z_report):
     raised — mirrors print_receipt's non-fatal contract).
     """
     try:
-        ip, port, profile = _get_printer()
-        if not ip:
+        profile = BusinessProfile.objects.first()
+        if not _is_printer_enabled(profile):
             logger.warning('Z-report print skipped: printer not configured.')
             return False
 
         # Currency is the ONLY value still allowed from BP-derived state,
         # and even that is taken off the frozen ZReport snapshot.
         ccode = z_report.currency or 'PHP'
-        p = File(_get_usb_device_path() or '/dev/usb/lp1')
-        p.set(font='b', align='left')
+        # Paper width / font are device config (not frozen content), so they
+        # come from the live profile — FLAG-058 parity is about Z *content*.
+        RECEIPT_WIDTH = _receipt_cols(profile)
+        p = _get_transport(profile)
+        p.set(font=_escpos_font(profile), align='left')
 
         def rrow(label, val):
             pad = RECEIPT_WIDTH - len(label) - len(val)
@@ -394,12 +422,13 @@ def print_z_report(z_report):
 def print_xreport_summary(data):
     """Print X-report summary via ESC/POS. Returns status dict. Never raises."""
     try:
-        ip, port, profile = _get_printer()
-        if not ip:
+        profile = BusinessProfile.objects.first()
+        if not _is_printer_enabled(profile):
             return {'success': False, 'message': 'Printer not configured.'}
         ccode = profile.currency if profile else 'PHP'
-        p = File(_get_usb_device_path() or '/dev/usb/lp1')
-        p.set(font='b', align='left')
+        RECEIPT_WIDTH = _receipt_cols(profile)
+        p = _get_transport(profile)
+        p.set(font=_escpos_font(profile), align='left')
         try:
             p.set(align='center', bold=True, double_height=True, double_width=True)
             p.text((profile.business_name if profile else 'X-REPORT') + '\n')
@@ -452,11 +481,11 @@ def kick_cash_drawer():
     Pin configurable via settings.CASH_DRAWER_PIN: 0=pin2 (default), 1=pin5.
     """
     try:
-        ip, port, _profile = _get_printer()
-        if not ip:
+        profile = BusinessProfile.objects.first()
+        if not _is_printer_enabled(profile):
             return
-        p = File(_get_usb_device_path() or '/dev/usb/lp1')
-        p.set(font='b', align='left')
+        p = _get_transport(profile)
+        p.set(font=_escpos_font(profile), align='left')
         try:
             drawer_pin = getattr(settings, 'CASH_DRAWER_PIN', 2)  # 2=pin2, 5=pin5 (escpos rejects 0)
             p.cashdraw(drawer_pin)
