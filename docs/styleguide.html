@@ -1303,21 +1303,22 @@ window.toast('Synced');  // info default</code></pre>
             <div class="name">Maria Santos</div>
             <div class="role">Cashier</div>
           </div>
-          <button type="button" style="background:rgba(34,197,94,0.25);color:#fff;border:0;padding:0 var(--space-3);min-height:44px;border-radius:var(--radius-md);font-weight:600;font-size:var(--text-sm)">🟢 Shift #42 · 08:15 AM</button>
+          <button type="button" style="background:rgba(34,197,94,0.25);color:#fff;border:0;padding:0 var(--space-3);min-height:48px;border-radius:var(--radius-md);font-weight:600;font-size:var(--text-sm)">🟢 Shift #42 · 08:15 AM</button>
           <button>☰ Menu ▼</button>
         </div>
       </div>
       <p class="note">Right-side ordering (FEATURE-036): <strong>clock → user pill → shift indicator → ☰ dropdown trigger</strong>. The user pill is separated from neighbours by a right border (<code>border-r border-blue-400 pr-4 mr-2</code>). Live in <code>components/nav.js:85–120</code>.</p>
     </div>
 
-    <h3>22.2 Shift indicator (FEATURE-036)</h3>
-    <p>Replaces the old <code>#shift-bar</code> sticky strip. Renders as a header pill (<code>#shift-indicator</code>) with two states. Hydrated by <code>window.renderShiftIndicator(shift)</code> — call this on any <code>currentShift</code> cache change to keep the header in sync.</p>
+    <h3>22.2 Shift indicator (FEATURE-036 · FEATURE-037)</h3>
+    <p>Replaces the old <code>#shift-bar</code> sticky strip. Renders as a <strong>tappable</strong> header status pill (<code>#shift-indicator</code>) — a <code>&lt;span&gt;</code> exposed as <code>role="button"</code> with <code>tabindex="0"</code> and <code>aria-haspopup="true"</code>, activated by click or <kbd>Enter</kbd>/<kbd>Space</kbd>. Hydrated by <code>window.renderShiftIndicator(shift)</code> — call this on any <code>currentShift</code> cache change to keep the header in sync.</p>
     <div class="panel">
       <div style="display:flex;gap:var(--space-4);align-items:center;flex-wrap:wrap;background:linear-gradient(to right,var(--color-primary),var(--color-primary-hover));padding:var(--space-4);border-radius:var(--radius-sm)">
-        <button type="button" style="background:rgba(34,197,94,0.25);color:#fff;border:0;padding:0 var(--space-3);min-height:44px;border-radius:var(--radius-md);font-weight:600;font-size:var(--text-sm)">🟢 Shift #42 · 08:15 AM</button>
-        <button type="button" style="background:rgba(255,255,255,0.12);color:#fff;border:0;padding:0 var(--space-3);min-height:44px;border-radius:var(--radius-md);font-weight:600;font-size:var(--text-sm)">⊘ No active shift</button>
+        <button type="button" style="background:rgba(34,197,94,0.25);color:#fff;border:0;padding:0 var(--space-3);min-height:48px;border-radius:var(--radius-md);font-weight:600;font-size:var(--text-sm)">🟢 Shift #42 · 08:15 AM</button>
+        <button type="button" style="background:rgba(255,255,255,0.12);color:#fff;border:0;padding:0 var(--space-3);min-height:48px;border-radius:var(--radius-md);font-weight:600;font-size:var(--text-sm)">⊘ No active shift</button>
+        <button type="button" style="background:rgba(255,255,255,0.12);color:#fff;border:0;padding:0 var(--space-3);min-height:48px;border-radius:var(--radius-md);font-weight:600;font-size:var(--text-sm)">⊘ No active shift · 2 open</button>
       </div>
-      <p class="note"><strong>Active</strong> (<code>data-state="open"</code>): shows <code>🟢 Shift #&lt;id&gt; · &lt;opened_at HH:MM&gt;</code> on a green-tinted background. Informational only — close-shift action lives in the dropdown. <strong>Inactive</strong> (<code>data-state="closed"</code>): shows <code>⊘ No active shift</code>; tapping invokes <code>window.showOpenShiftModal()</code> when defined (POS index only — no-op elsewhere). Both states meet ≥44px touch target via inline <code>min-height: 44px</code>. Source: <code>components/nav.js:189–226</code>.</p>
+      <p class="note"><strong>Active</strong> (<code>data-state="open"</code>): shows <code>🟢 Shift #&lt;id&gt; · &lt;opened_at HH:MM&gt;</code> on a green-tinted background (<code>rgba(34,197,94,0.25)</code>). <strong>Inactive</strong> (<code>data-state="closed"</code>): shows <code>⊘ No active shift</code> on the default translucent background (<code>rgba(255,255,255,0.12)</code>). When other accounts have open shifts, the inactive pill appends a floor-state hint <code>· &lt;N&gt; open</code> (from <code>refreshFloorBadge()</code>) without any tap. <strong>Tapping the pill (either state) opens the open-shifts floor panel</strong> (§22.4) — <em>not</em> the open-shift modal; opening a shift now lives in the dropdown (§22.3). Both states meet the ≥48px touch target via inline <code>min-height: 48px</code>. Source: <code>components/nav.js:202–223</code> (render), <code>294–324</code> (wiring).</p>
     </div>
 
     <h3>22.3 Nav dropdown — open (manager view, shift open)</h3>
@@ -1329,14 +1330,27 @@ window.toast('Synced');  // info default</code></pre>
         <a>📊 Dashboard</a>
         <a>📈 X-Report</a>
         <a>📉 Z-Report</a>
+        <a style="color:#15803d;border-top:1px solid var(--color-border)">🔓 Open Shift</a>
         <a style="color:#c2410c;border-top:1px solid var(--color-border)">🔒 Close Shift</a>
         <a class="logout">🚪 Logout</a>
       </div>
-      <p class="note">Live in <code>components/nav.js:106–116</code>. Settings link is admin-only — omitted for manager. The dropdown is anchored <code>absolute right-0 mt-2</code>, at <code>--z-dropdown</code> (1020).</p>
-      <p class="note"><strong>Conditional item pattern</strong> — <code>#nav-close-shift</code> ships with the <code>hidden</code> class and is unhidden by <code>renderShiftIndicator()</code> only when an active shift is present for the current user. This is the canonical "hidden-by-default + state-conditional reveal" pattern for dropdown items: render the element unconditionally, gate visibility via class toggle from the state hydrator. Reuse for upcoming role/page-access-conditional items (e.g. per-account page-access work) rather than rebuilding the dropdown.</p>
+      <p class="note">Live in <code>components/nav.js:118–123</code>. Settings link is admin-only — omitted for manager. The dropdown is anchored <code>absolute right-0 mt-2 w-48</code>, at <code>--z-dropdown</code> (1020).</p>
+      <p class="note"><strong>Symmetric Open/Close pair</strong> — both <code>#nav-open-shift</code> (<code>🔓 Open Shift</code>) and <code>#nav-close-shift</code> (<code>🔒 Close Shift</code>) sit above Logout and are <strong>mutually exclusive</strong>: <code>renderShiftIndicator()</code> shows <em>Open Shift</em> when no shift is active and <em>Close Shift</em> when one is. <em>Open Shift</em> routes to <code>index.html?open=1</code> (or invokes <code>window.showOpenShiftModal()</code> directly when already on the POS page); <em>Close Shift</em> routes to <code>zreport.html?close=1</code>. The §22.2 indicator is the one place to read shift state; the dropdown is the one place to change it. Demo above shows the shift-open variant — only one of the pair is visible at a time.</p>
+      <p class="note"><strong>Conditional item pattern</strong> — both shift items ship with the <code>hidden</code> class and are toggled by <code>renderShiftIndicator()</code> based on current shift state. This is the canonical "hidden-by-default + state-conditional reveal" pattern for dropdown items: render the element unconditionally, gate visibility via class toggle from the state hydrator. Reuse for upcoming role/page-access-conditional items (e.g. per-account page-access work) rather than rebuilding the dropdown.</p>
     </div>
 
-    <h3>22.4 Link visibility by role</h3>
+    <h3>22.4 Open shifts floor panel (FEATURE-037)</h3>
+    <p>Cross-account "who's on the floor" view, triggered by tapping the §22.2 shift indicator. Reuses the <strong>exact same surface as the ☰ nav dropdown — different content</strong>: <code>#shift-panel</code> carries the identical token set <code>absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl</code> at <code>--z-dropdown</code> (1020).</p>
+    <div class="panel">
+      <div class="nav-dropdown" style="padding:0">
+        <div style="padding:var(--space-3) var(--space-4);border-bottom:1px solid var(--color-border)">👔 jdela_cruz · Shift #41 · opened 07:58 AM</div>
+        <div style="padding:var(--space-3) var(--space-4)">🧑‍🍳 maria_s · Shift #42 · opened 08:15 AM</div>
+      </div>
+      <p class="note">Each row: <code>&lt;role icon&gt; &lt;username&gt; · Shift #&lt;shift_number&gt; · opened &lt;HH:MM&gt;</code>. Role icons: <code>👑</code> admin · <code>👔</code> manager · <code>🧑‍🍳</code> cashier · <code>👤</code> fallback. Empty state renders <code>No open shifts</code>. Visible to <strong>all roles</strong>; carries no financial fields. Source: <code>GET /api/canteen/shifts/active/</code> via <code>fetchActiveShifts()</code>, rendered by <code>openShiftPanel()</code> (<code>components/nav.js:264–285</code>).</p>
+      <p class="note"><strong>One overlay at a time</strong> — opening the floor panel closes the ☰ dropdown and vice versa; an outside click closes whichever is open. Wired through <code>closeShiftPanel()</code> / <code>toggleShiftPanel()</code> and the shared document click handler (<code>components/nav.js:164–181</code>, <code>257–292</code>).</p>
+    </div>
+
+    <h3>22.5 Link visibility by role</h3>
     <div class="panel">
       <table class="role-table">
         <thead><tr><th>Link</th><th>Cashier</th><th>Manager</th><th>Admin</th></tr></thead>
