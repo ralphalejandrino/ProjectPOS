@@ -1216,6 +1216,29 @@ class ShiftViewSet(viewsets.ModelViewSet):
             return Response(ShiftSerializer(shift).data)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
+    @action(detail=False, methods=['get'], url_path='active', permission_classes=[IsCashierOrAbove])
+    def active(self, request):
+        """FEATURE-037: cross-account floor view of all currently-open shifts.
+
+        Non-sensitive: shift number, cashier username/role, opened time only.
+        No financial fields (float, sales). Visible to all roles.
+        """
+        shifts = (
+            Shift.objects.filter(is_open=True)
+            .select_related('cashier')
+            .order_by('opened_at')
+        )
+        data = [
+            {
+                'shift_number': s.id,
+                'cashier_username': s.cashier.username,
+                'cashier_role': getattr(s.cashier, 'role', ''),
+                'opened_at': s.opened_at,
+            }
+            for s in shifts
+        ]
+        return Response(data)
+
     @action(detail=True, methods=['post'], url_path='close',
             permission_classes=[IsCashierOrAbove])
     def close(self, request, pk=None):

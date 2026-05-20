@@ -5,7 +5,8 @@
 // v65: FEATURE-036 — shift status in header, Close Shift moved to dropdown
 // v66: ISSUE-110 — fix shift indicator render (always-visible status pill)
 // + symmetric Open/Close shift dropdown entries
-const CACHE_NAME = 'tarsierpos-v66'; // canonical cache version
+// v67: FEATURE-037 — tappable shift indicator + cross-account open-shifts panel
+const CACHE_NAME = 'tarsierpos-v67'; // canonical cache version
 const ASSETS = [
   'index.html',
   'login.html',

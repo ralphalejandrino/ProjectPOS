@@ -13,6 +13,7 @@ from canteen.models import Shift, User
 
 OPEN_URL = '/api/canteen/shifts/open/'
 CURRENT_URL = '/api/canteen/shifts/current/'
+ACTIVE_URL = '/api/canteen/shifts/active/'
 
 
 class OpenShiftTests(APITestCase):
@@ -88,3 +89,38 @@ class OpenShiftTests(APITestCase):
         self.assertEqual(
             Shift.objects.filter(cashier=self.cashier, is_open=True).count(), 1
         )
+
+    # FEATURE-037: /shifts/active/ lists all open shifts across accounts.
+    def test_active_lists_all_open_shifts(self):
+        manager = User.objects.create_user(username='mae', password='x', role='manager')
+        s1 = Shift.objects.create(cashier=self.cashier, opening_cash=Decimal('100'), is_open=True)
+        s2 = Shift.objects.create(cashier=self.other, opening_cash=Decimal('200'), is_open=True)
+        # a closed shift must not appear
+        Shift.objects.create(cashier=manager, opening_cash=Decimal('0'), is_open=False)
+        self.client.force_authenticate(manager)
+        resp = self.client.get(ACTIVE_URL)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        numbers = {row['shift_number'] for row in resp.data}
+        self.assertEqual(numbers, {s1.id, s2.id})
+        row = next(r for r in resp.data if r['shift_number'] == s1.id)
+        self.assertEqual(row['cashier_username'], 'ana')
+        self.assertEqual(row['cashier_role'], 'cashier')
+        self.assertIn('opened_at', row)
+        # non-sensitive: no financial fields leaked
+        self.assertNotIn('opening_cash', row)
+
+    # FEATURE-037: empty list when nothing is open.
+    def test_active_empty_when_none_open(self):
+        self.client.force_authenticate(self.cashier)
+        resp = self.client.get(ACTIVE_URL)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data, [])
+
+    # FEATURE-037: all roles (cashier/manager/admin) may read the floor view.
+    def test_active_visible_to_all_roles(self):
+        admin = User.objects.create_user(username='ada', password='x', role='admin')
+        manager = User.objects.create_user(username='mim', password='x', role='manager')
+        for user in (self.cashier, manager, admin):
+            self.client.force_authenticate(user)
+            resp = self.client.get(ACTIVE_URL)
+            self.assertEqual(resp.status_code, status.HTTP_200_OK)

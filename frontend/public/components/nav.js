@@ -97,12 +97,18 @@
               <p class="text-sm font-bold text-white leading-tight" id="userName"></p>
               <p class="text-[10px] text-blue-200 uppercase tracking-widest font-black leading-tight" id="userRole"></p>
             </div>
-            <!-- FEATURE-036 / ISSUE-110: shift status indicator (pure display, hydrated by renderShiftIndicator) -->
-            <span id="shift-indicator"
-              class="inline-flex items-center font-semibold rounded-lg"
-              style="min-height: 36px; padding: 0 var(--space-3); background: rgba(255,255,255,0.12); color: #fff; font-size: var(--text-sm);">
-              <span id="shift-indicator-text">…</span>
-            </span>
+            <!-- FEATURE-036 / ISSUE-110 / FEATURE-037: shift status pill — own state +
+                 tap to reveal cross-account open-shifts floor panel. -->
+            <div class="relative">
+              <span id="shift-indicator" role="button" tabindex="0" aria-haspopup="true" aria-expanded="false"
+                class="inline-flex items-center font-semibold rounded-lg cursor-pointer select-none"
+                style="min-height: 48px; padding: 0 var(--space-3); background: rgba(255,255,255,0.12); color: #fff; font-size: var(--text-sm);">
+                <span id="shift-indicator-text">…</span>
+              </span>
+              <div id="shift-panel" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl" style="z-index: var(--z-dropdown);">
+                <div id="shift-panel-body" class="text-sm text-gray-700"></div>
+              </div>
+            </div>
             <div class="relative">
               <button id="menu-button" type="button" aria-label="Menu" aria-expanded="false"
                 class="bg-blue-700 hover:bg-blue-800 px-4 py-2 rounded-lg font-medium transition flex items-center space-x-2">
@@ -155,6 +161,7 @@
     if (btn && dd) {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
+        closeShiftPanel();   // FEATURE-037: only one overlay open at a time
         dd.classList.toggle('hidden');
         const open = !dd.classList.contains('hidden');
         if (arrow) arrow.textContent = open ? '▲' : '▼';
@@ -165,6 +172,11 @@
           dd.classList.add('hidden');
           if (arrow) arrow.textContent = '▼';
           btn.setAttribute('aria-expanded', 'false');
+        }
+        const panel = document.getElementById('shift-panel');
+        const ind = document.getElementById('shift-indicator');
+        if (panel && ind && !panel.contains(e.target) && !ind.contains(e.target)) {
+          closeShiftPanel();
         }
       });
     }
@@ -205,12 +217,90 @@
       ind.dataset.state = 'closed';
       if (openItem) openItem.classList.remove('hidden');
       if (closeItem) closeItem.classList.add('hidden');
+      // FEATURE-037: surface floor state on the inactive pill without tapping.
+      refreshFloorBadge();
     }
   }
 
+  // --- FEATURE-037: cross-account open-shifts floor view ---
+
+  const _ROLE_ICON = { admin: '👑', manager: '👔', cashier: '🧑‍🍳' };
+  function _roleIcon(role) { return _ROLE_ICON[role] || '👤'; }
+
+  function _esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[c]));
+  }
+
+  async function fetchActiveShifts() {
+    if (typeof authenticatedFetch !== 'function' || typeof API_BASE === 'undefined') return [];
+    try {
+      const res = await authenticatedFetch(`${API_BASE}/shifts/active/`);
+      if (!res.ok) return [];
+      const data = await res.json().catch(() => []);
+      return Array.isArray(data) ? data : [];
+    } catch (e) { return []; }
+  }
+
+  async function refreshFloorBadge() {
+    const ind = document.getElementById('shift-indicator');
+    const txt = document.getElementById('shift-indicator-text');
+    if (!ind || !txt || ind.dataset.state !== 'closed') return;
+    const list = await fetchActiveShifts();
+    if (ind.dataset.state !== 'closed') return;   // own shift opened mid-flight
+    txt.textContent = list.length
+      ? `⊘ No active shift · ${list.length} open`
+      : '⊘ No active shift';
+  }
+
+  function closeShiftPanel() {
+    const panel = document.getElementById('shift-panel');
+    const ind = document.getElementById('shift-indicator');
+    if (panel) panel.classList.add('hidden');
+    if (ind) ind.setAttribute('aria-expanded', 'false');
+  }
+
+  async function openShiftPanel() {
+    const panel = document.getElementById('shift-panel');
+    const body = document.getElementById('shift-panel-body');
+    const ind = document.getElementById('shift-indicator');
+    if (!panel || !body) return;
+    const dd = document.getElementById('dropdown-menu');   // only one overlay
+    if (dd) dd.classList.add('hidden');
+    body.innerHTML = '<div class="px-4 py-3 text-gray-400">Loading…</div>';
+    panel.classList.remove('hidden');
+    if (ind) ind.setAttribute('aria-expanded', 'true');
+    const list = await fetchActiveShifts();
+    if (panel.classList.contains('hidden')) return;
+    if (!list.length) {
+      body.innerHTML = '<div class="px-4 py-3 text-gray-500">No open shifts</div>';
+      return;
+    }
+    body.innerHTML = list.map((s, idx) => {
+      const radius = idx === 0 ? ' rounded-t-lg' : '';
+      const last = idx === list.length - 1 ? ' rounded-b-lg' : ' border-b border-gray-100';
+      return `<div class="px-4 py-3${radius}${last}">${_roleIcon(s.cashier_role)} ${_esc(s.cashier_username)} · Shift #${s.shift_number} · opened ${_fmtTime(s.opened_at)}</div>`;
+    }).join('');
+  }
+
+  function toggleShiftPanel() {
+    const panel = document.getElementById('shift-panel');
+    if (!panel) return;
+    if (panel.classList.contains('hidden')) openShiftPanel();
+    else closeShiftPanel();
+  }
+
   function wireShiftSurface() {
-    // ISSUE-110: indicator is a pure status display (no tap target).
-    // Open/close are reached symmetrically from the dropdown.
+    // FEATURE-037: tap the pill to reveal the open-shifts floor panel
+    // (NOT the open-shift modal — opening a shift lives in the dropdown).
+    const ind = document.getElementById('shift-indicator');
+    if (ind) {
+      ind.addEventListener('click', (e) => { e.stopPropagation(); toggleShiftPanel(); });
+      ind.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleShiftPanel(); }
+      });
+    }
     const openItem = document.getElementById('nav-open-shift');
     if (openItem) {
       openItem.addEventListener('click', (e) => {
