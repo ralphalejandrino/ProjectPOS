@@ -1,0 +1,3 @@
+# FLAG-066: passwordless systemctl restart for tarsierpos.service
+# Install: sudo install -m 0440 -o root -g root scripts/sudoers/tarsierpos-restart /etc/sudoers.d/
+ralph ALL=(root) NOPASSWD: /bin/systemctl restart tarsierpos.service
