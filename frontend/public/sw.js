@@ -3,7 +3,9 @@
 // open-shift modal, sale-without-shift enforcement
 // v64: ISSUE-108 — cashier role exception for zreport.html?close=1
 // v65: FEATURE-036 — shift status in header, Close Shift moved to dropdown
-const CACHE_NAME = 'tarsierpos-v65'; // canonical cache version
+// v66: ISSUE-110 — fix shift indicator render (always-visible status pill)
+// + symmetric Open/Close shift dropdown entries
+const CACHE_NAME = 'tarsierpos-v66'; // canonical cache version
 const ASSETS = [
   'index.html',
   'login.html',

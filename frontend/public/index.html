@@ -539,6 +539,12 @@
             loadColorScheme();
             initSidebar();
             initPayments();
+            // ISSUE-110: dropdown "Open Shift" routes here with ?open=1 to land
+            // straight on the open-shift modal (mirrors zreport.html ?close=1).
+            if (new URLSearchParams(location.search).get('open') === '1'
+                && typeof window.showOpenShiftModal === 'function') {
+                window.showOpenShiftModal();
+            }
         });
 
 // logout() is provided by config.js (awaits token blacklist, then location.replace)

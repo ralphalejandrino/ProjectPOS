@@ -97,12 +97,12 @@
               <p class="text-sm font-bold text-white leading-tight" id="userName"></p>
               <p class="text-[10px] text-blue-200 uppercase tracking-widest font-black leading-tight" id="userRole"></p>
             </div>
-            <!-- FEATURE-036: shift indicator (hydrated by renderShiftIndicator) -->
-            <button id="shift-indicator" type="button"
-              class="hidden sm:inline-flex items-center font-semibold rounded-lg transition"
-              style="min-height: 44px; padding: 0 var(--space-3); background: rgba(255,255,255,0.12); color: #fff; font-size: var(--text-sm);">
+            <!-- FEATURE-036 / ISSUE-110: shift status indicator (pure display, hydrated by renderShiftIndicator) -->
+            <span id="shift-indicator"
+              class="inline-flex items-center font-semibold rounded-lg"
+              style="min-height: 36px; padding: 0 var(--space-3); background: rgba(255,255,255,0.12); color: #fff; font-size: var(--text-sm);">
               <span id="shift-indicator-text">…</span>
-            </button>
+            </span>
             <div class="relative">
               <button id="menu-button" type="button" aria-label="Menu" aria-expanded="false"
                 class="bg-blue-700 hover:bg-blue-800 px-4 py-2 rounded-lg font-medium transition flex items-center space-x-2">
@@ -111,6 +111,7 @@
               </button>
               <div id="dropdown-menu" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl" style="z-index: var(--z-dropdown);">
                 ${linksHTML}
+                <a href="#" id="nav-open-shift" class="hidden block px-4 py-3 text-green-700 hover:bg-green-50 border-t border-gray-100">🔓 Open Shift</a>
                 <a href="#" id="nav-close-shift" class="hidden block px-4 py-3 text-orange-700 hover:bg-orange-50 border-t border-gray-100">🔒 Close Shift</a>
                 <a href="#" id="nav-logout" class="block px-4 py-3 text-red-600 hover:bg-red-50 rounded-b-lg">🚪 Logout</a>
               </div>
@@ -187,32 +188,39 @@
   }
 
   function renderShiftIndicator(shift) {
-    const btn = document.getElementById('shift-indicator');
+    const ind = document.getElementById('shift-indicator');
     const txt = document.getElementById('shift-indicator-text');
+    const openItem = document.getElementById('nav-open-shift');
     const closeItem = document.getElementById('nav-close-shift');
-    if (!btn || !txt) return;
+    if (!ind || !txt) return;
     if (shift && shift.id) {
       txt.textContent = `🟢 Shift #${shift.id} · ${_fmtTime(shift.opened_at)}`;
-      btn.style.background = 'rgba(34,197,94,0.25)';
-      btn.dataset.state = 'open';
+      ind.style.background = 'rgba(34,197,94,0.25)';
+      ind.dataset.state = 'open';
+      if (openItem) openItem.classList.add('hidden');
       if (closeItem) closeItem.classList.remove('hidden');
     } else {
       txt.textContent = '⊘ No active shift';
-      btn.style.background = 'rgba(255,255,255,0.12)';
-      btn.dataset.state = 'closed';
+      ind.style.background = 'rgba(255,255,255,0.12)';
+      ind.dataset.state = 'closed';
+      if (openItem) openItem.classList.remove('hidden');
       if (closeItem) closeItem.classList.add('hidden');
     }
   }
 
   function wireShiftSurface() {
-    const btn = document.getElementById('shift-indicator');
-    if (btn) {
-      btn.addEventListener('click', () => {
-        // Active shift: indicator is informational only (Close Shift lives
-        // in the dropdown). No active shift: open the shift modal if this
-        // page hosts it (POS index), otherwise no-op.
-        if (btn.dataset.state === 'closed' && typeof window.showOpenShiftModal === 'function') {
+    // ISSUE-110: indicator is a pure status display (no tap target).
+    // Open/close are reached symmetrically from the dropdown.
+    const openItem = document.getElementById('nav-open-shift');
+    if (openItem) {
+      openItem.addEventListener('click', (e) => {
+        e.preventDefault();
+        // On the POS page the modal is present — open it directly without a
+        // reload. Elsewhere, route to index.html which auto-opens it.
+        if (typeof window.showOpenShiftModal === 'function' && document.getElementById('shift-modal')) {
           window.showOpenShiftModal();
+        } else {
+          window.location.href = 'index.html?open=1';
         }
       });
     }
