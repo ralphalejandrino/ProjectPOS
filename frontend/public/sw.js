@@ -6,7 +6,8 @@
 // v66: ISSUE-110 — fix shift indicator render (always-visible status pill)
 // + symmetric Open/Close shift dropdown entries
 // v67: FEATURE-037 — tappable shift indicator + cross-account open-shifts panel
-const CACHE_NAME = 'tarsierpos-v67'; // canonical cache version
+// v68: ISSUE-099 — printer settings overhaul (transport mode + paper/font)
+const CACHE_NAME = 'tarsierpos-v68'; // canonical cache version
 const ASSETS = [
   'index.html',
   'login.html',

@@ -553,41 +553,60 @@
             <div class="bg-white rounded-lg shadow p-6">
               <h3 class="text-lg font-semibold text-gray-800 mb-4">🖨️ Receipt Printer</h3>
               <div class="space-y-4">
-                <div class="flex items-center justify-between">
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">Connection Mode</label>
+                  <select id="printer-mode" onchange="updatePrinterModeUI()"
+                          class="w-full max-w-xs px-3 py-2 border border-gray-300 rounded-lg
+                                 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white">
+                    <option value="disabled">Disabled (no receipts)</option>
+                    <option value="usb">USB-connected printer</option>
+                    <option value="network">Network-connected printer</option>
+                  </select>
+                </div>
+                <div id="printer-network-fields" class="space-y-4">
                   <div>
-                    <p class="font-medium text-gray-700">Enable Receipt Printer</p>
-                    <p class="text-sm text-gray-500">Automatically print on every completed sale</p>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Printer IP Address</label>
+                    <input type="text" id="printer-ip" placeholder="e.g. 192.168.1.100"
+                           class="w-full max-w-xs px-3 py-2 border border-gray-300 rounded-lg
+                                  focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
                   </div>
-                  <label class="relative inline-flex items-center cursor-pointer">
-                    <input type="checkbox" id="printer-enabled" class="sr-only peer">
-                    <div class="w-11 h-6 bg-gray-200 peer-checked:bg-blue-600 rounded-full peer
-                                peer-focus:ring-2 peer-focus:ring-blue-500 after:content-['']
-                                after:absolute after:top-[2px] after:left-[2px] after:bg-white
-                                after:rounded-full after:h-5 after:w-5 after:transition-all
-                                peer-checked:after:translate-x-full"></div>
-                  </label>
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Printer Port</label>
+                    <input type="number" id="printer-port" placeholder="9100"
+                           class="w-full max-w-xs px-3 py-2 border border-gray-300 rounded-lg
+                                  focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+                    <p class="text-xs text-gray-400 mt-1">Default is 9100 for most ESC/POS network printers</p>
+                  </div>
                 </div>
-                <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-1">Printer IP Address</label>
-                  <input type="text" id="printer-ip" placeholder="e.g. 192.168.1.100"
-                         class="w-full max-w-xs px-3 py-2 border border-gray-300 rounded-lg
-                                focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
-                </div>
-                <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-1">Printer Port</label>
-                  <input type="number" id="printer-port" placeholder="9100"
-                         class="w-full max-w-xs px-3 py-2 border border-gray-300 rounded-lg
-                                focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
-                  <p class="text-xs text-gray-400 mt-1">Default is 9100 for most ESC/POS network printers</p>
+                <div id="printer-paper-fields" class="space-y-4">
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Paper Width</label>
+                    <select id="paper-width"
+                            class="w-full max-w-xs px-3 py-2 border border-gray-300 rounded-lg
+                                   focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white">
+                      <option value="58mm">58mm</option>
+                      <option value="80mm">80mm</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Font</label>
+                    <select id="printer-font"
+                            class="w-full max-w-xs px-3 py-2 border border-gray-300 rounded-lg
+                                   focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white">
+                      <option value="A">Font A (wide)</option>
+                      <option value="B">Font B (narrow)</option>
+                    </select>
+                  </div>
                 </div>
                 <button onclick="savePrinterSettings()"
                         class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg
                                text-sm font-medium transition">
                   Save Printer Settings
                 </button>
-                <button onclick="testPrinter()"
+                <button onclick="testPrinter()" id="printer-test-btn"
                         class="ml-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700
-                               rounded-lg text-sm font-medium transition border border-gray-300">
+                               rounded-lg text-sm font-medium transition border border-gray-300
+                               disabled:opacity-40 disabled:cursor-not-allowed">
                   🧪 Test Print
                 </button>
               </div>
@@ -1260,22 +1279,44 @@
             }
         }
 
+        function updatePrinterModeUI() {
+            const mode = document.getElementById('printer-mode').value;
+            // IP + port only matter for a network printer.
+            document.getElementById('printer-network-fields').style.display =
+                mode === 'network' ? '' : 'none';
+            // Paper width + font apply to any active printer.
+            document.getElementById('printer-paper-fields').style.display =
+                mode === 'disabled' ? 'none' : '';
+            // Test Print only makes sense when a transport is configured.
+            document.getElementById('printer-test-btn').disabled = mode === 'disabled';
+        }
+
         async function loadPrinterSettings() {
             try {
                 const res = await authenticatedFetch(`${API_BASE}/business/`);
                 const data = await res.json();
-                document.getElementById('printer-enabled').checked = !!data.printer_enabled;
+                document.getElementById('printer-mode').value = data.printer_mode || 'disabled';
                 document.getElementById('printer-ip').value = data.printer_ip || '';
                 document.getElementById('printer-port').value = data.printer_port || 9100;
+                document.getElementById('paper-width').value = data.paper_width || '58mm';
+                document.getElementById('printer-font').value = data.printer_font || 'B';
+                updatePrinterModeUI();
             } catch(e) { console.error('Failed to load printer settings', e); }
         }
 
         async function savePrinterSettings() {
+            const mode = document.getElementById('printer-mode').value;
             const payload = {
-                printer_enabled: document.getElementById('printer-enabled').checked,
-                printer_ip: document.getElementById('printer-ip').value.trim() || null,
+                printer_mode: mode,
+                paper_width: document.getElementById('paper-width').value,
+                printer_font: document.getElementById('printer-font').value,
                 printer_port: parseInt(document.getElementById('printer-port').value) || 9100,
             };
+            // Only send an IP when in network mode; clear it otherwise so a
+            // stale address can't masquerade as the (removed) enable flag.
+            payload.printer_ip = mode === 'network'
+                ? (document.getElementById('printer-ip').value.trim() || null)
+                : null;
             try {
                 const res = await authenticatedFetch(`${API_BASE}/business/update/`, {
                     method: 'PATCH',

@@ -172,6 +172,11 @@ sudo systemctl reload nginx
 - SC/PWD/VAT labels pull from BusinessProfile configured rates
 - `variant_selections` displayed on receipt via `TransactionItemVariant`
 - Sequential OR numbers from OfficialReceiptCounter
+- **ISSUE-099:** transport set by `BusinessProfile.printer_mode`
+  (`disabled`/`usb`/`network`). USB uses the local `/dev/usb/lp*` device —
+  the old `printer_ip = 127.0.0.1` "enable" workaround is **no longer
+  needed**; existing rows auto-migrated (migration 0031). Column count is
+  driven by `paper_width` × `printer_font` (see `WIDTH_FONT_COLS`).
 
 ---
 
