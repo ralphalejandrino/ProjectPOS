@@ -552,6 +552,11 @@ class BusinessProfileSerializer(serializers.ModelSerializer):
             'pos_accreditation_number',
             'pos_permit_number',
             'pos_accreditation_valid_until',
+            # ISSUE-099: printer transport + paper calibration. ModelSerializer
+            # validates each against the model's choices automatically.
+            'printer_mode',
+            'paper_width',
+            'printer_font',
         ]
 
 

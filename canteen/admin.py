@@ -80,7 +80,8 @@ class BusinessProfileAdmin(admin.ModelAdmin):
         }),
         ('Printer', {
             'fields': (
-                'printer_enabled', 'printer_ip', 'printer_port',
+                'printer_mode', 'printer_ip', 'printer_port',
+                'paper_width', 'printer_font',
             ),
         }),
         ('Rate Configuration', {

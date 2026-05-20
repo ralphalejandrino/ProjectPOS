@@ -308,7 +308,7 @@ class PosTransactionViewSet(viewsets.ViewSet):
         from decimal import Decimal
         import threading
         profile = BusinessProfile.get_instance()
-        if not profile.printer_enabled or not profile.printer_ip:
+        if profile.printer_mode == 'disabled':
             return Response({'status': 'error', 'error': 'Printer not configured or disabled.'}, status=400)
         # Build a mock transaction-like object for the test
         class MockItem:
@@ -1344,7 +1344,9 @@ def get_business_profile(request):
         'receipt_header': profile.receipt_header,
         'receipt_footer': profile.receipt_footer,
         'low_stock_threshold': profile.low_stock_threshold,
-        'printer_enabled': profile.printer_enabled,
+        'printer_mode': profile.printer_mode,
+        'paper_width': profile.paper_width,
+        'printer_font': profile.printer_font,
         'color_scheme': profile.color_scheme,
         'logo': request.build_absolute_uri(profile.logo.url) if profile.logo else None,
         'vat_enabled': profile.vat_enabled,
@@ -1379,15 +1381,26 @@ def get_business_profile(request):
 def update_business_profile(request):
     from .models import BusinessProfile
     profile = BusinessProfile.get_instance()
-    fields = ['business_name', 'tagline', 'contact_number', 'email', 'address', 'tin', 'receipt_header', 'receipt_footer', 'low_stock_threshold', 'printer_ip', 'printer_port', 'printer_enabled', 'color_scheme', 'logo', 'vat_enabled', 'vat_rate', 'vat_inclusive', 'currency', 'sc_discount_enabled', 'sc_discount_rate', 'pwd_discount_enabled', 'pwd_discount_rate', 'promo_discount_enabled', 'track_inventory',
+    fields = ['business_name', 'tagline', 'contact_number', 'email', 'address', 'tin', 'receipt_header', 'receipt_footer', 'low_stock_threshold', 'printer_ip', 'printer_port', 'printer_mode', 'paper_width', 'printer_font', 'color_scheme', 'logo', 'vat_enabled', 'vat_rate', 'vat_inclusive', 'currency', 'sc_discount_enabled', 'sc_discount_rate', 'pwd_discount_enabled', 'pwd_discount_rate', 'promo_discount_enabled', 'track_inventory',
               # FEATURE-011-B: BIR identity fields
               'machine_identification_number', 'machine_serial_number',
               'pos_accreditation_number', 'pos_permit_number',
               'pos_accreditation_valid_until']
     from django.utils.dateparse import parse_date
+    # ISSUE-099: reject out-of-choice printer config at the write boundary.
+    choice_fields = {
+        'printer_mode': {'usb', 'network', 'disabled'},
+        'paper_width': {'58mm', '80mm'},
+        'printer_font': {'A', 'B'},
+    }
     for field in fields:
         if field in request.data:
             value = request.data[field]
+            if field in choice_fields and value not in choice_fields[field]:
+                return Response(
+                    {'error': f'{field} must be one of {sorted(choice_fields[field])}.'},
+                    status=400,
+                )
             if field == 'pos_accreditation_valid_until':
                 # Empty means "not set" -> NULL (never '' on the DateField).
                 if not value:
