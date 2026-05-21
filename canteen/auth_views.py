@@ -8,7 +8,8 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import TokenError
-from .models import User
+from django.db.models import Q
+from .models import User, PosTransaction, Shift, ZReport
 from .serializers import UserSerializer, UserCreateSerializer, LoginSerializer
 from rest_framework.throttling import AnonRateThrottle
 from .permissions import IsManagerOrAbove, IsAdmin
@@ -98,8 +99,13 @@ class UserViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         # Overriding get_permissions takes precedence over @action(permission_classes=...),
-        # so admin-only actions (set_role) must be gated here too — not just on the decorator.
-        if self.action in ['create', 'destroy', 'set_role']:
+        # so EVERY action's permission must be declared here too — not just on the decorator.
+        # quick_login is the pre-login kiosk grid fetch and must stay AllowAny; without this
+        # branch it fell through to IsManagerOrAbove and 401'd the unauthenticated fetch,
+        # silently hiding the avatar grid (ISSUE-113 regression from QA-S3's admin gating).
+        if self.action == 'quick_login':
+            return [AllowAny()]
+        if self.action in ['create', 'destroy', 'rename', 'set_role']:
             return [IsAdmin()]
         return [IsManagerOrAbove()]
 
@@ -117,6 +123,78 @@ class UserViewSet(viewsets.ModelViewSet):
         if password and len(password) >= 6:
             instance.set_password(password)
             instance.save()
+
+    @action(detail=True, methods=['patch'], permission_classes=[IsAdmin], url_path='rename')
+    def rename(self, request, pk=None):
+        """FEATURE-041: admin-only account rename. Target is resolved through the
+        managed (cashier/manager) queryset, so admins can't be renamed laterally.
+
+        Safe because the username is purely the login label: every FK references the
+        user PK (not the username string) and JWTs key off the user id, so no related
+        rows or tokens need migrating when the username changes. Enforces
+        case-insensitive uniqueness across the whole User table; optional
+        first_name/last_name update the display name."""
+        user = self.get_object()
+        new_username = str(request.data.get('username', '')).strip()
+        if not new_username:
+            return Response({'error': 'Username cannot be blank.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        if len(new_username) > 150:
+            return Response({'error': 'Username too long (max 150 characters).'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        if User.objects.filter(username__iexact=new_username).exclude(pk=user.pk).exists():
+            return Response({'error': f'Username "{new_username}" is already taken.'},
+                            status=status.HTTP_409_CONFLICT)
+        fields = ['username']
+        user.username = new_username
+        if 'first_name' in request.data:
+            user.first_name = str(request.data.get('first_name', '')).strip()
+            fields.append('first_name')
+        if 'last_name' in request.data:
+            user.last_name = str(request.data.get('last_name', '')).strip()
+            fields.append('last_name')
+        user.save(update_fields=fields)
+        return Response({'id': user.pk, 'username': user.username,
+                         'first_name': user.first_name, 'last_name': user.last_name})
+
+    def destroy(self, request, *args, **kwargs):
+        """FEATURE-041: admin-only hard delete (distinct from Deactivate/soft path).
+
+        Resolved against the full User table (like set_role) so the safety messages
+        are accurate rather than a bare 404. Blocks three cases:
+          - deleting your own account (lockout),
+          - deleting the last active admin (lockout),
+          - deleting any user with transaction/shift/Z-report history.
+        The history guard is the audit safeguard: Shift.cashier is CASCADE and
+        Attendance.employee is CASCADE (would silently destroy those records),
+        PosTransaction FKs are SET_NULL (would orphan transactions), and
+        ZReport.cashier is PROTECT (would error). BLOCK preserves audit integrity
+        with zero mutation; such accounts must be Deactivated instead."""
+        try:
+            user = User.objects.get(pk=kwargs.get('pk'))
+        except User.DoesNotExist:
+            return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+        if user.pk == request.user.pk:
+            return Response({'error': 'You cannot delete your own account.'},
+                            status=status.HTTP_403_FORBIDDEN)
+        if (user.role == 'admin' and not User.objects
+                .filter(role='admin', is_active=True).exclude(pk=user.pk).exists()):
+            return Response({'error': 'Cannot delete the last active admin.'},
+                            status=status.HTTP_403_FORBIDDEN)
+        has_history = (
+            PosTransaction.objects.filter(
+                Q(cashier=user) | Q(voided_by=user) | Q(created_by=user)).exists()
+            or Shift.objects.filter(cashier=user).exists()
+            or ZReport.objects.filter(cashier=user).exists()
+        )
+        if has_history:
+            return Response(
+                {'error': 'This account has transaction, shift, or Z-report history and '
+                          'cannot be deleted. Deactivate it instead to preserve audit records.'},
+                status=status.HTTP_409_CONFLICT,
+            )
+        user.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=True, methods=['patch'], permission_classes=[IsAdmin], url_path='role')
     def set_role(self, request, pk=None):

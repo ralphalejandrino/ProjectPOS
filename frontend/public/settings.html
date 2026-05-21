@@ -773,6 +773,36 @@
         </div>
     </div>
 
+    <!-- RENAME ACCOUNT MODAL (FEATURE-041) -->
+    <div id="rename-user-modal" data-modal data-modal-close="closeRenameModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center" style="z-index: var(--z-modal);">
+        <div class="bg-white rounded-lg shadow-2xl p-8 max-w-md w-full mx-4">
+            <h3 class="text-2xl font-bold mb-2 text-gray-800">✏️ Rename Account</h3>
+            <p class="text-gray-600 mb-4 text-sm">Renaming <span id="rename-current-username" class="font-semibold"></span>. The username is the login identifier.</p>
+            <label class="block text-sm font-medium text-gray-700 mb-1" for="rename-username-input">Username</label>
+            <input type="text" id="rename-username-input" placeholder="New username" autocomplete="off"
+                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 mb-3">
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" for="rename-first-input">First name</label>
+                    <input type="text" id="rename-first-input" placeholder="First name" autocomplete="off"
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" for="rename-last-input">Last name</label>
+                    <input type="text" id="rename-last-input" placeholder="Last name" autocomplete="off"
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+            </div>
+            <p id="rename-error" class="hidden text-red-600 text-sm mt-2"></p>
+            <div class="flex space-x-3 mt-4">
+                <button type="button" onclick="closeRenameModal()"
+                    class="touch-target-pos flex-1 bg-gray-500 hover:bg-gray-600 text-white font-bold rounded-lg transition">Cancel</button>
+                <button type="button" onclick="submitRename()"
+                    class="touch-target-pos flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition">Save</button>
+            </div>
+        </div>
+    </div>
+
     <!-- SUCCESS MODAL -->
     <div id="success-modal" data-modal data-modal-close="closeSuccessModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center" style="z-index: var(--z-modal);">
         <div class="bg-white rounded-lg shadow-2xl p-8 max-w-md w-full mx-4">
@@ -1226,6 +1256,10 @@
                                 style="border:1px solid var(--color-border,#d1d5db);border-radius:var(--radius-md,0.375rem);padding:0.25rem 0.5rem;font-size:0.75rem;color:var(--color-primary,#1d4ed8);background:#fff;">
                                 ${roleOptions(u)}
                             </select>
+                            <button onclick="openRename(${u.id}, '${escapeHtml(u.username)}', '${escapeHtml(u.first_name || '')}', '${escapeHtml(u.last_name || '')}')"
+                                class="text-xs px-3 py-1 rounded-lg bg-blue-100 text-blue-700 hover:bg-blue-200">
+                                Rename
+                            </button>
                             <button onclick="openResetPassword(${u.id}, '${escapeHtml(u.username)}')"
                                 class="text-xs px-3 py-1 rounded-lg bg-amber-100 text-amber-700 hover:bg-amber-200">
                                 Reset Password
@@ -1233,6 +1267,10 @@
                             <button onclick="toggleUserActive(${u.id}, ${!u.is_active})"
                                 class="text-xs px-3 py-1 rounded-lg ${u.is_active ? 'bg-red-100 text-red-600 hover:bg-red-200' : 'bg-green-100 text-green-600 hover:bg-green-200'}">
                                 ${u.is_active ? 'Deactivate' : 'Activate'}
+                            </button>
+                            <button onclick="deleteUser(${u.id}, '${escapeHtml(u.username)}')"
+                                class="text-xs px-3 py-1 rounded-lg bg-red-600 text-white hover:bg-red-700">
+                                Delete
                             </button>
                         </div>
                     </div>
@@ -1366,6 +1404,83 @@
                 }
             } catch (e) {
                 window.toast({ severity: 'danger', message: `Reset failed: ${e.message}` });
+            }
+        }
+
+        // FEATURE-041: account rename — modal + uniqueness errors + toast.
+        let renameTarget = null;
+
+        function openRename(userId, username, firstName, lastName) {
+            renameTarget = { userId, username };
+            document.getElementById('rename-current-username').textContent = username;
+            document.getElementById('rename-username-input').value = username;
+            document.getElementById('rename-first-input').value = firstName || '';
+            document.getElementById('rename-last-input').value = lastName || '';
+            document.getElementById('rename-error').classList.add('hidden');
+            document.getElementById('rename-user-modal').classList.remove('hidden');
+        }
+
+        function closeRenameModal() {
+            document.getElementById('rename-user-modal').classList.add('hidden');
+            renameTarget = null;
+        }
+
+        async function submitRename() {
+            if (!renameTarget) return;
+            const { userId } = renameTarget;
+            const username = document.getElementById('rename-username-input').value.trim();
+            const first_name = document.getElementById('rename-first-input').value.trim();
+            const last_name = document.getElementById('rename-last-input').value.trim();
+            const errorEl = document.getElementById('rename-error');
+            errorEl.classList.add('hidden');
+            if (!username) {
+                errorEl.textContent = 'Username cannot be blank.';
+                errorEl.classList.remove('hidden');
+                return;
+            }
+            try {
+                const response = await authenticatedFetch(`${API_BASE}/users/${userId}/rename/`, {
+                    method: 'PATCH',
+                    body: JSON.stringify({ username, first_name, last_name })
+                });
+                const data = await response.json().catch(() => ({}));
+                if (response.ok) {
+                    closeRenameModal();
+                    window.toast({ severity: 'success', message: `Account renamed to ${data.username}` });
+                    loadUsers();
+                } else {
+                    errorEl.textContent = data.error || `Rename failed (${response.status}).`;
+                    errorEl.classList.remove('hidden');
+                    window.toast({ severity: 'danger', message: `Rename failed: ${data.error || response.status}` });
+                }
+            } catch (e) {
+                window.toast({ severity: 'danger', message: `Rename failed: ${e.message}` });
+            }
+        }
+
+        // FEATURE-041: hard delete — confirm modal + audit-safe server guards + toast.
+        async function deleteUser(userId, username) {
+            const ok = await window.confirmDialog({
+                title: 'Delete account',
+                message: `Permanently delete "${username}"? This cannot be undone. Accounts with transaction or shift history must be Deactivated instead.`,
+                okLabel: 'Delete',
+                cancelLabel: 'Cancel',
+                danger: true,
+            });
+            if (!ok) return;
+            try {
+                const response = await authenticatedFetch(`${API_BASE}/users/${userId}/`, {
+                    method: 'DELETE'
+                });
+                if (response.ok || response.status === 204) {
+                    window.toast({ severity: 'success', message: `${username} deleted` });
+                    loadUsers();
+                } else {
+                    const data = await response.json().catch(() => ({}));
+                    window.toast({ severity: 'danger', message: data.error || `Delete failed (${response.status}).` });
+                }
+            } catch (e) {
+                window.toast({ severity: 'danger', message: `Delete failed: ${e.message}` });
             }
         }
 

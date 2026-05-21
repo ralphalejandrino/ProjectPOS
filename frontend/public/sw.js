@@ -13,7 +13,8 @@
 // v72: FEATURE-006 — reset-password modal styleguide compliance fix
 // v73: FEATURE-040 — receipt overhaul + on-screen preview
 // v74: ISSUE-067 + FEATURE-039 — match Create Account & Wi-Fi inputs to BIR styling
-const CACHE_NAME = 'tarsierpos-v74'; // canonical cache version
+// v75: ISSUE-113 + FEATURE-041 — fix quick-login grid perms; account rename + hard delete
+const CACHE_NAME = 'tarsierpos-v75'; // canonical cache version
 const ASSETS = [
   'index.html',
   'login.html',
