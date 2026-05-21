@@ -162,3 +162,81 @@ sudo systemctl disable --now tarsierpos-backup-offsite.timer
 sudo rm /etc/systemd/system/tarsierpos-backup-offsite.{service,timer}
 sudo systemctl daemon-reload
 ```
+
+## GCS off-site upload (FEATURE-017(b))
+
+The offsite backup script also uploads each snapshot to Google Cloud Storage
+when `GCS_DEST` is set. Auth is a service-account JSON key on disk; the SA is
+scoped to one bucket only (no project-level roles). 3-attempt retry with
+exponential backoff (10s, 20s, 40s); on full failure the script logs `gcs
+ABORT` and (sub-commit c) will enqueue the file for later retry.
+
+### One-time GCP setup (org-less project `pos-backup-project`)
+
+```sh
+gcloud projects create pos-backup-project --name="TarsierPOS Backup"
+gcloud billing projects link pos-backup-project \
+  --billing-account=0147A3-995DE3-0F35C4
+gcloud config set project pos-backup-project
+gcloud services enable storage.googleapis.com iam.googleapis.com \
+  --project=pos-backup-project
+
+# Bucket: asia-southeast1, Standard, uniform BLA, versioning on, 90d delete
+gsutil mb -p pos-backup-project -c STANDARD -l asia-southeast1 -b on \
+  gs://tarsierpos-backups-rma/
+gsutil versioning set on gs://tarsierpos-backups-rma/
+cat > /tmp/lifecycle.json <<'EOF'
+{"lifecycle":{"rule":[{"action":{"type":"Delete"},"condition":{"age":90}}]}}
+EOF
+gsutil lifecycle set /tmp/lifecycle.json gs://tarsierpos-backups-rma/
+rm /tmp/lifecycle.json
+
+# Service account, bucket-scoped objectAdmin (NOT project-level)
+gcloud iam service-accounts create tarsierpos-backup \
+  --display-name="TarsierPOS off-site backup" \
+  --project=pos-backup-project
+SA_EMAIL=tarsierpos-backup@pos-backup-project.iam.gserviceaccount.com
+gsutil iam ch serviceAccount:${SA_EMAIL}:objectAdmin \
+  gs://tarsierpos-backups-rma/
+# Verify project-level policy for the SA is empty:
+gcloud projects get-iam-policy pos-backup-project \
+  --flatten="bindings[].members" --filter="bindings.members:${SA_EMAIL}"
+```
+
+### Per-machine key + drop-in install
+
+```sh
+gcloud iam service-accounts keys create /tmp/gcs-backup-sa.json \
+  --iam-account=${SA_EMAIL} --project=pos-backup-project
+sudo mkdir -p /etc/tarsierpos
+sudo install -m 0640 -o root -g ralph /tmp/gcs-backup-sa.json \
+  /etc/tarsierpos/gcs-backup-sa.json
+rm /tmp/gcs-backup-sa.json
+
+sudo mkdir -p /etc/systemd/system/tarsierpos-backup-offsite.service.d/
+sudo install -m 0644 -o root -g root \
+  scripts/systemd/tarsierpos-backup-offsite.service.d/gcs.conf \
+  /etc/systemd/system/tarsierpos-backup-offsite.service.d/gcs.conf
+sudo systemctl daemon-reload
+```
+
+### Per-machine `GCS_DEST`
+
+Each host writes to its own prefix so snapshots don't collide:
+
+| Host           | `GCS_DEST`                                  |
+|----------------|---------------------------------------------|
+| dev-optiplex   | `gs://tarsierpos-backups-rma/dev-optiplex`  |
+| pos-01 (M710q, Phase 2) | `gs://tarsierpos-backups-rma/pos-01` |
+
+The repo's `gcs.conf` ships with `dev-optiplex`. For other hosts edit the
+drop-in's `GCS_DEST=` line before installing, or override locally with
+`sudo systemctl edit tarsierpos-backup-offsite.service` and reload.
+
+### FLAG-070 ordering note
+
+The 23:30 local-snapshot timer must complete before the 23:45 offsite timer
+fires; the offsite script reads the newest `db_[0-9]*.sqlite3` and silently
+re-uploads yesterday's snapshot if the 23:30 job hasn't landed yet. Don't
+narrow that gap without also adding `After=` / ordering between the two
+timers.
