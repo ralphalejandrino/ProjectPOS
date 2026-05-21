@@ -10,7 +10,8 @@
 // v69: FEATURE-020 — local-status MVP page
 // v70: FEATURE-006 — credential (password) reset in User Management
 // v71: FEATURE-039 — network (WiFi) management with auto-revert
-const CACHE_NAME = 'tarsierpos-v71'; // canonical cache version
+// v72: FEATURE-006 — reset-password modal styleguide compliance fix
+const CACHE_NAME = 'tarsierpos-v72'; // canonical cache version
 const ASSETS = [
   'index.html',
   'login.html',
