@@ -186,6 +186,29 @@ class ReceiptCurrencyTests(TestCase):
         self.assertIn('SC Discount (25%):', out.decode('latin-1'))
 
 
+class ReceiptAsciiCurrencyTests(TestCase):
+    """ISSUE-114: print uses an ASCII currency token; screen keeps ₱."""
+
+    def test_print_uses_iso_prefix_not_glyph(self):
+        _profile(currency='PHP', vat_enabled=False)
+        out, _ = _print(_txn())
+        text = out.decode('latin-1')
+        self.assertIn('PHP ', text)     # ASCII token "PHP 200.00"
+        self.assertNotIn('₱', text)
+
+    def test_print_uses_profile_currency_code(self):
+        # Zero-config store with a different currency must still work.
+        _profile(currency='USD', vat_enabled=False)
+        out, _ = _print(_txn())
+        self.assertIn('USD ', out.decode('latin-1'))
+
+    def test_screen_preview_keeps_unicode_symbol(self):
+        bp = _profile(currency='PHP')
+        text = receipt_layout.render_text(_txn(), bp)
+        self.assertIn('₱', text)        # browser-safe glyph stays on screen
+        self.assertNotIn('PHP ', text)
+
+
 class ReceiptParityTests(TestCase):
     """Screen and paper render from the SAME builder (FLAG-064)."""
 

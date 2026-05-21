@@ -21,12 +21,18 @@ def currency_symbol(code):
     return _SYMBOLS.get((code or 'PHP').upper(), '')
 
 
-def format_currency(amount, code='PHP'):
+def format_currency(amount, code='PHP', ascii_only=False):
     """Format ``amount`` for display in the given currency.
 
     JPY uses 0 decimals; everything else uses 2. Negative values keep
     the sign before the symbol (``-₱5.00``). Unknown ISO codes get an
     ISO prefix instead of a symbol (``SGD 1,234.50``).
+
+    ``ascii_only=True`` forces the ISO-prefix form for ALL currencies
+    (``PHP 120.00``) instead of the Unicode symbol. ISSUE-114: thermal
+    receipts print in PC437, which has no ₱ glyph (it transliterates to
+    '?'), so the print path passes ascii_only=True. The code still comes
+    from BusinessProfile.currency — nothing is hardcoded.
     """
     code = (code or 'PHP').upper()
     decimals = 0 if code == 'JPY' else 2
@@ -37,7 +43,7 @@ def format_currency(amount, code='PHP'):
     sign = '-' if value < 0 else ''
     quant = Decimal('1') if decimals == 0 else Decimal('0.01')
     formatted = f"{abs(value).quantize(quant, rounding=ROUND_HALF_UP):,.{decimals}f}"
-    symbol = _SYMBOLS.get(code)
+    symbol = None if ascii_only else _SYMBOLS.get(code)
     if symbol:
         return f"{sign}{symbol}{formatted}"
     return f"{sign}{code} {formatted}"

@@ -135,13 +135,16 @@ class StreamLayoutTests(ZPrintTestBase):
             last = idx
 
     def test_currency_via_format_currency(self):
-        """2. Money uses format_currency (no hardcoded prefixes)."""
+        """2. Money uses format_currency (no hardcoded prefixes).
+
+        ISSUE-114: thermal print is PC437 (no ₱ glyph), so the paper uses the
+        ASCII ISO-prefix token ("PHP 120.00"), not the Unicode symbol.
+        """
         z = self._finalize()
         ok, out = self._print(z)
         self.assertTrue(ok)
-        # PHP renders the ₱ symbol; no bare 'PHP ' / raw float lines.
-        self.assertIn('₱', out)
-        self.assertNotIn('PHP ', out)
+        self.assertIn('PHP ', out)
+        self.assertNotIn('₱', out)
         with mock.patch('canteen.receipt_service.format_currency',
                         wraps=receipt_service.format_currency) as fc:
             self._print(z)
@@ -160,8 +163,10 @@ class StreamLayoutTests(ZPrintTestBase):
         self.assertTrue(ok)
         self.assertIn('Test Canteen', out)
         self.assertNotIn('MUTATED LIVE NAME', out)
-        # currency frozen as PHP -> ₱, never the live USD '$'
-        self.assertIn('₱', out)
+        # currency frozen as PHP -> "PHP " token, never the live USD (ISSUE-114
+        # prints the ASCII ISO token, not a glyph).
+        self.assertIn('PHP ', out)
+        self.assertNotIn('USD ', out)
         self.assertNotIn('$', out)
 
     def test_vat_exempt_line(self):
@@ -177,8 +182,9 @@ class StreamLayoutTests(ZPrintTestBase):
         ok, out = self._print(z)
         self.assertTrue(ok)
         from canteen.utils.currency import format_currency
+        # ISSUE-114: paper uses the ASCII token, so expect ascii_only form.
         self.assertIn(
-            format_currency(z.vat_exempt_sales, z.currency), out
+            format_currency(z.vat_exempt_sales, z.currency, ascii_only=True), out
         )
 
     def test_official_z_includes_identity_lines(self):

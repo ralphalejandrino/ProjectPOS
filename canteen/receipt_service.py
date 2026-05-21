@@ -102,7 +102,9 @@ def print_receipt(transaction):
             _print_logo(p, profile)
 
             # Body: single source of truth shared with the on-screen preview.
-            rows, cols, ccode = build_receipt_rows(transaction, profile)
+            # ascii_currency=True — PC437 can't print ₱, so the paper uses the
+            # ISO-prefix form ("PHP 120.00"); the screen preview keeps ₱ (ISSUE-114).
+            rows, cols, ccode = build_receipt_rows(transaction, profile, ascii_currency=True)
             for r in rows:
                 if r['title']:
                     # Business name — emphasized, double size.
@@ -151,35 +153,34 @@ def print_z_report(z_report):
         # come from the live profile — FLAG-058 parity is about Z *content*.
         RECEIPT_WIDTH = _receipt_cols(profile)
         p = _get_transport(profile)
-        p.set(font=_escpos_font(profile), align='left')
+        _pset(p, profile, align='left')
 
         def rrow(label, val):
             pad = RECEIPT_WIDTH - len(label) - len(val)
             return label + ' ' * max(pad, 1) + val + '\n'
 
         def money(val):
-            return format_currency(val, ccode)
+            return format_currency(val, ccode, ascii_only=True)
 
         official = z_report.is_official
 
         try:
             # --- ISSUE-105: UNOFFICIAL top banner ---
             if not official:
-                p.set(align='center', bold=True)
+                _pset(p, profile, align='center', bold=True)
                 p.text('=' * RECEIPT_WIDTH + '\n')
-                p.set(align='center', bold=True,
+                _pset(p, profile, align='center', bold=True,
                       double_height=True, double_width=False)
                 p.text('*** UNOFFICIAL ***\n')
                 p.text('NOT FOR BIR SUBMISSION\n')
-                p.set(align='center', bold=True,
-                      double_height=False, double_width=False)
+                _pset(p, profile, normal_textsize=True, align='center', bold=True)
                 p.text('=' * RECEIPT_WIDTH + '\n')
-                p.set(align='left', bold=False)
+                _pset(p, profile, align='left', bold=False)
 
             # --- Header (frozen identity) ---
-            p.set(align='center', bold=True, double_height=True, double_width=True)
+            _pset(p, profile, align='center', bold=True, double_height=True, double_width=True)
             p.text((z_report.business_name or 'Z-REPORT') + '\n')
-            p.set(align='center', bold=False, double_height=False, double_width=False)
+            _pset(p, profile, normal_textsize=True, align='center', bold=False)
             if z_report.business_address:
                 for line in z_report.business_address.strip().splitlines():
                     line = line.strip()
@@ -201,9 +202,9 @@ def print_z_report(z_report):
 
             # --- Z block ---
             p.text('-' * RECEIPT_WIDTH + '\n')
-            p.set(align='center', bold=True)
+            _pset(p, profile, align='center', bold=True)
             p.text('Z REPORT\n')
-            p.set(align='left', bold=False)
+            _pset(p, profile, align='left', bold=False)
             p.text('-' * RECEIPT_WIDTH + '\n')
             p.text(rrow(f'Z #: {z_report.z_counter}',
                         f'Reset: {z_report.reset_counter}'))
@@ -228,9 +229,9 @@ def print_z_report(z_report):
                 p.text(rrow('  PWD:', money(-z_report.pwd_discount_total)))
             if z_report.promo_discount_total:
                 p.text(rrow('  Promo:', money(-z_report.promo_discount_total)))
-            p.set(bold=True)
+            _pset(p, profile, bold=True)
             p.text(rrow('Net Sales:', money(z_report.net_sales)))
-            p.set(bold=False)
+            _pset(p, profile, bold=False)
             p.text(rrow('Vatable Sales:', money(z_report.vatable_sales)))
             p.text(rrow('Output VAT:', money(z_report.output_vat)))
             p.text(rrow('VAT-Exempt Sales:', money(z_report.vat_exempt_sales)))
@@ -249,9 +250,9 @@ def print_z_report(z_report):
                 total_payments += amt
                 p.text(rrow(f'  {labels.get(method, method.title())}:',
                             money(amt)))
-            p.set(bold=True)
+            _pset(p, profile, bold=True)
             p.text(rrow('Total Payments:', money(total_payments)))
-            p.set(bold=False)
+            _pset(p, profile, bold=False)
 
             # --- Cash reconciliation ---
             p.text('-' * RECEIPT_WIDTH + '\n')
@@ -268,17 +269,17 @@ def print_z_report(z_report):
 
             # --- Footer ---
             p.text('-' * RECEIPT_WIDTH + '\n')
-            p.set(bold=True)
+            _pset(p, profile, bold=True)
             p.text(rrow('Grand Total Sales:',
                         money(z_report.grand_total_sales)))
-            p.set(bold=False, align='center')
+            _pset(p, profile, bold=False, align='center')
             p.text(f'Generated {finalized}\n')
             if not official:
-                p.set(align='center', bold=True)
+                _pset(p, profile, align='center', bold=True)
                 p.text('=' * RECEIPT_WIDTH + '\n')
                 p.text('*** UNOFFICIAL Z REPORT ***\n')
                 p.text('=' * RECEIPT_WIDTH + '\n')
-                p.set(align='center', bold=False)
+                _pset(p, profile, align='center', bold=False)
             p.cut()
         finally:
             p.close()
@@ -297,19 +298,19 @@ def print_xreport_summary(data):
         ccode = profile.currency if profile else 'PHP'
         RECEIPT_WIDTH = _receipt_cols(profile)
         p = _get_transport(profile)
-        p.set(font=_escpos_font(profile), align='left')
+        _pset(p, profile, align='left')
         try:
-            p.set(align='center', bold=True, double_height=True, double_width=True)
+            _pset(p, profile, align='center', bold=True, double_height=True, double_width=True)
             p.text((profile.business_name if profile else 'X-REPORT') + '\n')
-            p.set(align='center', bold=False, double_height=False, double_width=False)
+            _pset(p, profile, normal_textsize=True, align='center', bold=False)
             if profile and profile.tagline:
                 p.text(profile.tagline + '\n')
             if profile and profile.receipt_header:
                 p.text(profile.receipt_header + '\n')
             p.text('-' * RECEIPT_WIDTH + '\n')
-            p.set(align='center', bold=True)
+            _pset(p, profile, align='center', bold=True)
             p.text('X-REPORT - SHIFT SUMMARY\n')
-            p.set(align='left', bold=False)
+            _pset(p, profile, align='left', bold=False)
             if data.get('cashier'):
                 p.text(f"Cashier: {data['cashier']}\n")
             if data.get('opened_at'):
@@ -320,20 +321,20 @@ def print_xreport_summary(data):
                 pad = RECEIPT_WIDTH - len(label) - len(val)
                 return label + ' ' * max(pad, 1) + val + '\n'
 
-            p.text(rrow('Gross Sales:', format_currency(data.get('gross_sales', 0), ccode)))
-            p.text(rrow('Voids:', format_currency(data.get('void_total', 0), ccode)))
-            p.set(bold=True)
-            p.text(rrow('Net Sales:', format_currency(data.get('net_sales', 0), ccode)))
-            p.set(bold=False)
+            p.text(rrow('Gross Sales:', format_currency(data.get('gross_sales', 0), ccode, ascii_only=True)))
+            p.text(rrow('Voids:', format_currency(data.get('void_total', 0), ccode, ascii_only=True)))
+            _pset(p, profile, bold=True)
+            p.text(rrow('Net Sales:', format_currency(data.get('net_sales', 0), ccode, ascii_only=True)))
+            _pset(p, profile, bold=False)
             p.text(rrow('Transactions:', str(data.get('transaction_count', 0))))
             p.text('-' * RECEIPT_WIDTH + '\n')
             for row in data.get('by_payment_method', []):
                 method = {'cash': 'Cash', 'gcash': 'GCash', 'maya': 'Maya'}.get(
                     row.get('payment_method', ''), row.get('payment_method', 'Other'))
                 p.text(rrow(f"  {method} ({row.get('count', 0)}):",
-                            format_currency(row.get('subtotal', 0), ccode)))
+                            format_currency(row.get('subtotal', 0), ccode, ascii_only=True)))
             p.text('-' * RECEIPT_WIDTH + '\n')
-            p.set(align='center')
+            _pset(p, profile, align='center')
             if profile and profile.receipt_footer:
                 p.text(profile.receipt_footer + '\n')
             p.cut()

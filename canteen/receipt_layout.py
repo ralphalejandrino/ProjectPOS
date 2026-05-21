@@ -51,7 +51,7 @@ def _money_row(label, value, cols, bold=False):
     return _row(label + ' ' * max(pad, 1) + value, bold=bold)
 
 
-def _item_rows(item, cols, ccode):
+def _item_rows(item, cols, money):
     """Item line(s): 'name  qty x price        subtotal', wrapping the qty/price
     to an indented second line when the single line would overflow. Variant
     selections are indented underneath."""
@@ -74,24 +74,34 @@ def _item_rows(item, cols, ccode):
     for vs in item.variant_selections.all():
         mod = float(vs.price_modifier or 0)
         if mod > 0:
-            modifier_str = ' +' + format_currency(mod, ccode)
+            modifier_str = ' +' + money(mod)
         elif mod < 0:
-            modifier_str = ' ' + format_currency(mod, ccode)  # native '-' (ISSUE-074)
+            modifier_str = ' ' + money(mod)  # native '-' (ISSUE-074)
         else:
             modifier_str = ''
         rows.append(_row(f'  {vs.group_name}: {vs.option_name}{modifier_str}'))
     return rows
 
 
-def build_receipt_rows(transaction, profile):
+def build_receipt_rows(transaction, profile, ascii_currency=False):
     """Build the ordered row list for a receipt. Returns (rows, cols, ccode).
 
     Pure layout — no I/O, no ESC/POS. Mirrors the legacy print_receipt body so
     the printed output is unchanged except for the corrected width, font and the
     (new) logo, which the printer consumer adds around these rows.
+
+    ISSUE-114: ``ascii_currency`` controls the money token. The printer passes
+    True (PC437 has no ₱ glyph → ISO-prefix form like "PHP 120.00"); the on-screen
+    preview passes False so the browser shows the Unicode ₱. This screen-vs-paper
+    symbol divergence is INTENTIONAL and acceptable (the glyph is hardware-
+    unprintable, not a FLAG-064 parity violation) — do not "fix" it back.
     """
     cols = receipt_cols(profile)
     ccode = profile.currency if profile else 'PHP'
+
+    def money(v):
+        return format_currency(v, ccode, ascii_only=ascii_currency)
+
     rows = []
 
     # --- Header: identity (centered) ---
@@ -128,7 +138,7 @@ def build_receipt_rows(transaction, profile):
     for item in transaction.items.select_related('item').all():
         sub_amt = item.subtotal.amount if hasattr(item.subtotal, 'amount') else item.subtotal
         subtotal_sum += float(sub_amt)
-        rows.extend(_item_rows(item, cols, ccode))
+        rows.extend(_item_rows(item, cols, money))
     rows.append(_row('-' * cols))
 
     # --- Totals ---
@@ -140,12 +150,12 @@ def build_receipt_rows(transaction, profile):
 
     vat_inclusive = bool(profile and getattr(profile, 'vat_inclusive', False))
     subtotal_label = 'Subtotal (VAT-inc):' if vat_inclusive else 'Subtotal:'
-    rows.append(_money_row(subtotal_label, format_currency(subtotal_sum, ccode), cols))
+    rows.append(_money_row(subtotal_label, money(subtotal_sum), cols))
 
     if is_vat_exempt and stored_vat_amount > 0:
         vat_pct = int(profile.vat_rate) if profile and hasattr(profile, 'vat_rate') else 12
         rows.append(_money_row(f'VAT ({vat_pct}%) Removed:',
-                               format_currency(-stored_vat_amount, ccode), cols))
+                               money(-stored_vat_amount), cols))
 
     discount = float(transaction.discount_amount) if transaction.discount_amount else 0.0
     if discount > 0:
@@ -159,19 +169,19 @@ def build_receipt_rows(transaction, profile):
             disc_label = 'Promo Discount:'
         else:
             disc_label = 'Discount:'
-        rows.append(_money_row(disc_label, format_currency(-discount, ccode), cols))
+        rows.append(_money_row(disc_label, money(-discount), cols))
         id_number = getattr(transaction, 'discount_id_number', '')
         if id_number and disc_type in ('sc', 'pwd'):
             id_prefix = 'SC ID: ' if disc_type == 'sc' else 'PWD ID: '
             rows.append(_row(f'{id_prefix}{id_number}'))
 
-    rows.append(_money_row('TOTAL:', format_currency(total, ccode), cols, bold=True))
+    rows.append(_money_row('TOTAL:', money(total), cols, bold=True))
 
     if profile and profile.vat_enabled and not is_vat_exempt:
         vat_rate = float(profile.vat_rate)
         vat_amount = total * vat_rate / (100 + vat_rate)
         rows.append(_money_row(f'Incl. VAT ({vat_rate:.0f}%):',
-                               format_currency(vat_amount, ccode), cols))
+                               money(vat_amount), cols))
 
     if is_vat_exempt:
         ra_ref = 'RA 9994' if disc_type == 'sc' else 'RA 10754'
@@ -186,8 +196,8 @@ def build_receipt_rows(transaction, profile):
         change_dec = (cash_dec - Decimal(str(total))).quantize(
             Decimal('0.01'), rounding=ROUND_HALF_UP)
         rows.append(_row(
-            f'Cash: {format_currency(cash_dec, ccode)}  '
-            f'Change: {format_currency(change_dec, ccode)}'))
+            f'Cash: {money(cash_dec)}  '
+            f'Change: {money(change_dec)}'))
     elif transaction.payment_method in ('gcash', 'maya'):
         ref = transaction.gcash_reference or transaction.maya_reference or 'N/A'
         rows.append(_row(f'Ref#: {ref}'))
