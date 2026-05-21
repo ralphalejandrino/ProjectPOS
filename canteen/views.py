@@ -39,7 +39,8 @@ from datetime import datetime, timedelta, date, timezone as dt_tz
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.views import APIView
-from .permissions import IsManagerOrAbove, IsCashierOrAbove
+from .permissions import IsManagerOrAbove, IsCashierOrAbove, IsAdmin
+from . import network_service
 import csv, io, logging, subprocess
 
 logger = logging.getLogger(__name__)
@@ -1571,3 +1572,44 @@ def local_status_snapshot(request):
     if not info:
         return Response({'detail': 'snapshot produced no file'}, status=500)
     return Response({'filename': info['filename'], 'size_bytes': info['size_bytes']})
+
+
+# FEATURE-039: WiFi network management (admin-only — the box is reached only over
+# Tailscale-over-WiFi, so a bad change can sever access; see scripts/network).
+@api_view(['GET'])
+@permission_classes([IsAdmin])
+def network_status(request):
+    """Current WiFi + any pending/confirmed change awaiting the admin's signal."""
+    return Response({
+        'current': network_service.current_wifi(),
+        'pending': network_service.get_state(),
+    })
+
+
+@api_view(['POST'])
+@permission_classes([IsAdmin])
+def network_apply(request):
+    """Apply a new WiFi profile. Creates a NEW connection (never overwrites the
+    working one) and starts a 60s confirmation window with auto-revert."""
+    ssid = str(request.data.get('ssid', '')).strip()
+    password = str(request.data.get('password', ''))
+    if not ssid or len(ssid) > 32:
+        return Response({'error': 'SSID must be 1–32 characters.'}, status=400)
+    # WPA-PSK keys are 8–63 chars; empty password = open network.
+    if password and not (8 <= len(password) <= 63):
+        return Response({'error': 'WiFi password must be 8–63 characters.'}, status=400)
+    ok, message = network_service.apply(ssid, password)
+    if not ok:
+        return Response({'error': message}, status=400)
+    return Response({'detail': message, 'pending': network_service.get_state()})
+
+
+@api_view(['POST'])
+@permission_classes([IsAdmin])
+def network_confirm(request):
+    """Explicit success signal — admin reached this page over Tailscale on the new
+    network and confirms. Cancels the pending auto-revert."""
+    ok, message = network_service.confirm()
+    if not ok:
+        return Response({'error': message}, status=400)
+    return Response({'detail': message, 'pending': network_service.get_state()})

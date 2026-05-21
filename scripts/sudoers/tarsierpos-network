@@ -1,0 +1,19 @@
+# FEATURE-039: scoped passwordless access for WiFi management.
+#
+# The app user may only APPLY a new network, CONFIRM it, or read STATUS. It can
+# NOT invoke 'check' / revert directly — that is root/systemd-only (60s timer +
+# boot unit). The privileged logic lives in a root-owned binary at
+# /usr/local/sbin/tarsier-netguard (NOT the user-writable repo path — granting
+# root on a user-writable script would be a root-escalation hole).
+#
+# The WiFi password is passed on stdin, never on argv, so it stays out of `ps`
+# and the sudo audit log.
+#
+# Install:
+#   sudo install -m 0440 -o root -g root \
+#     scripts/sudoers/tarsierpos-network /etc/sudoers.d/tarsierpos-network
+#   sudo visudo -cf /etc/sudoers.d/tarsierpos-network   # validate
+
+ralph ALL=(root) NOPASSWD: /usr/local/sbin/tarsier-netguard apply *
+ralph ALL=(root) NOPASSWD: /usr/local/sbin/tarsier-netguard confirm
+ralph ALL=(root) NOPASSWD: /usr/local/sbin/tarsier-netguard status

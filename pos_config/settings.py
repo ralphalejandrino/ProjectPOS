@@ -161,6 +161,12 @@ DEFAULT_CURRENCY = 'PHP'
 # Custom User Model
 AUTH_USER_MODEL = 'canteen.User'
 
+# FEATURE-039: WiFi network management (admin-only). The privileged state machine
+# lives in a root-owned binary invoked via scoped sudoers; Django only reads the
+# world-readable state file and shells out to apply/confirm. Overridable in tests.
+NETGUARD_BIN = '/usr/local/sbin/tarsier-netguard'
+NETWORK_STATE_FILE = '/var/lib/tarsierpos-network/state.json'
+
 from datetime import timedelta
 
 # REST Framework Configuration

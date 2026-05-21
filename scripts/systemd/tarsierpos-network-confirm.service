@@ -1,0 +1,28 @@
+# FEATURE-039: on-boot revert of any unconfirmed WiFi change.
+#
+# This is the power-cut guarantee. If the box loses power mid-change, the 60s
+# transient revert timer does NOT survive the reboot — but a 'pending' state in
+# /var/lib/tarsierpos-network/state.json means the change was never confirmed,
+# so on every boot we revert to the last known-good profile.
+#
+# Ordered AFTER NetworkManager so the connection profiles exist before we act.
+# Runs as root (no User=) — it calls 'check', which is root/systemd-only.
+#
+# Install:
+#   sudo install -m 0644 -o root -g root \
+#     scripts/systemd/tarsierpos-network-confirm.service \
+#     /etc/systemd/system/tarsierpos-network-confirm.service
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable tarsierpos-network-confirm.service
+
+[Unit]
+Description=TarsierPOS network change guard (revert unconfirmed WiFi on boot)
+After=NetworkManager.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/tarsier-netguard check
+
+[Install]
+WantedBy=multi-user.target

@@ -24,6 +24,10 @@ urlpatterns = [
     path('auth/me/', auth_views.current_user, name='current_user'),
     path('status/', views.local_status, name='local-status'),
     path('status/snapshot/', views.local_status_snapshot, name='local-status-snapshot'),
+    # FEATURE-039: WiFi network management (admin-only)
+    path('network/', views.network_status, name='network-status'),
+    path('network/apply/', views.network_apply, name='network-apply'),
+    path('network/confirm/', views.network_confirm, name='network-confirm'),
     path('business/', views.get_business_profile, name='get_business_profile'),
     path('business/update/', views.update_business_profile, name='update_business_profile'),
     path('business/logo/', views.upload_business_logo, name='upload-business-logo'),
