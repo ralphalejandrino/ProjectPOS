@@ -7,7 +7,8 @@
 // + symmetric Open/Close shift dropdown entries
 // v67: FEATURE-037 — tappable shift indicator + cross-account open-shifts panel
 // v68: ISSUE-099 — printer settings overhaul (transport mode + paper/font)
-const CACHE_NAME = 'tarsierpos-v68'; // canonical cache version
+// v69: FEATURE-020 — local-status MVP page
+const CACHE_NAME = 'tarsierpos-v69'; // canonical cache version
 const ASSETS = [
   'index.html',
   'login.html',
@@ -17,6 +18,7 @@ const ASSETS = [
   'settings.html',
   'xreport.html',
   'zreport.html',
+  'status.html',
   'denied.html',
   'app.js',
   'config.js',

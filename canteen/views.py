@@ -40,7 +40,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.views import APIView
 from .permissions import IsManagerOrAbove, IsCashierOrAbove
-import csv, io, logging
+import csv, io, logging, subprocess
 
 logger = logging.getLogger(__name__)
 from rest_framework.parsers import MultiPartParser
@@ -563,13 +563,14 @@ class DashboardViewSet(viewsets.ViewSet):
             for item in top_items
         ]
         
-        # Backup health check
+        # Backup health check (ISSUE-112: use real backup path + tightened glob)
         import os, glob
-        backup_dir = os.environ.get('BACKUP_PATH', '/tmp/pos_backups')
+        from django.conf import settings
+        backup_dir = os.environ.get('BACKUP_PATH', str(settings.BASE_DIR / 'backups'))
         backup_warning = False
         last_backup = None
         try:
-            backups = sorted(glob.glob(f'{backup_dir}/db_backup_*.sqlite3'))
+            backups = sorted(glob.glob(f'{backup_dir}/db_[0-9]*.sqlite3'))
             if backups:
                 last_backup_time = os.path.getmtime(backups[-1])
                 PHT = dt_tz(timedelta(hours=8))
@@ -1508,3 +1509,65 @@ class RecipeIngredientViewSet(viewsets.ModelViewSet):
         if variant_id:
             qs = qs.filter(variant_id=variant_id)
         return qs
+
+
+# FEATURE-020: local-status MVP
+def _latest_backup_info():
+    import glob, os
+    from django.conf import settings
+    backup_dir = str(settings.BASE_DIR / 'backups')
+    matches = sorted(glob.glob(f'{backup_dir}/db_[0-9]*.sqlite3'))
+    if not matches:
+        return None
+    latest = matches[-1]
+    st = os.stat(latest)
+    return {
+        'filename': os.path.basename(latest),
+        'size_bytes': st.st_size,
+        'mtime': datetime.fromtimestamp(st.st_mtime, tz=dt_tz.utc).isoformat(),
+    }
+
+
+def _disk_info():
+    import shutil
+    from django.conf import settings
+    total, used, free = shutil.disk_usage(settings.BASE_DIR)
+    return {
+        'total_bytes': total,
+        'used_bytes': used,
+        'available_bytes': free,
+        'used_percent': round(used / total * 100, 1) if total else 0.0,
+    }
+
+
+@api_view(['GET'])
+@permission_classes([IsManagerOrAbove])
+def local_status(request):
+    return Response({
+        'backup': _latest_backup_info(),
+        'disk': _disk_info(),
+        'server_time': timezone.now().isoformat(),
+    })
+
+
+@api_view(['POST'])
+@permission_classes([IsManagerOrAbove])
+def local_status_snapshot(request):
+    from django.conf import settings
+    script = str(settings.BASE_DIR / 'backup_db.sh')
+    try:
+        proc = subprocess.run(
+            ['/bin/bash', script],
+            capture_output=True, text=True, timeout=30,
+        )
+    except subprocess.TimeoutExpired:
+        return Response({'detail': 'snapshot timed out'}, status=500)
+    if proc.returncode != 0:
+        return Response(
+            {'detail': 'snapshot failed', 'stderr': proc.stderr},
+            status=500,
+        )
+    info = _latest_backup_info()
+    if not info:
+        return Response({'detail': 'snapshot produced no file'}, status=500)
+    return Response({'filename': info['filename'], 'size_bytes': info['size_bytes']})

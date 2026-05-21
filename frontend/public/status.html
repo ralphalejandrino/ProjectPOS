@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Status — TarsierPOS</title>
+    <script>if(localStorage.getItem('darkMode')==='true')document.documentElement.classList.add('dark');</script>
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/png" href="assets/tarsier-icon.png">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="shared-styles.css">
+    <script src="config.js"></script>
+    <script src="components/format.js"></script>
+    <script src="components/nav.js"></script>
+</head>
+<body class="bg-gray-50" data-page="status" style="visibility:hidden">
+    <script>
+        // FEATURE-020: manager/admin only; cashier → denied.html
+        (function () {
+            const t = localStorage.getItem('access_token');
+            if (!t) { window.location.replace('login.html'); return; }
+            let role = null;
+            try { role = JSON.parse(atob(t.split('.')[1])).role || null; } catch (e) {}
+            const allowedRoles = ['admin', 'manager'];
+            if (!role || !allowedRoles.includes(role)) {
+                window.location.replace('denied.html?from=' + encodeURIComponent(location.pathname));
+                return;
+            }
+            document.body.style.visibility = '';
+        })();
+    </script>
+
+    <div id="nav-mount"></div>
+    <script>renderNav({ activePage: 'status' });</script>
+
+    <div class="h-[calc(100vh-73px)] overflow-y-auto bg-gray-50">
+    <div class="container mx-auto px-4 py-6">
+
+        <div class="mb-6">
+            <h2 class="text-3xl font-bold text-gray-800">🩺 Local Status</h2>
+            <p class="text-gray-600">Operational health of this POS box.</p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+            <div class="bg-white rounded-lg shadow p-4">
+                <h3 class="text-lg font-semibold text-gray-800 mb-2">Service</h3>
+                <p class="text-green-700 font-medium">TarsierPOS is running.</p>
+                <p class="text-sm text-gray-500 mt-1">Server time:
+                  <span id="server-time">—</span></p>
+            </div>
+
+            <div class="bg-white rounded-lg shadow p-4">
+                <h3 class="text-lg font-semibold text-gray-800 mb-2">Last backup</h3>
+                <p id="backup-name" class="text-gray-800 font-mono text-sm">—</p>
+                <p id="backup-meta" class="text-sm text-gray-500 mt-1">—</p>
+            </div>
+
+            <div class="bg-white rounded-lg shadow p-4">
+                <h3 class="text-lg font-semibold text-gray-800 mb-2">Disk usage</h3>
+                <p id="disk-headline" class="text-gray-800">—</p>
+                <div class="w-full bg-gray-200 rounded h-2 mt-2 overflow-hidden">
+                    <div id="disk-bar" class="h-2 bg-blue-500" style="width:0%"></div>
+                </div>
+                <p id="disk-meta" class="text-sm text-gray-500 mt-1">—</p>
+            </div>
+
+            <div class="bg-white rounded-lg shadow p-4">
+                <h3 class="text-lg font-semibold text-gray-800 mb-2">Snapshot for support</h3>
+                <p class="text-sm text-gray-500 mb-3">Triggers an on-demand DB snapshot using the same backup script as shutdown.</p>
+                <button id="snapshot-btn"
+                  class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">
+                  Take snapshot now
+                </button>
+                <p id="snapshot-result" class="text-sm mt-2"></p>
+            </div>
+
+        </div>
+    </div>
+    </div>
+
+    <script>
+        function fmtBytes(n) {
+            if (n == null) return '—';
+            const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+            let i = 0, v = n;
+            while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
+            return `${v.toFixed(v < 10 ? 1 : 0)} ${units[i]}`;
+        }
+        function fmtTime(iso) {
+            if (!iso) return '—';
+            try { return new Date(iso).toLocaleString(); } catch (e) { return iso; }
+        }
+
+        async function loadStatus() {
+            const res = await authenticatedFetch(`${API_BASE}/status/`);
+            if (!res.ok) {
+                document.getElementById('backup-meta').textContent =
+                  `Failed to load status (HTTP ${res.status}).`;
+                return;
+            }
+            const data = await res.json();
+            document.getElementById('server-time').textContent = fmtTime(data.server_time);
+
+            const b = data.backup;
+            if (b) {
+                document.getElementById('backup-name').textContent = b.filename;
+                document.getElementById('backup-meta').textContent =
+                  `${fmtBytes(b.size_bytes)} · ${fmtTime(b.mtime)}`;
+            } else {
+                document.getElementById('backup-name').textContent = 'No backup found';
+                document.getElementById('backup-meta').textContent = '';
+            }
+
+            const d = data.disk;
+            document.getElementById('disk-headline').textContent =
+              `${d.used_percent}% used`;
+            document.getElementById('disk-bar').style.width = `${d.used_percent}%`;
+            document.getElementById('disk-meta').textContent =
+              `${fmtBytes(d.used_bytes)} of ${fmtBytes(d.total_bytes)} used · ${fmtBytes(d.available_bytes)} free`;
+        }
+
+        document.getElementById('snapshot-btn').addEventListener('click', async () => {
+            const btn = document.getElementById('snapshot-btn');
+            const out = document.getElementById('snapshot-result');
+            btn.disabled = true;
+            out.textContent = 'Working…';
+            out.className = 'text-sm mt-2 text-gray-600';
+            try {
+                const res = await authenticatedFetch(`${API_BASE}/status/snapshot/`,
+                  { method: 'POST' });
+                const body = await res.json();
+                if (res.ok) {
+                    out.textContent = `OK — ${body.filename} (${fmtBytes(body.size_bytes)})`;
+                    out.className = 'text-sm mt-2 text-green-700';
+                    await loadStatus();
+                } else {
+                    out.textContent = body.detail || `Failed (HTTP ${res.status}).`;
+                    out.className = 'text-sm mt-2 text-red-700';
+                }
+            } catch (e) {
+                out.textContent = 'Network error.';
+                out.className = 'text-sm mt-2 text-red-700';
+            } finally {
+                btn.disabled = false;
+            }
+        });
+
+        document.addEventListener('DOMContentLoaded', loadStatus);
+    </script>
+</body>
+</html>
