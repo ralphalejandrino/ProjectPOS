@@ -677,6 +677,23 @@
 
     </div>
 
+    <!-- RESET PASSWORD MODAL (FEATURE-006) -->
+    <div id="reset-password-modal" data-modal data-modal-close="closeResetPasswordModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center" style="z-index: var(--z-modal);">
+        <div class="bg-white rounded-lg shadow-2xl p-8 max-w-md w-full mx-4">
+            <h3 class="text-xl font-bold mb-2 text-gray-800">🔑 Reset Password</h3>
+            <p class="text-gray-600 mb-4">Set a new password for <span id="reset-password-username" class="font-semibold"></span>.</p>
+            <input type="password" id="reset-password-input" placeholder="New password (min 6 chars)"
+                autocomplete="new-password" class="w-full border rounded-lg p-2 text-sm mb-2">
+            <p id="reset-password-error" class="text-red-500 text-sm mb-3 hidden"></p>
+            <div class="flex justify-end gap-2">
+                <button type="button" onclick="closeResetPasswordModal()"
+                    class="px-4 py-2 bg-gray-100 text-gray-700 text-sm rounded-lg hover:bg-gray-200">Cancel</button>
+                <button type="button" onclick="submitResetPassword()"
+                    class="px-4 py-2 bg-amber-600 text-white text-sm rounded-lg hover:bg-amber-700">Reset Password</button>
+            </div>
+        </div>
+    </div>
+
     <!-- SUCCESS MODAL -->
     <div id="success-modal" data-modal data-modal-close="closeSuccessModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center" style="z-index: var(--z-modal);">
         <div class="bg-white rounded-lg shadow-2xl p-8 max-w-md w-full mx-4">
@@ -1129,6 +1146,10 @@
                                 style="border:1px solid var(--color-border,#d1d5db);border-radius:var(--radius-md,0.375rem);padding:0.25rem 0.5rem;font-size:0.75rem;color:var(--color-primary,#1d4ed8);background:#fff;">
                                 ${roleOptions(u)}
                             </select>
+                            <button onclick="openResetPassword(${u.id}, '${escapeHtml(u.username)}')"
+                                class="text-xs px-3 py-1 rounded-lg bg-amber-100 text-amber-700 hover:bg-amber-200">
+                                Reset Password
+                            </button>
                             <button onclick="toggleUserActive(${u.id}, ${!u.is_active})"
                                 class="text-xs px-3 py-1 rounded-lg ${u.is_active ? 'bg-red-100 text-red-600 hover:bg-red-200' : 'bg-green-100 text-green-600 hover:bg-green-200'}">
                                 ${u.is_active ? 'Deactivate' : 'Activate'}
@@ -1218,6 +1239,53 @@
                 if (response.ok) loadUsers();
             } catch (e) {
                 window.alertDialog({title: 'Notice', message: 'Error updating user: ' + e.message});
+            }
+        }
+
+        // FEATURE-006: credential (password) reset — modal + confirm + toast.
+        let resetPasswordTarget = null;
+
+        function openResetPassword(userId, username) {
+            resetPasswordTarget = { userId, username };
+            document.getElementById('reset-password-username').textContent = username;
+            const input = document.getElementById('reset-password-input');
+            input.value = '';
+            document.getElementById('reset-password-error').classList.add('hidden');
+            document.getElementById('reset-password-modal').classList.remove('hidden');
+        }
+
+        function closeResetPasswordModal() {
+            document.getElementById('reset-password-modal').classList.add('hidden');
+            resetPasswordTarget = null;
+        }
+
+        async function submitResetPassword() {
+            if (!resetPasswordTarget) return;
+            const { userId, username } = resetPasswordTarget;
+            const password = document.getElementById('reset-password-input').value;
+            const errorEl = document.getElementById('reset-password-error');
+            errorEl.classList.add('hidden');
+            if (password.length < 6) {
+                errorEl.textContent = 'Password must be at least 6 characters.';
+                errorEl.classList.remove('hidden');
+                return;
+            }
+            try {
+                const response = await authenticatedFetch(`${API_BASE}/users/${userId}/reset-password/`, {
+                    method: 'PATCH',
+                    body: JSON.stringify({ password })
+                });
+                const data = await response.json().catch(() => ({}));
+                if (response.ok) {
+                    closeResetPasswordModal();
+                    window.toast({ severity: 'success', message: `Password reset for ${username}` });
+                } else {
+                    errorEl.textContent = data.error || `Reset failed (${response.status}).`;
+                    errorEl.classList.remove('hidden');
+                    window.toast({ severity: 'danger', message: `Reset failed: ${data.error || response.status}` });
+                }
+            } catch (e) {
+                window.toast({ severity: 'danger', message: `Reset failed: ${e.message}` });
             }
         }
 

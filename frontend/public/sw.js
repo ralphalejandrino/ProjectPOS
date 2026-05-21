@@ -8,7 +8,8 @@
 // v67: FEATURE-037 — tappable shift indicator + cross-account open-shifts panel
 // v68: ISSUE-099 — printer settings overhaul (transport mode + paper/font)
 // v69: FEATURE-020 — local-status MVP page
-const CACHE_NAME = 'tarsierpos-v69'; // canonical cache version
+// v70: FEATURE-006 — credential (password) reset in User Management
+const CACHE_NAME = 'tarsierpos-v70'; // canonical cache version
 const ASSETS = [
   'index.html',
   'login.html',

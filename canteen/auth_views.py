@@ -144,6 +144,29 @@ class UserViewSet(viewsets.ModelViewSet):
         user.save(update_fields=['role'])
         return Response({'id': user.pk, 'username': user.username, 'role': user.role})
 
+    @action(detail=True, methods=['patch'], permission_classes=[IsManagerOrAbove],
+            url_path='reset-password')
+    def reset_password(self, request, pk=None):
+        """FEATURE-006: admin/manager resets another user's password.
+
+        Permission is manager-or-above (cashier denied) — note get_permissions()
+        leaves this action on the IsManagerOrAbove default, so it is NOT in the
+        IsAdmin set with create/destroy/set_role. The target is resolved through
+        get_object() against the managed queryset (cashier/manager only), so admins
+        cannot be targeted (404) — preventing lateral takeover and privilege
+        escalation. Only the password is touched here; role is never read, so this
+        flow cannot change a role."""
+        user = self.get_object()
+        password = str(request.data.get('password', ''))
+        if len(password) < 6:
+            return Response(
+                {'error': 'Password must be at least 6 characters.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        user.set_password(password)
+        user.save(update_fields=['password'])
+        return Response({'id': user.pk, 'username': user.username, 'detail': 'Password reset.'})
+
     @action(detail=False, methods=['get'], permission_classes=[AllowAny],
             throttle_classes=[QuickLoginRateThrottle], url_path='quick-login')
     def quick_login(self, request):
