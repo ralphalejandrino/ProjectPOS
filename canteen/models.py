@@ -787,7 +787,10 @@ class BusinessProfile(models.Model):
     printer_font = models.CharField(
         max_length=2,
         choices=[('A', 'Font A (wide)'), ('B', 'Font B (narrow)')],
-        default='B', verbose_name='Printer Font',
+        # FEATURE-040 follow-up: default to Font A (12x24, legible). Font B is the
+        # narrow 9x17 condensed font and prints too small as a default body. A/B
+        # remain selectable + distinct; this only changes the zero-config default.
+        default='A', verbose_name='Printer Font',
     )
     color_scheme = models.CharField(max_length=7, default='#1d4ed8')
     updated_at = models.DateTimeField(auto_now=True)

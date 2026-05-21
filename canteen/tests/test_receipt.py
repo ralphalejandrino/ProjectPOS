@@ -146,12 +146,20 @@ class ReceiptSizeTests(TestCase):
         self.assertIn(TXT_NORMAL, out)
 
 
+def _raster_width_dots(out):
+    """Parse the GS v 0 raster header to recover the image width in dots.
+    Layout: GS v 0 m xL xH yL yH <data>; width_bytes = xL + 256*xH."""
+    i = out.index(GS_V0)
+    xL, xH = out[i + 4], out[i + 5]
+    return (xL + 256 * xH) * 8
+
+
 @override_settings(MEDIA_ROOT=tempfile.mkdtemp())
 class ReceiptLogoTests(TestCase):
-    def _attach_logo(self, bp):
+    def _attach_logo(self, bp, width=600, height=200):
         buf = io.BytesIO()
         from PIL import Image
-        Image.new('L', (300, 100), 255).save(buf, 'PNG')
+        Image.new('L', (width, height), 255).save(buf, 'PNG')
         bp.logo.save('logo.png', ContentFile(buf.getvalue()), save=True)
 
     def test_logo_rasterized_when_present(self):
@@ -166,6 +174,25 @@ class ReceiptLogoTests(TestCase):
             bp.logo.delete(save=True)
         out, _ = _print(_txn())
         self.assertNotIn(GS_V0, out)
+
+    def test_logo_scaled_to_fraction_of_paper_width(self):
+        # FEATURE-040 follow-up: logo must NOT fill the carriage. ~58% of paper
+        # width (rounded up to the next byte = 8 dots by the raster encoder).
+        for width, full in (('58mm', 384), ('80mm', 576)):
+            bp = _profile(paper_width=width)
+            self._attach_logo(bp, width=full + 100)  # source wider than carriage
+            out, _ = _print(_txn())
+            target = rs._logo_target_dots(bp)
+            self.assertAlmostEqual(_raster_width_dots(out), target, delta=8,
+                                   msg=f'{width}: logo width off target')
+            self.assertLess(target, full)  # never full carriage width
+
+
+class PrinterFontDefaultTests(TestCase):
+    def test_default_font_is_A(self):
+        # FEATURE-040 follow-up: zero-config stores get the legible Font A.
+        field = BusinessProfile._meta.get_field('printer_font')
+        self.assertEqual(field.default, 'A')
 
 
 class ReceiptCurrencyTests(TestCase):

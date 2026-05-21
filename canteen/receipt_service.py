@@ -28,6 +28,18 @@ logger = logging.getLogger(__name__)
 # Column count + the corrected width/font table now live in receipt_layout.py
 # (single source of truth shared with the on-screen preview — FEATURE-040).
 
+# Full printable carriage width in dots per paper size (58mm = 384, 80mm = 576).
+_PAPER_DOTS = {'58mm': 384, '80mm': 576}
+# FEATURE-040 follow-up: the logo printed at full carriage width (too big).
+# Render it at this fraction of the paper width, centered. Single tuning knob —
+# bump it here (e.g. 0.50–0.65) to make the printed logo smaller/larger.
+LOGO_PAPER_WIDTH_FRACTION = 0.58  # ~222 dots @58mm, ~334 dots @80mm
+
+def _logo_target_dots(profile):
+    """Target logo width in dots: a fraction of the paper's printable width."""
+    full = _PAPER_DOTS.get(getattr(profile, 'paper_width', '58mm'), 384)
+    return int(full * LOGO_PAPER_WIDTH_FRACTION)
+
 def _is_printer_enabled(profile):
     """True when a transport is configured (USB or network)."""
     return bool(profile) and profile.printer_mode in ('usb', 'network')
@@ -74,9 +86,9 @@ def _print_logo(p, profile):
         return
     try:
         from PIL import Image
-        target_dots = 576 if profile.paper_width == '80mm' else 384
+        target_dots = _logo_target_dots(profile)  # ~58% of paper width, centered
         img = Image.open(path).convert('L')
-        if img.width > target_dots:
+        if img.width != target_dots:
             ratio = target_dots / img.width
             img = img.resize((target_dots, max(1, int(img.height * ratio))))
         # Centering is done via ESC a (align='center') below — it is honored for
