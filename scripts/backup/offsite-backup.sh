@@ -3,11 +3,13 @@
 # Future sub-commits add GCS upload and offline queue.
 set -euo pipefail
 
-BACKUP_DIR=/home/ralph/TarsierPOS/backups
-USB_MOUNT=/mnt/backup
-AUDIT_LOG=/home/ralph/TarsierPOS/logs/backup-audit.log
+BACKUP_DIR=${BACKUP_DIR:-/home/ralph/TarsierPOS/backups}
+USB_MOUNT=${USB_MOUNT:-/mnt/backup}
+AUDIT_LOG=${AUDIT_LOG:-/home/ralph/TarsierPOS/logs/backup-audit.log}
+QUEUE_DIR=${QUEUE_DIR:-/home/ralph/TarsierPOS/logs/backup-queue}
+BACKOFF_INITIAL=${BACKOFF_INITIAL:-10}
 
-mkdir -p "$(dirname "$AUDIT_LOG")"
+mkdir -p "$(dirname "$AUDIT_LOG")" "$QUEUE_DIR"
 ts() { date -Iseconds; }
 log() { echo "$(ts) [offsite-backup] $*" | tee -a "$AUDIT_LOG"; }
 
@@ -34,7 +36,7 @@ fi
 # GCS upload (FEATURE-017(b))
 if [[ -n "${GCS_DEST:-}" ]]; then
   gcs_ok=0
-  delay=10
+  delay=$BACKOFF_INITIAL
   for attempt in 1 2 3; do
     if gsutil cp "$latest" "${GCS_DEST%/}/$(basename "$latest")"; then
       log "gcs OK attempt=$attempt dest=${GCS_DEST%/}/$(basename "$latest")"
@@ -48,8 +50,10 @@ if [[ -n "${GCS_DEST:-}" ]]; then
     fi
   done
   if [[ $gcs_ok -eq 0 ]]; then
-    log "gcs ABORT all 3 attempts failed — queue for retry (sub-commit c)"
-    # sub-commit (c) will write the file path into a pending queue here
+    log "gcs ABORT all 3 attempts failed"
+    queue_file="$QUEUE_DIR/$(date +%Y%m%dT%H%M%S).pending"
+    printf '%s\n' "$latest" > "$queue_file"
+    log "gcs QUEUE wrote $queue_file"
   fi
 else
   log "gcs SKIP GCS_DEST not configured"

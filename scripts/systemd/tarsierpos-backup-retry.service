@@ -1,0 +1,10 @@
+[Unit]
+Description=TarsierPOS off-site backup retry (flush GCS upload queue)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=ralph
+Group=ralph
+ExecStart=/home/ralph/TarsierPOS/scripts/backup/retry-queue.sh

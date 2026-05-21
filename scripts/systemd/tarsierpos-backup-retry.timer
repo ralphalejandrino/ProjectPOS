@@ -1,0 +1,10 @@
+[Unit]
+Description=Hourly retry of queued GCS uploads
+
+[Timer]
+OnCalendar=hourly
+Persistent=true
+RandomizedDelaySec=2min
+
+[Install]
+WantedBy=timers.target

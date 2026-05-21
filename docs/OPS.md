@@ -233,6 +233,34 @@ The repo's `gcs.conf` ships with `dev-optiplex`. For other hosts edit the
 drop-in's `GCS_DEST=` line before installing, or override locally with
 `sudo systemctl edit tarsierpos-backup-offsite.service` and reload.
 
+### Offline queue + hourly flush (FEATURE-017(c))
+
+When the 23:45 GCS upload aborts (3 attempts failed), the script writes
+`logs/backup-queue/<YYYYMMDDTHHMMSS>.pending` containing the absolute snapshot
+path. The `tarsierpos-backup-retry.timer` (hourly, `Persistent=true`) fires
+`retry-queue.sh` which reads each pending file, retries with the same 3x
+exponential backoff, deletes the queue file on success, and leaves it for the
+next hour on failure.
+
+Install:
+
+```sh
+sudo install -m 0644 -o root -g root \
+  scripts/systemd/tarsierpos-backup-retry.service \
+  /etc/systemd/system/tarsierpos-backup-retry.service
+sudo install -m 0644 -o root -g root \
+  scripts/systemd/tarsierpos-backup-retry.timer \
+  /etc/systemd/system/tarsierpos-backup-retry.timer
+sudo mkdir -p /etc/systemd/system/tarsierpos-backup-retry.service.d/
+sudo ln -sf /etc/systemd/system/tarsierpos-backup-offsite.service.d/gcs.conf \
+  /etc/systemd/system/tarsierpos-backup-retry.service.d/gcs.conf
+sudo systemctl daemon-reload
+sudo systemctl enable --now tarsierpos-backup-retry.timer
+```
+
+The retry drop-in is a symlink to the offsite drop-in — one source of truth for
+`GCS_DEST` and `GOOGLE_APPLICATION_CREDENTIALS` on this host.
+
 ### FLAG-070 ordering note
 
 The 23:30 local-snapshot timer must complete before the 23:45 offsite timer
