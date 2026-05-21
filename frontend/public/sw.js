@@ -12,7 +12,8 @@
 // v71: FEATURE-039 — network (WiFi) management with auto-revert
 // v72: FEATURE-006 — reset-password modal styleguide compliance fix
 // v73: FEATURE-040 — receipt overhaul + on-screen preview
-const CACHE_NAME = 'tarsierpos-v73'; // canonical cache version
+// v74: ISSUE-067 + FEATURE-039 — match Create Account & Wi-Fi inputs to BIR styling
+const CACHE_NAME = 'tarsierpos-v74'; // canonical cache version
 const ASSETS = [
   'index.html',
   'login.html',
