@@ -82,3 +82,37 @@ sudo rm /etc/systemd/system/tarsierpos.service.d/preload.conf
 sudo systemctl daemon-reload
 sudo systemctl restart tarsierpos.service
 ```
+
+## FEATURE-022: Boot ordering
+
+A systemd drop-in delays `tarsierpos.service` until `tailscaled.service` and
+`network-online.target` are reached, so gunicorn does not start before the box
+has Tailscale up and a usable network. The stock unit only orders after
+`network.target` (link configured, not necessarily online). `Wants=` is
+required because `network-online.target` is not pulled into the boot
+transaction by default — without it the `After=` would wait on a target that is
+never activated.
+
+### Install
+
+```sh
+sudo mkdir -p /etc/systemd/system/tarsierpos.service.d/
+sudo install -m 0644 -o root -g root \
+  scripts/systemd/tarsierpos.service.d/ordering.conf \
+  /etc/systemd/system/tarsierpos.service.d/ordering.conf
+sudo systemd-analyze verify tarsierpos.service   # no warnings expected
+sudo systemctl daemon-reload
+```
+
+Verify the drop-in is merged with `systemctl cat tarsierpos.service` (the
+effective `[Unit]` section should list `tailscaled.service` and
+`network-online.target` in `After=`). `systemd-analyze critical-chain
+tarsierpos.service` should show both in the chain. The ordering only takes
+effect at the next reboot; no restart is needed to apply the change.
+
+### Revert
+
+```sh
+sudo rm /etc/systemd/system/tarsierpos.service.d/ordering.conf
+sudo systemctl daemon-reload
+```
