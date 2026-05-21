@@ -116,3 +116,49 @@ effect at the next reboot; no restart is needed to apply the change.
 sudo rm /etc/systemd/system/tarsierpos.service.d/ordering.conf
 sudo systemctl daemon-reload
 ```
+
+## FEATURE-017: Off-site backup
+
+`scripts/backup/offsite-backup.sh` copies the latest local snapshot
+(`backups/db_*.sqlite3`, produced by FIX-PENDING-15) to off-site targets. A
+systemd timer runs it daily at 23:45. Sub-commit (a) ships the **local USB**
+target only: it copies to `/mnt/backup/` when that path is a mountpoint and logs
+a `local SKIP` otherwise (the OptiPlex has no USB SSD). GCS upload (b) and the
+offline queue + hourly flush (c) land in later sub-commits and are currently
+no-op comments in the script. All actions append to
+`/home/ralph/TarsierPOS/logs/backup-audit.log`.
+
+### Install
+
+```sh
+sudo install -m 0644 -o root -g root \
+  scripts/systemd/tarsierpos-backup-offsite.service /etc/systemd/system/
+sudo install -m 0644 -o root -g root \
+  scripts/systemd/tarsierpos-backup-offsite.timer /etc/systemd/system/
+sudo systemd-analyze verify \
+  tarsierpos-backup-offsite.service tarsierpos-backup-offsite.timer
+sudo systemctl daemon-reload
+sudo systemctl enable --now tarsierpos-backup-offsite.timer
+systemctl list-timers tarsierpos-backup-offsite.timer
+```
+
+### Manual run
+
+```sh
+sudo systemctl start tarsierpos-backup-offsite.service
+systemctl status tarsierpos-backup-offsite.service --no-pager
+tail -10 /home/ralph/TarsierPOS/logs/backup-audit.log
+```
+
+On a host without `/mnt/backup` mounted, expect `begin ...`, `local SKIP
+/mnt/backup not a mountpoint`, `end`. To exercise the mounted branch, bind-mount
+a writable dir at `/mnt/backup` (owned by ralph) and re-run; expect `local OK
+dest=/mnt/backup/db_<ts>.sqlite3`.
+
+### Revert
+
+```sh
+sudo systemctl disable --now tarsierpos-backup-offsite.timer
+sudo rm /etc/systemd/system/tarsierpos-backup-offsite.{service,timer}
+sudo systemctl daemon-reload
+```

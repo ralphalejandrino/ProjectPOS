@@ -1,0 +1,10 @@
+[Unit]
+Description=Run TarsierPOS off-site backup daily at 23:45
+
+[Timer]
+OnCalendar=*-*-* 23:45:00
+Persistent=true
+RandomizedDelaySec=5min
+
+[Install]
+WantedBy=timers.target

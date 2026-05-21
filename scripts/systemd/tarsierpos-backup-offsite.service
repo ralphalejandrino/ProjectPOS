@@ -1,0 +1,9 @@
+[Unit]
+Description=TarsierPOS off-site backup (local USB + cloud)
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=ralph
+Group=ralph
+ExecStart=/home/ralph/TarsierPOS/scripts/backup/offsite-backup.sh
