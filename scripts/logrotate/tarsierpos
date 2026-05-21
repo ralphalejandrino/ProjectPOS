@@ -1,0 +1,36 @@
+# /etc/logrotate.d/tarsierpos
+# FEATURE-021 + ISSUE-093: bound growth of TarsierPOS log files
+# Install: sudo install -m 0644 -o root -g root scripts/logrotate/tarsierpos /etc/logrotate.d/tarsierpos
+#
+# copytruncate (not postrotate reload): gunicorn logs to the systemd journal, not
+# to these files. Django's logging.FileHandler writes tarsierpos-app.log and does
+# NOT reopen its file descriptor on SIGHUP, so a postrotate reload would leave
+# Django writing to the unlinked (rotated) inode — a silent no-op-on-rotation
+# hazard. copytruncate copies then truncates in place, so the live fd keeps working.
+#
+# su root syslog: /var/log is drwxrwxr-x root:syslog (group-writable by a non-root
+# group), so logrotate refuses to rotate files inside it unless told which
+# user/group to operate as. root:syslog matches the directory and lets root
+# truncate the app log (owned by the service user) safely.
+
+/var/log/tarsierpos-app.log {
+    su root syslog
+    daily
+    rotate 14
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+}
+
+/var/log/tarsierpos-health.log {
+    su root syslog
+    daily
+    rotate 14
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+}

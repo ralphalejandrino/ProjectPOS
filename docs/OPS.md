@@ -1,5 +1,29 @@
 # Operations
 
+## Logs
+
+### Django application log (WARNING + ERROR level)
+Path: `/var/log/tarsierpos-app.log`
+Tail: `sudo tail -f /var/log/tarsierpos-app.log`
+Rotation: handled by `/etc/logrotate.d/tarsierpos` (daily, keep 14, compressed)
+
+### gunicorn stdout/stderr (request-level activity, worker boot, errors)
+Source: systemd journal
+Tail: `sudo journalctl -u tarsierpos.service -f`
+Recent: `sudo journalctl -u tarsierpos.service -n 200 --no-pager`
+Rotation: handled by systemd-journald (defaults apply unless tuned separately)
+
+### Old health watchdog log (disabled, may not have recent writes)
+Path: `/var/log/tarsierpos-health.log`
+Rotation: handled by `/etc/logrotate.d/tarsierpos` (defensive — kept in case
+FEATURE-020's replacement uses the same path)
+
+### Install log rotation
+```sh
+sudo install -m 0644 -o root -g root scripts/logrotate/tarsierpos /etc/logrotate.d/tarsierpos
+sudo logrotate --debug /etc/logrotate.d/tarsierpos   # dry-run, no changes
+```
+
 ## Post-commit hook setup
 
 The repo ships a versioned post-commit hook that auto-pushes to `origin/main`
