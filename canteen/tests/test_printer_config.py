@@ -59,12 +59,16 @@ class TransportModeTests(APITestCase):
 
 class ColumnCalibrationTests(APITestCase):
     def test_paper_width_font_drives_column_count(self):
-        """_receipt_cols maps each (width, font) to its calibrated columns."""
+        """_receipt_cols maps each (width, font) to its calibrated columns.
+
+        FEATURE-040: corrected from the prior (wrong) values. Font A is 12 dots
+        wide, Font B 9; 58mm = 384 dots, 80mm = 576.
+        """
         cases = {
-            ('58mm', 'B'): 32,
-            ('58mm', 'A'): 24,
-            ('80mm', 'B'): 56,
-            ('80mm', 'A'): 42,
+            ('58mm', 'A'): 32,   # 384 / 12
+            ('58mm', 'B'): 42,   # 384 / 9
+            ('80mm', 'A'): 48,   # 576 / 12
+            ('80mm', 'B'): 64,   # 576 / 9
         }
         for (width, font), cols in cases.items():
             bp = _profile(paper_width=width, printer_font=font)

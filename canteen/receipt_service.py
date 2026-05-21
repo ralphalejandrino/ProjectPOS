@@ -3,6 +3,7 @@ from django.conf import settings
 from escpos.printer import File, Network
 from .models import BusinessProfile
 from .utils.currency import format_currency
+from .receipt_layout import build_receipt_rows, receipt_cols
 import logging
 
 # ISSUE-095: USB printer device auto-detect
@@ -24,23 +25,8 @@ def _get_usb_device_path():
     return None
 logger = logging.getLogger(__name__)
 
-RECEIPT_WIDTH = 32  # default fallback: 58mm @ Font B (384 dots / 12).
-                    # Per-print column count comes from _receipt_cols(profile);
-                    # visual contract: docs/receipt-design.html (FEATURE-034).
-
-# ISSUE-099: printable columns per paper width / ESC/POS font. 58mm/Font B
-# (32 cols) is the empirically calibrated baseline (FIX-PENDING-14); the
-# others are the design contract and may need on-device tuning.
-WIDTH_FONT_COLS = {
-    ('58mm', 'B'): 32,
-    ('58mm', 'A'): 24,
-    ('80mm', 'B'): 56,
-    ('80mm', 'A'): 42,
-}
-
-def _truncate(text, max_len):
-    """Truncate text with ellipsis if it exceeds max_len."""
-    return text[:max_len - 3] + '...' if len(text) > max_len else text
+# Column count + the corrected width/font table now live in receipt_layout.py
+# (single source of truth shared with the on-screen preview — FEATURE-040).
 
 def _is_printer_enabled(profile):
     """True when a transport is configured (USB or network)."""
@@ -56,12 +42,51 @@ def _get_transport(profile):
 
 def _receipt_cols(profile):
     """Printable column count for the profile's paper width + font."""
-    return WIDTH_FONT_COLS.get(
-        (profile.paper_width, profile.printer_font), RECEIPT_WIDTH)
+    return receipt_cols(profile)
 
 def _escpos_font(profile):
     """Map BusinessProfile printer_font (A/B) to escpos font ('a'/'b')."""
     return 'a' if profile.printer_font == 'A' else 'b'
+
+def _pset(p, profile, **kwargs):
+    """Wrapper for p.set() that ALWAYS re-asserts the font.
+
+    FEATURE-040 fix: escpos's double_height/double_width path emits ESC ! 0
+    (TXT_NORMAL), whose bit 0 resets the printer to Font A — silently undoing an
+    earlier set(font=...). Since escpos emits the size (ESC !) before the font
+    (ESC M) within one set() call, injecting font= on every call re-selects the
+    chosen font after the reset, making A/B genuinely distinct on the body."""
+    kwargs.setdefault('font', _escpos_font(profile))
+    p.set(**kwargs)
+
+def _print_logo(p, profile):
+    """Rasterize and emit the business logo centered, scaled to paper width
+    (GS v 0 bit-image). Non-fatal — a logo problem must never block the sale."""
+    logo = getattr(profile, 'logo', None)
+    if not logo:
+        return
+    try:
+        path = logo.path
+    except (ValueError, AttributeError):
+        return
+    import os
+    if not os.path.exists(path):
+        return
+    try:
+        from PIL import Image
+        target_dots = 576 if profile.paper_width == '80mm' else 384
+        img = Image.open(path).convert('L')
+        if img.width > target_dots:
+            ratio = target_dots / img.width
+            img = img.resize((target_dots, max(1, int(img.height * ratio))))
+        # Centering is done via ESC a (align='center') below — it is honored for
+        # raster images on ESC/POS hardware. The escpos center= flag needs a
+        # media-width profile we don't configure, so we don't use it.
+        p.set(align='center')
+        p.image(img, impl='bitImageRaster')
+        p.text('\n')
+    except Exception as e:
+        logger.warning(f'Logo print skipped (non-fatal): {e}')
 
 def print_receipt(transaction):
     """ESC/POS receipt print. Returns status dict. Never raises."""
@@ -70,183 +95,27 @@ def print_receipt(transaction):
         if not _is_printer_enabled(profile):
             return {'success': False, 'message': 'Printer not configured. Set up Business Profile in Settings.'}
 
-        ccode = profile.currency if profile else 'PHP'
-        RECEIPT_WIDTH = _receipt_cols(profile)
         p = _get_transport(profile)
-        p.set(font=_escpos_font(profile), align='left')
+        _pset(p, profile, align='left')
         try:
-            # Header — business name (large, bold, centered)
-            p.set(align='center', bold=True, double_height=True, double_width=True)
-            p.text((profile.business_name if profile else 'POS') + '\n')
-            p.set(align='center', bold=False, double_height=False, double_width=False)
+            # Logo (centered raster, scaled to paper width) above the header.
+            _print_logo(p, profile)
 
-            # Tagline
-            if profile and profile.tagline:
-                p.text(profile.tagline + '\n')
-
-            # Address (skip if blank; handle multi-line)
-            if profile and profile.address:
-                for line in profile.address.strip().splitlines():
-                    line = line.strip()
-                    if line:
-                        p.text(line + '\n')
-
-            # TIN (skip if blank)
-            if profile and profile.tin:
-                p.text(f'TIN: {profile.tin}\n')
-
-            # MIN / Serial — BIR-mandated for accredited POS. Fields are
-            # forward-compatible: render only when BusinessProfile gains
-            # them via FLAG-056 (getattr with default keeps this safe today).
-            min_no = getattr(profile, 'min_number', '') if profile else ''
-            serial_no = getattr(profile, 'serial_number', '') if profile else ''
-            if min_no:
-                p.text(f'MIN: {min_no}\n')
-            if serial_no:
-                p.text(f'Serial: {serial_no}\n')
-
-            p.text('-' * RECEIPT_WIDTH + '\n')
-
-            # Receipt header text (skip if blank)
-            if profile and profile.receipt_header:
-                p.text(profile.receipt_header + '\n')
-
-            # Transaction info
-            p.set(align='left')
-            p.text(f'Receipt #: {transaction.transaction_no}\n')
-            p.text(f'Date: {transaction.created_at.strftime("%Y-%m-%d %H:%M")}\n')
-            if transaction.cashier:
-                p.text(f'Cashier: {transaction.cashier.username}\n')
-            p.text('-' * RECEIPT_WIDTH + '\n')
-
-            # Items — at 58mm/Font B the row is tight (32 chars). When the
-            # name + qty_price would push past the width, the qty_price
-            # wraps to an indented second line under the name (see
-            # docs/receipt-design.html "Chicken Sandwich" sample).
-            subtotal_sum = 0.0
-            for item in transaction.items.select_related('item').all():
-                qty_price = f'{item.quantity} x {float(item.unit_price):.2f}'
-                subtotal = f'{float(item.subtotal):.2f}'
-                subtotal_sum += float(item.subtotal)
-                name = (item.item.name if item.item else 'Item')
-
-                # Single-line layout: "name qty_price     subtotal"
-                single_line_len = len(name) + 1 + len(qty_price) + 1 + len(subtotal)
-                if single_line_len <= RECEIPT_WIDTH:
-                    line = f'{name} {qty_price}'
-                    padding = RECEIPT_WIDTH - len(line) - len(subtotal)
-                    p.text(line + ' ' * max(padding, 1) + subtotal + '\n')
+            # Body: single source of truth shared with the on-screen preview.
+            rows, cols, ccode = build_receipt_rows(transaction, profile)
+            for r in rows:
+                if r['title']:
+                    # Business name — emphasized, double size.
+                    _pset(p, profile, align=r['align'], bold=True,
+                          double_height=True, double_width=True)
+                    p.text(r['text'] + '\n')
+                    # Reset to NORMAL size for the body. normal_textsize=True is
+                    # required — passing double_*=False does NOT reset size (the
+                    # old code's bug that left the whole body double-sized).
+                    _pset(p, profile, normal_textsize=True, align='left', bold=False)
                 else:
-                    # Two-line layout: name + subtotal on row 1, qty_price indented on row 2
-                    name_trunc = _truncate(name, RECEIPT_WIDTH - len(subtotal) - 1)
-                    padding = RECEIPT_WIDTH - len(name_trunc) - len(subtotal)
-                    p.text(name_trunc + ' ' * max(padding, 1) + subtotal + '\n')
-                    p.text(f'  {qty_price}\n')
-
-                for vs in item.variant_selections.all():
-                    mod = float(vs.price_modifier or 0)
-                    if mod > 0:
-                        modifier_str = ' +' + format_currency(mod, ccode)
-                    elif mod < 0:
-                        modifier_str = ' ' + format_currency(mod, ccode)  # native '-' sign (ISSUE-074)
-                    else:
-                        modifier_str = ''
-                    p.text(f'  {vs.group_name}: {vs.option_name}{modifier_str}\n')
-
-            p.text('-' * RECEIPT_WIDTH + '\n')
-
-            # Summary subtotal + total
-            total = float(transaction.total_amount.amount) if hasattr(
-                transaction.total_amount, 'amount') else float(transaction.total_amount)
-            is_vat_exempt = getattr(transaction, 'vat_exempt', False)
-            stored_vat_amount = float(getattr(transaction, 'vat_amount', 0) or 0)
-            disc_type = getattr(transaction, 'discount_type', '')
-
-            vat_inclusive = bool(profile and getattr(profile, 'vat_inclusive', False))
-            subtotal_label = 'Subtotal (VAT-inc):' if vat_inclusive else 'Subtotal:'
-            subtotal_val = format_currency(subtotal_sum, ccode)
-            subtotal_padding = RECEIPT_WIDTH - len(subtotal_label) - len(subtotal_val)
-            p.text(subtotal_label + ' ' * max(subtotal_padding, 1) + subtotal_val + '\n')
-
-            # VAT removed line (only for VAT-exempt SC/PWD transactions)
-            if is_vat_exempt and stored_vat_amount > 0:
-                vat_pct = int(profile.vat_rate) if profile and hasattr(profile, 'vat_rate') else 12
-                vat_rem_label = f'VAT ({vat_pct}%) Removed:'
-                vat_rem_val = format_currency(-stored_vat_amount, ccode)
-                vat_rem_padding = RECEIPT_WIDTH - len(vat_rem_label) - len(vat_rem_val)
-                p.text(vat_rem_label + ' ' * max(vat_rem_padding, 1) + vat_rem_val + '\n')
-
-            # Discount line (only when a discount was applied)
-            discount = float(transaction.discount_amount) if transaction.discount_amount else 0.0
-            if discount > 0:
-                if disc_type == 'sc':
-                    sc_rate = int(profile.sc_discount_rate) if profile and hasattr(profile, 'sc_discount_rate') else 20
-                    disc_label = f'SC Discount ({sc_rate}%):'
-                elif disc_type == 'pwd':
-                    pwd_rate = int(profile.pwd_discount_rate) if profile and hasattr(profile, 'pwd_discount_rate') else 20
-                    disc_label = f'PWD Discount ({pwd_rate}%):'
-                elif disc_type == 'promo':
-                    disc_label = 'Promo Discount:'
-                else:
-                    disc_label = 'Discount:'
-
-                disc_val = format_currency(-discount, ccode)
-                disc_padding = RECEIPT_WIDTH - len(disc_label) - len(disc_val)
-                p.text(disc_label + ' ' * max(disc_padding, 1) + disc_val + '\n')
-
-                # Print SC/PWD ID if provided
-                id_number = getattr(transaction, 'discount_id_number', '')
-                if id_number and disc_type in ('sc', 'pwd'):
-                    id_prefix = 'SC ID: ' if disc_type == 'sc' else 'PWD ID: '
-                    p.text(f'{id_prefix}{id_number}\n')
-
-            p.set(bold=True)
-            total_label = 'TOTAL:'
-            total_val = format_currency(total, ccode)
-            total_padding = RECEIPT_WIDTH - len(total_label) - len(total_val)
-            p.text(total_label + ' ' * max(total_padding, 1) + total_val + '\n')
-            p.set(bold=False)
-
-            # VAT info line — only for non-exempt VAT-enabled transactions
-            if profile and profile.vat_enabled and not is_vat_exempt:
-                vat_rate = float(profile.vat_rate)
-                vat_amount = total * vat_rate / (100 + vat_rate)
-                vat_label = f'Incl. VAT ({vat_rate:.0f}%):'
-                vat_val = format_currency(vat_amount, ccode)
-                vat_padding = RECEIPT_WIDTH - len(vat_label) - len(vat_val)
-                p.text(vat_label + ' ' * max(vat_padding, 1) + vat_val + '\n')
-
-            # VAT-exempt declaration (RA 9994 for SC, RA 10754 for PWD)
-            if is_vat_exempt:
-                ra_ref = 'RA 9994' if disc_type == 'sc' else 'RA 10754'
-                p.set(align='center', bold=True)
-                p.text('VAT-EXEMPT TRANSACTION\n')
-                p.set(bold=False)
-                p.text(f'({ra_ref})\n')
-                p.set(align='left')
-            p.text(f'Payment: {transaction.get_payment_method_display()}\n')
-
-            if transaction.payment_method == 'cash' and transaction.cash_received:
-                cash_raw = transaction.cash_received.amount if hasattr(
-                    transaction.cash_received, 'amount') else transaction.cash_received
-                cash_dec = Decimal(str(cash_raw))
-                total_dec = Decimal(str(total))
-                change_dec = (cash_dec - total_dec).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-                # 32-char layout — see docs/receipt-design.html (cash sample).
-                p.text(f'Cash: {format_currency(cash_dec, ccode)}  Change: {format_currency(change_dec, ccode)}\n')
-            elif transaction.payment_method in ('gcash', 'maya'):
-                ref = transaction.gcash_reference or transaction.maya_reference or 'N/A'
-                p.text(f'Ref#: {ref}\n')
-                if transaction.customer_phone:
-                    p.text(f'Phone: {transaction.customer_phone}\n')
-
-            # Footer
-            p.text('-' * RECEIPT_WIDTH + '\n')
-            p.set(align='center')
-            if profile and profile.receipt_footer:
-                p.text(profile.receipt_footer + '\n')
-            else:
-                p.text('Thank you!\n')
+                    _pset(p, profile, align=r['align'], bold=r['bold'])
+                    p.text(r['text'] + '\n')
 
             p.cut()
         finally:

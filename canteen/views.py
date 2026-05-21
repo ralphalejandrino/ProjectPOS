@@ -1574,6 +1574,31 @@ def local_status_snapshot(request):
     return Response({'filename': info['filename'], 'size_bytes': info['size_bytes']})
 
 
+# FEATURE-040: on-screen receipt preview — renders the SAME layout the printer
+# uses (canteen/receipt_layout), so screen and paper stay in parity (FLAG-064).
+@api_view(['GET'])
+@permission_classes([IsManagerOrAbove])
+def receipt_preview(request):
+    from .receipt_layout import render_sample_text, receipt_cols
+    from .models import BusinessProfile
+    profile = BusinessProfile.objects.first()
+    # Optional live overrides so the preview reflects unsaved width/font choices.
+    # Set on the in-memory instance only — never saved.
+    pw = request.query_params.get('paper_width')
+    pf = request.query_params.get('printer_font')
+    if profile and pw in ('58mm', '80mm'):
+        profile.paper_width = pw
+    if profile and pf in ('A', 'B'):
+        profile.printer_font = pf
+    return Response({
+        'text': render_sample_text(profile),
+        'cols': receipt_cols(profile),
+        'paper_width': profile.paper_width if profile else '58mm',
+        'font': profile.printer_font if profile else 'A',
+        'logo_url': (profile.logo.url if (profile and profile.logo) else None),
+    })
+
+
 # FEATURE-039: WiFi network management (admin-only — the box is reached only over
 # Tailscale-over-WiFi, so a bad change can sever access; see scripts/network).
 @api_view(['GET'])
