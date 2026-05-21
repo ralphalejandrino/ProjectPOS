@@ -2,7 +2,7 @@
 # post-commit: auto-push + auto-restart
 # Install: cp scripts/post-commit-hook .git/hooks/post-commit && chmod +x .git/hooks/post-commit
 
-git push origin main
+git push origin HEAD:dev
 
 # FLAG-066: clear stale bytecode then restart so new .py files take effect
 find /home/ralph/TarsierPOS -name __pycache__ -type d -prune -exec rm -rf {} + 2>/dev/null
