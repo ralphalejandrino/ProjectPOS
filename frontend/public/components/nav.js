@@ -31,6 +31,12 @@
   }
 
   function visibleLinks(role) {
+    // FEATURE-044: drive nav off the effective page set (role default + per-user
+    // override). LINKS[].roles stays as the documented default + fallback.
+    if (typeof getAllowedPages === 'function') {
+      const pages = getAllowedPages();
+      return LINKS.filter(l => pages.includes(l.key));
+    }
     if (!role) return LINKS;
     return LINKS.filter(l => l.roles.includes(role));
   }

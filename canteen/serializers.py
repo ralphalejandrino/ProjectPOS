@@ -373,14 +373,21 @@ class CartSerializer(serializers.ModelSerializer):
 
 class UserSerializer(serializers.ModelSerializer):
     full_name = serializers.SerializerMethodField()
+    effective_pages = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'role', 'phone', 'is_active', 'full_name']
-        read_only_fields = ['id', 'full_name']
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'role', 'phone',
+                  'is_active', 'full_name', 'allowed_pages', 'effective_pages']
+        read_only_fields = ['id', 'full_name', 'allowed_pages', 'effective_pages']
 
     def get_full_name(self, obj):
         return f"{obj.first_name} {obj.last_name}".strip() or obj.username
+
+    def get_effective_pages(self, obj):
+        # FEATURE-044: resolved page set (role default + per-user override).
+        from .access import effective_pages
+        return sorted(effective_pages(obj))
 
 
 class EmployeeProfileSerializer(serializers.ModelSerializer):

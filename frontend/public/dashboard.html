@@ -21,15 +21,9 @@
         // FLAG-028: hide body until role check passes to prevent one-frame flash of manager-only UI
         // ISSUE-066: cashier denial routes to friendly denied.html instead of silent index.html redirect
         (function () {
-            const t = localStorage.getItem('access_token');
-            if (!t) { window.location.replace('login.html'); return; }
-            let role = null;
-            try { role = JSON.parse(atob(t.split('.')[1])).role || null; } catch (e) {}
-            const allowedRoles = ['admin', 'manager'];
-            if (!role || !allowedRoles.includes(role)) {
-                window.location.replace('denied.html?from=' + encodeURIComponent(location.pathname));
-                return;
-            }
+            // FEATURE-044: gate on the per-user effective page set (role default
+            // + override) via the shared guard, not a hardcoded role list.
+            if (!guardPage('dashboard')) return;
             document.body.style.visibility = '';
         })();
     </script>

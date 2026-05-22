@@ -59,6 +59,48 @@ function getUserRole() {
     }
 }
 
+// ============================================================
+// FEATURE-044 — per-user page access (client side)
+// Authoritative enforcement is server-side (canteen/access.py +
+// HasPageAccess). These helpers drive nav visibility + page guards
+// off the JWT 'pages' claim, falling back to the role default for
+// tokens issued before this feature (so behaviour is unchanged
+// until the user next logs in / refreshes). Keep this map in sync
+// with canteen/access.py.
+// ============================================================
+const ROLE_DEFAULT_PAGES = {
+    admin:   ['pos', 'inventory', 'ingredients', 'dashboard', 'xreport', 'zreport', 'settings', 'status'],
+    manager: ['pos', 'inventory', 'ingredients', 'dashboard', 'xreport', 'zreport', 'status'],
+    cashier: ['pos'],
+};
+
+function getAllowedPages() {
+    const token = getToken();
+    if (!token) return [];
+    try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        if (Array.isArray(payload.pages)) return payload.pages;
+        return ROLE_DEFAULT_PAGES[payload.role] || [];
+    } catch (e) {
+        return [];
+    }
+}
+
+function canAccessPage(key) {
+    return getAllowedPages().includes(key);
+}
+
+// Guard a page route. Returns true when allowed; otherwise redirects
+// (login if unauthenticated, denied otherwise) and returns false.
+function guardPage(key) {
+    if (!getToken()) { window.location.replace('login.html'); return false; }
+    if (!canAccessPage(key)) {
+        window.location.replace('denied.html?from=' + encodeURIComponent(location.pathname));
+        return false;
+    }
+    return true;
+}
+
 // Authenticated Fetch Wrapper
 async function authenticatedFetch(url, options = {}) {
     const token = getToken();

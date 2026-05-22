@@ -39,7 +39,7 @@ from datetime import datetime, timedelta, date, timezone as dt_tz
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.views import APIView
-from .permissions import IsManagerOrAbove, IsCashierOrAbove, IsAdmin
+from .permissions import IsManagerOrAbove, IsCashierOrAbove, IsAdmin, HasPageAccess
 from . import network_service
 import csv, io, logging, subprocess
 
@@ -74,7 +74,8 @@ class ItemCategoryViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
             return [IsCashierOrAbove()]
-        return [IsManagerOrAbove()]
+        # FEATURE-044: category writes gated by 'inventory' page.
+        return [HasPageAccess('inventory')()]
 
 class PosTransactionViewSet(viewsets.ViewSet):
     permission_classes = [IsCashierOrAbove]
@@ -427,7 +428,8 @@ class PosTransactionViewSet(viewsets.ViewSet):
 class VariantGroupViewSet(viewsets.ModelViewSet):
     queryset = VariantGroup.objects.prefetch_related('options').all()
     serializer_class = VariantGroupSerializer
-    permission_classes = [IsManagerOrAbove]
+    # FEATURE-044: variant management gated by 'inventory' page.
+    permission_classes = [HasPageAccess('inventory')]
 
     @action(detail=True, methods=['patch'], url_path='reorder-options')
     def reorder_options(self, request, pk=None):
@@ -440,7 +442,8 @@ class VariantGroupViewSet(viewsets.ModelViewSet):
 
 class VariantOptionViewSet(viewsets.ModelViewSet):
     serializer_class = VariantOptionSerializer
-    permission_classes = [IsManagerOrAbove]
+    # FEATURE-044: variant management gated by 'inventory' page.
+    permission_classes = [HasPageAccess('inventory')]
 
     def get_queryset(self):
         return VariantOption.objects.filter(group_id=self.kwargs['group_pk'])
@@ -452,7 +455,8 @@ class VariantOptionViewSet(viewsets.ModelViewSet):
 
 class CategoryVariantGroupViewSet(viewsets.ModelViewSet):
     serializer_class = CategoryVariantGroupSerializer
-    permission_classes = [IsManagerOrAbove]
+    # FEATURE-044: variant management gated by 'inventory' page.
+    permission_classes = [HasPageAccess('inventory')]
 
     def get_queryset(self):
         return CategoryVariantGroup.objects.filter(category_id=self.kwargs['category_pk']).select_related('group')
@@ -466,7 +470,8 @@ class CategoryVariantGroupViewSet(viewsets.ModelViewSet):
 
 class ProductVariantGroupViewSet(viewsets.ModelViewSet):
     serializer_class = ProductVariantGroupSerializer
-    permission_classes = [IsManagerOrAbove]
+    # FEATURE-044: variant management gated by 'inventory' page.
+    permission_classes = [HasPageAccess('inventory')]
 
     def get_queryset(self):
         return ProductVariantGroup.objects.filter(product_id=self.kwargs['product_pk']).select_related('group').order_by('id')
@@ -480,7 +485,8 @@ class ProductVariantGroupViewSet(viewsets.ModelViewSet):
 
 class DashboardViewSet(viewsets.ViewSet):
     """Dashboard statistics and analytics"""
-    permission_classes = [IsManagerOrAbove]
+    # FEATURE-044: gated by the 'dashboard' page (defaults to manager/admin).
+    permission_classes = [HasPageAccess('dashboard')]
 
     def list(self, request):
         """Get dashboard data"""
@@ -975,7 +981,8 @@ class ItemViewSet(viewsets.ModelViewSet):
         Instantiates and returns the list of permissions that this view requires.
         """
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
-            permission_classes = [IsManagerOrAbove]
+            # FEATURE-044: writes gated by 'inventory' page; reads stay cashier+ (POS).
+            permission_classes = [HasPageAccess('inventory')]
         else:
             permission_classes = [IsCashierOrAbove]
         return [permission() for permission in permission_classes]
@@ -1301,7 +1308,8 @@ class ZReportViewSet(viewsets.ReadOnlyModelViewSet):
     model itself rejects re-saves; manager/admin only. Lookup by the
     gapless z_counter, not the surrogate pk.
     """
-    permission_classes = [IsManagerOrAbove]
+    # FEATURE-044: gated by the 'zreport' page (defaults to manager/admin).
+    permission_classes = [HasPageAccess('zreport')]
     serializer_class = ZReportSerializer
     pagination_class = ZReportPagination
     lookup_field = 'z_counter'
@@ -1465,13 +1473,15 @@ class IngredientUnitViewSet(viewsets.ModelViewSet):
 class SupplierViewSet(viewsets.ModelViewSet):
     queryset = Supplier.objects.filter(is_active=True).order_by('name')
     serializer_class = SupplierSerializer
-    permission_classes = [IsManagerOrAbove]
+    # FEATURE-044: gated by the 'ingredients' page (defaults to manager/admin).
+    permission_classes = [HasPageAccess('ingredients')]
 
 
 class IngredientViewSet(viewsets.ModelViewSet):
     queryset = Ingredient.objects.filter(is_active=True).select_related('unit','supplier').order_by('name')
     serializer_class = IngredientSerializer
-    permission_classes = [IsManagerOrAbove]
+    # FEATURE-044: gated by the 'ingredients' page (defaults to manager/admin).
+    permission_classes = [HasPageAccess('ingredients')]
 
     @action(detail=True, methods=['post'])
     def restock(self, request, pk=None):
@@ -1499,7 +1509,8 @@ class IngredientViewSet(viewsets.ModelViewSet):
 class RecipeIngredientViewSet(viewsets.ModelViewSet):
     queryset = RecipeIngredient.objects.select_related('ingredient','item','variant').all()
     serializer_class = RecipeIngredientSerializer
-    permission_classes = [IsManagerOrAbove]
+    # FEATURE-044: gated by the 'ingredients' page (defaults to manager/admin).
+    permission_classes = [HasPageAccess('ingredients')]
 
     def get_queryset(self):
         qs = super().get_queryset()

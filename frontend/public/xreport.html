@@ -24,7 +24,11 @@
     </style>
 </head>
 <body class="bg-gray-50" data-page="xreport">
-    <script>if (!localStorage.getItem('access_token')) { window.location.replace('login.html'); }</script>
+    <script>
+        // FEATURE-044: gate on the 'xreport' page (manager/admin by default),
+        // matching the nav which already hides X-Report from cashiers.
+        if (!guardPage('xreport')) { /* redirected */ }
+    </script>
 
     <!-- NAVIGATION (FEATURE-029: canonical shared nav) -->
     <div id="nav-mount"></div>

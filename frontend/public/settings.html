@@ -19,14 +19,9 @@
         // FLAG-028: hide body until role check passes to prevent flash of admin-only settings UI
         // ISSUE-100: tightened to admin-only to match nav.js settings link gating (ISSUE-097)
         (function () {
-            const t = localStorage.getItem('access_token');
-            if (!t) { window.location.replace('login.html'); return; }
-            let role = null;
-            try { role = JSON.parse(atob(t.split('.')[1])).role || null; } catch (e) {}
-            if (role !== 'admin') {
-                window.location.replace('denied.html?from=' + encodeURIComponent(location.pathname));
-                return;
-            }
+            // FEATURE-044: gate on the 'settings' page (admin by default;
+            // admin-only-grantable). Shared guard reads the effective page set.
+            if (!guardPage('settings')) return;
             document.body.style.visibility = '';
         })();
     </script>
@@ -789,6 +784,15 @@
                     class="touch-target-pos w-full mt-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition">Change role</button>
             </div>
 
+            <!-- Page Access (FEATURE-044) -->
+            <div class="border-t border-gray-200 mt-4 pt-4">
+                <label class="block text-sm font-medium text-gray-700 mb-1">Page Access</label>
+                <p class="text-xs text-gray-500 mb-3">Pages this account can open. Defaults follow the role; toggles override per user.</p>
+                <div id="manage-page-access" class="space-y-2"></div>
+                <button type="button" onclick="saveManagePageAccess()"
+                    class="touch-target-pos w-full mt-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition">Save page access</button>
+            </div>
+
             <!-- Reset password -->
             <div class="border-t border-gray-200 mt-4 pt-4">
                 <label class="block text-sm font-medium text-gray-700 mb-1" for="manage-password-input">New password</label>
@@ -1345,7 +1349,79 @@
             toggleBtn.textContent = u.is_active ? 'Deactivate' : 'Activate';
             toggleBtn.className = 'touch-target-pos flex-1 font-bold rounded-lg transition bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-300';
             document.getElementById('manage-error').classList.add('hidden');
+            renderPageAccess(u);
             document.getElementById('manage-user-modal').classList.remove('hidden');
+        }
+
+        // FEATURE-044: per-user Page Access toggles.
+        let pageAccessCatalog = null;        // [{key,label,sensitive}]
+        let pageAccessGrantable = new Set(); // page keys the current admin may toggle
+
+        async function ensurePageAccessCatalog() {
+            if (pageAccessCatalog) return;
+            try {
+                const res = await authenticatedFetch(`${API_BASE}/users/page-access-catalog/`);
+                if (!res.ok) return;
+                const data = await res.json();
+                pageAccessCatalog = data.pages || [];
+                pageAccessGrantable = new Set(data.grantable || []);
+            } catch (e) { /* non-fatal: section stays empty */ }
+        }
+
+        async function renderPageAccess(u) {
+            const wrap = document.getElementById('manage-page-access');
+            if (!wrap) return;
+            wrap.innerHTML = '<p class="text-xs text-gray-400">Loading…</p>';
+            await ensurePageAccessCatalog();
+            if (!pageAccessCatalog) {
+                wrap.innerHTML = '<p class="text-xs text-red-500">Could not load page list.</p>';
+                return;
+            }
+            const effective = new Set(u.effective_pages || []);
+            wrap.innerHTML = pageAccessCatalog.map(p => {
+                const checked = effective.has(p.key) ? 'checked' : '';
+                const grantable = pageAccessGrantable.has(p.key);
+                const disabled = grantable ? '' : 'disabled';
+                const hint = grantable ? '' : '<span class="text-xs text-gray-400 ml-2">admin only</span>';
+                return `
+                    <div class="flex items-center justify-between">
+                        <div><span class="text-sm text-gray-700">${escapeHtml(p.label)}</span>${hint}</div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" class="sr-only peer manage-page-toggle" data-page="${escapeHtml(p.key)}" ${checked} ${disabled}>
+                            <div class="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:bg-blue-600
+                                        after:content-[''] after:absolute after:top-[2px] after:left-[2px]
+                                        after:bg-white after:rounded-full after:h-5 after:w-5
+                                        after:transition-all peer-checked:after:translate-x-full"></div>
+                        </label>
+                    </div>`;
+            }).join('');
+        }
+
+        async function saveManagePageAccess() {
+            if (!manageTarget) return;
+            document.getElementById('manage-error').classList.add('hidden');
+            const toggles = document.querySelectorAll('#manage-page-access .manage-page-toggle');
+            const pages = [];
+            toggles.forEach(t => { if (t.checked) pages.push(t.getAttribute('data-page')); });
+            try {
+                const res = await authenticatedFetch(`${API_BASE}/users/${manageTarget.id}/page-access/`, {
+                    method: 'PATCH',
+                    body: JSON.stringify({ pages })
+                });
+                const data = await res.json().catch(() => ({}));
+                if (res.ok) {
+                    if (usersById[manageTarget.id]) {
+                        usersById[manageTarget.id].allowed_pages = data.allowed_pages;
+                        usersById[manageTarget.id].effective_pages = data.effective_pages;
+                    }
+                    window.toast({ severity: 'success', message: `Page access updated for ${manageTarget.username}` });
+                    loadUsers();
+                } else {
+                    manageError(data.error || `Update failed (${res.status}).`);
+                }
+            } catch (e) {
+                manageError('Update failed: ' + e.message);
+            }
         }
 
         function closeManageUser() {

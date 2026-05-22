@@ -747,6 +747,10 @@ class User(AbstractUser):
 
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='cashier')
     phone = models.CharField(max_length=20, blank=True)
+    # FEATURE-044: per-user page-access override. NULL = follow role default
+    # (the historical role gate); a list of gateable page keys overrides it.
+    # See canteen/access.py for the canonical page definitions and resolution.
+    allowed_pages = models.JSONField(null=True, blank=True, default=None)
 
     class Meta:
         db_table = 'users'

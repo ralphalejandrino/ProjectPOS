@@ -13,6 +13,7 @@ from .models import User, PosTransaction, Shift, ZReport
 from .serializers import UserSerializer, UserCreateSerializer, LoginSerializer
 from rest_framework.throttling import AnonRateThrottle
 from .permissions import IsManagerOrAbove, IsAdmin
+from . import access
 
 
 class QuickLoginRateThrottle(AnonRateThrottle):
@@ -46,6 +47,10 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         token = super().get_token(user)
         token['role'] = user.role
         token['username'] = user.username
+        # FEATURE-044: effective page set for client nav/guards. Server-side
+        # enforcement reads the DB (not this claim), so a stale claim after a
+        # change can never grant access beyond what the live record allows.
+        token['pages'] = sorted(access.effective_pages(user))
         return token
 
 
@@ -265,6 +270,64 @@ class UserViewSet(viewsets.ModelViewSet):
         user.set_password(password)
         user.save(update_fields=['password'])
         return Response({'id': user.pk, 'username': user.username, 'detail': 'Password reset.'})
+
+    @action(detail=False, methods=['get'], url_path='page-access-catalog')
+    def page_access_catalog(self, request):
+        """FEATURE-044: the page-access toggle catalog for the Manage modal.
+
+        Returns every gateable page (key + label + sensitivity) and the subset
+        the REQUESTER may actually toggle (grantable). The UI disables the rest,
+        but the server is authoritative — set_page_access re-checks grantability.
+        """
+        return Response({
+            'pages': [
+                {'key': k, 'label': access.PAGE_LABELS[k], 'sensitive': k in access.SENSITIVE_PAGES}
+                for k in access.GATEABLE_PAGES
+            ],
+            'grantable': sorted(access.grantable_pages(request.user)),
+        })
+
+    @action(detail=True, methods=['patch'], url_path='page-access')
+    def set_page_access(self, request, pk=None):
+        """FEATURE-044: set a target user's per-page access (manager/admin only).
+
+        GUARDRAIL (the security boundary — do not weaken): the requester may only
+        flip pages within their own grantable set (access.grantable_pages); bits
+        outside that set are preserved from the target's current effective set, so
+        a manager can neither grant a sensitive/admin-only page (e.g. Settings)
+        nor any page beyond their own — no escalation path. Target is resolved via
+        the managed (cashier/manager) queryset, so admins can't be retargeted.
+        """
+        user = self.get_object()
+        requested = request.data.get('pages', [])
+        if not isinstance(requested, list):
+            return Response({'error': 'pages must be a list of page keys.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        unknown = [p for p in requested if p not in access.GATEABLE_PAGES]
+        if unknown:
+            return Response({'error': f'Unknown page(s): {", ".join(map(str, unknown))}'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        # Reject (rather than silently drop) an attempt to set a page the
+        # requester may not grant — surfaces escalation attempts instead of
+        # masking them. Bits the requester DOESN'T touch are still preserved.
+        manageable = access.grantable_pages(request.user)
+        current = access.effective_pages(user) & set(access.GATEABLE_PAGES)
+        requested_set = set(requested)
+        attempted_changes = (requested_set ^ current)  # adds or removes
+        if attempted_changes - manageable:
+            forbidden = sorted(attempted_changes - manageable)
+            return Response(
+                {'error': f'You are not allowed to change access to: {", ".join(forbidden)}'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        user.allowed_pages = access.resolve_page_access(request.user, user, requested)
+        user.save(update_fields=['allowed_pages'])
+        return Response({
+            'id': user.pk,
+            'username': user.username,
+            'allowed_pages': user.allowed_pages,
+            'effective_pages': sorted(access.effective_pages(user)),
+        })
 
     @action(detail=False, methods=['get'], permission_classes=[AllowAny],
             throttle_classes=[QuickLoginRateThrottle], url_path='quick-login')

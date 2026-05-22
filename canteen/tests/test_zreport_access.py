@@ -25,13 +25,15 @@ class ZReportAccessGateTests(SimpleTestCase):
     # --- Early FLAG-028 guard ---
 
     def test_cashier_can_load_zreport_with_close_param(self):
-        # The early guard reads ?close=1 and lets cashier through.
+        # FEATURE-044: the early guard now allows on page access OR the ISSUE-108
+        # cashier close-shift exception (?close=1).
         self.assertIn("get('close') === '1'", self.src)
-        self.assertIn("role === 'cashier' && !closeOnly", self.src)
+        self.assertIn("canAccessPage('zreport') || (role === 'cashier' && closeOnly)", self.src)
 
     def test_cashier_blocked_from_zreport_without_close_param(self):
-        # Without closeOnly, cashier hits denied.html in the early guard.
-        idx = self.src.index("role === 'cashier' && !closeOnly")
+        # The allow-condition's else branch redirects to denied.html, so a
+        # cashier without page access and without ?close=1 is blocked.
+        idx = self.src.index("canAccessPage('zreport') || (role === 'cashier' && closeOnly)")
         tail = self.src[idx:idx + 400]
         self.assertIn("denied.html", tail)
 
