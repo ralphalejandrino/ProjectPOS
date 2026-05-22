@@ -17,7 +17,8 @@
 // v76: FEATURE-041 — consolidate per-user actions into a single Manage Account modal
 // v77: FEATURE-041 — nested-dialog z-index (--z-dialog) + Danger Zone button hierarchy
 // v78: FEATURE-041 — replace dead (unpurged) Tailwind classes in Manage modal; fix spacing
-const CACHE_NAME = 'tarsierpos-v78'; // canonical cache version
+// v79: DEPLOY pre-flight — re-add purge-dropped utilities for FEATURE-039/040 (banner/preview)
+const CACHE_NAME = 'tarsierpos-v79'; // canonical cache version
 const ASSETS = [
   'index.html',
   'login.html',
