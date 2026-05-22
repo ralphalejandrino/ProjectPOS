@@ -804,7 +804,7 @@
                 <p class="text-xs font-semibold uppercase tracking-wide text-red-600 mb-3">Danger zone</p>
                 <div class="flex gap-3">
                     <button type="button" id="manage-toggle-active-btn" onclick="toggleManageActive()"
-                        class="touch-target-pos flex-1 font-bold rounded-lg transition bg-amber-100 text-amber-700 hover:bg-amber-200"></button>
+                        class="touch-target-pos flex-1 font-bold rounded-lg transition bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-300"></button>
                     <button type="button" onclick="deleteManageUser()"
                         class="touch-target-pos flex-1 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg transition">Delete</button>
                 </div>
@@ -1338,14 +1338,11 @@
             document.getElementById('manage-role-select').innerHTML = Object.keys(ROLE_LABELS).map(value =>
                 `<option value="${value}" ${u.role === value ? 'selected' : ''}>${ROLE_LABELS[value]}</option>`
             ).join('');
+            // Deactivate/Activate is a reversible soft action — neutral/secondary
+            // styling so it doesn't visually compete with the destructive red Delete.
             const toggleBtn = document.getElementById('manage-toggle-active-btn');
-            if (u.is_active) {
-                toggleBtn.textContent = 'Deactivate';
-                toggleBtn.className = 'touch-target-pos flex-1 font-bold rounded-lg transition bg-amber-100 text-amber-700 hover:bg-amber-200';
-            } else {
-                toggleBtn.textContent = 'Activate';
-                toggleBtn.className = 'touch-target-pos flex-1 font-bold rounded-lg transition bg-green-100 text-green-700 hover:bg-green-200';
-            }
+            toggleBtn.textContent = u.is_active ? 'Deactivate' : 'Activate';
+            toggleBtn.className = 'touch-target-pos flex-1 font-bold rounded-lg transition bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-300';
             document.getElementById('manage-error').classList.add('hidden');
             document.getElementById('manage-user-modal').classList.remove('hidden');
         }

@@ -68,6 +68,10 @@
     --z-dropdown:       1020;
     --z-modal-backdrop: 1040;
     --z-modal:          1050;
+    /* FEATURE-041: canonical confirm/alert dialogs are the topmost interactive
+       layer — they must stack ABOVE any --z-modal modal that opened them (e.g. a
+       delete-confirm fired from the Manage Account modal) yet stay below toasts. */
+    --z-dialog:         1055;
     --z-toast:          1060;
 
     /* touch targets */
@@ -480,7 +484,9 @@ body {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.5);
-  z-index: var(--z-modal-backdrop);
+  /* FEATURE-041: above --z-modal so a confirm/alert nested over an open modal
+     dims it and sits clickable on top; still below --z-toast. */
+  z-index: var(--z-dialog);
   display: flex;
   align-items: center;
   justify-content: center;
