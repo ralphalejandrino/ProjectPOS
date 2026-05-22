@@ -754,52 +754,64 @@
 
     </div>
 
-    <!-- RESET PASSWORD MODAL (FEATURE-006) -->
-    <div id="reset-password-modal" data-modal data-modal-close="closeResetPasswordModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center" style="z-index: var(--z-modal);">
-        <div class="bg-white rounded-lg shadow-2xl p-8 max-w-md w-full mx-4">
-            <h3 class="text-2xl font-bold mb-2 text-gray-800">🔑 Reset Password</h3>
-            <p class="text-gray-600 mb-4 text-sm">Set a new password for <span id="reset-password-username" class="font-semibold"></span>.</p>
-            <label class="block text-sm font-medium text-gray-700 mb-1" for="reset-password-input">New password</label>
-            <input type="password" id="reset-password-input" placeholder="New password (min 6 chars)"
-                autocomplete="new-password"
-                class="w-full border border-gray-300 rounded-lg px-3 py-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-400 mb-2">
-            <p id="reset-password-error" class="hidden text-red-600 text-sm mb-2"></p>
-            <div class="flex space-x-3 mt-4">
-                <button type="button" onclick="closeResetPasswordModal()"
-                    class="touch-target-pos flex-1 bg-gray-500 hover:bg-gray-600 text-white font-bold rounded-lg transition">Cancel</button>
-                <button type="button" onclick="submitResetPassword()"
-                    class="touch-target-pos flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition">Reset Password</button>
-            </div>
-        </div>
-    </div>
+    <!-- MANAGE ACCOUNT MODAL (FEATURE-041 — consolidated per-user actions) -->
+    <div id="manage-user-modal" data-modal data-modal-close="closeManageUser" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center" style="z-index: var(--z-modal);">
+        <div class="bg-white rounded-lg shadow-2xl p-8 max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <h3 class="text-2xl font-bold mb-1 text-gray-800">⚙️ Manage Account</h3>
+            <p class="text-gray-600 mb-5 text-sm"><span id="manage-username-label" class="font-semibold"></span><span id="manage-role-badge"></span></p>
 
-    <!-- RENAME ACCOUNT MODAL (FEATURE-041) -->
-    <div id="rename-user-modal" data-modal data-modal-close="closeRenameModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center" style="z-index: var(--z-modal);">
-        <div class="bg-white rounded-lg shadow-2xl p-8 max-w-md w-full mx-4">
-            <h3 class="text-2xl font-bold mb-2 text-gray-800">✏️ Rename Account</h3>
-            <p class="text-gray-600 mb-4 text-sm">Renaming <span id="rename-current-username" class="font-semibold"></span>. The username is the login identifier.</p>
-            <label class="block text-sm font-medium text-gray-700 mb-1" for="rename-username-input">Username</label>
-            <input type="text" id="rename-username-input" placeholder="New username" autocomplete="off"
+            <!-- Identity: username + display name -->
+            <label class="block text-sm font-medium text-gray-700 mb-1" for="manage-username-input">Username</label>
+            <input type="text" id="manage-username-input" placeholder="Username" autocomplete="off"
                 class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 mb-3">
             <div class="grid grid-cols-2 gap-3">
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1" for="rename-first-input">First name</label>
-                    <input type="text" id="rename-first-input" placeholder="First name" autocomplete="off"
+                    <label class="block text-sm font-medium text-gray-700 mb-1" for="manage-first-input">First name</label>
+                    <input type="text" id="manage-first-input" placeholder="First name" autocomplete="off"
                         class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1" for="rename-last-input">Last name</label>
-                    <input type="text" id="rename-last-input" placeholder="Last name" autocomplete="off"
+                    <label class="block text-sm font-medium text-gray-700 mb-1" for="manage-last-input">Last name</label>
+                    <input type="text" id="manage-last-input" placeholder="Last name" autocomplete="off"
                         class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
                 </div>
             </div>
-            <p id="rename-error" class="hidden text-red-600 text-sm mt-2"></p>
-            <div class="flex space-x-3 mt-4">
-                <button type="button" onclick="closeRenameModal()"
-                    class="touch-target-pos flex-1 bg-gray-500 hover:bg-gray-600 text-white font-bold rounded-lg transition">Cancel</button>
-                <button type="button" onclick="submitRename()"
-                    class="touch-target-pos flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition">Save</button>
+            <button type="button" onclick="saveManageName()"
+                class="touch-target-pos w-full mt-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition">Save name</button>
+
+            <!-- Role -->
+            <div class="border-t border-gray-200 mt-5 pt-4">
+                <label class="block text-sm font-medium text-gray-700 mb-1" for="manage-role-select">Role</label>
+                <select id="manage-role-select"
+                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></select>
+                <button type="button" onclick="saveManageRole()"
+                    class="touch-target-pos w-full mt-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition">Change role</button>
             </div>
+
+            <!-- Reset password -->
+            <div class="border-t border-gray-200 mt-5 pt-4">
+                <label class="block text-sm font-medium text-gray-700 mb-1" for="manage-password-input">New password</label>
+                <input type="password" id="manage-password-input" placeholder="New password (min 6 chars)" autocomplete="new-password"
+                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <button type="button" onclick="saveManagePassword()"
+                    class="touch-target-pos w-full mt-3 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-lg transition">Reset password</button>
+            </div>
+
+            <p id="manage-error" class="hidden text-red-600 text-sm mt-4"></p>
+
+            <!-- Danger zone: destructive actions, visually separated -->
+            <div class="border-t-2 border-red-200 mt-5 pt-4">
+                <p class="text-xs font-semibold uppercase tracking-wide text-red-600 mb-3">Danger zone</p>
+                <div class="flex gap-3">
+                    <button type="button" id="manage-toggle-active-btn" onclick="toggleManageActive()"
+                        class="touch-target-pos flex-1 font-bold rounded-lg transition bg-amber-100 text-amber-700 hover:bg-amber-200"></button>
+                    <button type="button" onclick="deleteManageUser()"
+                        class="touch-target-pos flex-1 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg transition">Delete</button>
+                </div>
+            </div>
+
+            <button type="button" onclick="closeManageUser()"
+                class="touch-target-pos w-full mt-5 bg-gray-500 hover:bg-gray-600 text-white font-bold rounded-lg transition">Close</button>
         </div>
     </div>
 
@@ -1216,6 +1228,7 @@
         }
 
         const ROLE_LABELS = { admin: 'Admin', manager: 'Manager', cashier: 'Cashier' };
+        let usersById = {};  // FEATURE-041: id -> user record cache for the Manage modal
 
         function roleBadgeClass(role) {
             if (role === 'admin') return 'bg-red-100 text-red-700';
@@ -1235,14 +1248,15 @@
                 const response = await authenticatedFetch(`${API_BASE}/users/`);
                 const data = await response.json();
                 const users = data.results || data; // handle both paginated and plain array
+                // Cache by id so the per-user Manage modal can look up full records
+                // without re-fetching or smuggling data through HTML attributes.
+                usersById = {};
+                users.forEach(u => { usersById[u.id] = u; });
                 const list = document.getElementById('user-list');
                 if (!users.length) {
                     list.innerHTML = '<p class="text-gray-400 text-sm">No cashier accounts yet.</p>';
                     return;
                 }
-                const roleOptions = u => Object.keys(ROLE_LABELS).map(value =>
-                    `<option value="${value}" ${u.role === value ? 'selected' : ''}>${ROLE_LABELS[value]}</option>`
-                ).join('');
                 list.innerHTML = users.map(u => `
                     <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                         <div>
@@ -1251,65 +1265,15 @@
                             ${!u.is_active ? '<span class="ml-2 text-xs text-red-500">(inactive)</span>' : ''}
                         </div>
                         <div class="flex items-center gap-2">
-                            <select data-current="${escapeHtml(u.role)}"
-                                onchange="changeUserRole(${u.id}, '${escapeHtml(u.username)}', this.value, this)"
-                                style="border:1px solid var(--color-border,#d1d5db);border-radius:var(--radius-md,0.375rem);padding:0.25rem 0.5rem;font-size:0.75rem;color:var(--color-primary,#1d4ed8);background:#fff;">
-                                ${roleOptions(u)}
-                            </select>
-                            <button onclick="openRename(${u.id}, '${escapeHtml(u.username)}', '${escapeHtml(u.first_name || '')}', '${escapeHtml(u.last_name || '')}')"
-                                class="text-xs px-3 py-1 rounded-lg bg-blue-100 text-blue-700 hover:bg-blue-200">
-                                Rename
-                            </button>
-                            <button onclick="openResetPassword(${u.id}, '${escapeHtml(u.username)}')"
-                                class="text-xs px-3 py-1 rounded-lg bg-amber-100 text-amber-700 hover:bg-amber-200">
-                                Reset Password
-                            </button>
-                            <button onclick="toggleUserActive(${u.id}, ${!u.is_active})"
-                                class="text-xs px-3 py-1 rounded-lg ${u.is_active ? 'bg-red-100 text-red-600 hover:bg-red-200' : 'bg-green-100 text-green-600 hover:bg-green-200'}">
-                                ${u.is_active ? 'Deactivate' : 'Activate'}
-                            </button>
-                            <button onclick="deleteUser(${u.id}, '${escapeHtml(u.username)}')"
-                                class="text-xs px-3 py-1 rounded-lg bg-red-600 text-white hover:bg-red-700">
-                                Delete
+                            <button onclick="openManageUser(${u.id})"
+                                class="text-sm px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 font-medium">
+                                Manage
                             </button>
                         </div>
                     </div>
                 `).join('');
             } catch (e) {
                 console.error('Failed to load users:', e);
-            }
-        }
-
-        async function changeUserRole(userId, username, newRole, selectEl) {
-            const previousRole = selectEl.dataset.current;
-            if (newRole === previousRole) return;
-            const ok = await window.confirmDialog({
-                title: 'Change role',
-                message: `Change ${username}'s role to ${ROLE_LABELS[newRole] || newRole}?`,
-                okLabel: 'Change',
-                cancelLabel: 'Cancel',
-                danger: true,
-            });
-            if (!ok) {
-                selectEl.value = previousRole;
-                return;
-            }
-            try {
-                const response = await authenticatedFetch(`${API_BASE}/users/${userId}/role/`, {
-                    method: 'PATCH',
-                    body: JSON.stringify({ role: newRole })
-                });
-                const data = await response.json().catch(() => ({}));
-                if (response.ok) {
-                    window.toast({ severity: 'success', message: `${username} is now ${ROLE_LABELS[newRole] || newRole}` });
-                    selectEl.dataset.current = newRole;
-                } else {
-                    window.toast({ severity: 'danger', message: `Role change failed: ${data.error || response.status}` });
-                    selectEl.value = previousRole;
-                }
-            } catch (e) {
-                window.toast({ severity: 'danger', message: `Role change failed: ${e.message}` });
-                selectEl.value = previousRole;
             }
         }
 
@@ -1347,119 +1311,152 @@
             }
         }
 
-        async function toggleUserActive(userId, newState) {
+        // FEATURE-041: consolidated per-user "Manage Account" modal. One affordance
+        // per row opens this; every action (rename, role, password, activate/deactivate,
+        // delete) lives here. All server-side safeguards are unchanged — this only
+        // reorganizes the client; the endpoints still enforce uniqueness/admin-only/blocks.
+        let manageTarget = null;  // { id, username, role, is_active }
+
+        function manageError(msg) {
+            const el = document.getElementById('manage-error');
+            el.textContent = msg;
+            el.classList.remove('hidden');
+        }
+
+        function openManageUser(userId) {
+            const u = usersById[userId];
+            if (!u) return;
+            manageTarget = { id: u.id, username: u.username, role: u.role, is_active: u.is_active };
+            document.getElementById('manage-username-label').textContent = u.username;
+            const badge = document.getElementById('manage-role-badge');
+            badge.className = 'ml-1 text-xs px-2 py-0.5 rounded-full ' + roleBadgeClass(u.role);
+            badge.textContent = u.role + (u.is_active ? '' : ' · inactive');
+            document.getElementById('manage-username-input').value = u.username;
+            document.getElementById('manage-first-input').value = u.first_name || '';
+            document.getElementById('manage-last-input').value = u.last_name || '';
+            document.getElementById('manage-password-input').value = '';
+            document.getElementById('manage-role-select').innerHTML = Object.keys(ROLE_LABELS).map(value =>
+                `<option value="${value}" ${u.role === value ? 'selected' : ''}>${ROLE_LABELS[value]}</option>`
+            ).join('');
+            const toggleBtn = document.getElementById('manage-toggle-active-btn');
+            if (u.is_active) {
+                toggleBtn.textContent = 'Deactivate';
+                toggleBtn.className = 'touch-target-pos flex-1 font-bold rounded-lg transition bg-amber-100 text-amber-700 hover:bg-amber-200';
+            } else {
+                toggleBtn.textContent = 'Activate';
+                toggleBtn.className = 'touch-target-pos flex-1 font-bold rounded-lg transition bg-green-100 text-green-700 hover:bg-green-200';
+            }
+            document.getElementById('manage-error').classList.add('hidden');
+            document.getElementById('manage-user-modal').classList.remove('hidden');
+        }
+
+        function closeManageUser() {
+            document.getElementById('manage-user-modal').classList.add('hidden');
+            manageTarget = null;
+        }
+
+        async function saveManageName() {
+            if (!manageTarget) return;
+            const username = document.getElementById('manage-username-input').value.trim();
+            const first_name = document.getElementById('manage-first-input').value.trim();
+            const last_name = document.getElementById('manage-last-input').value.trim();
+            document.getElementById('manage-error').classList.add('hidden');
+            if (!username) { manageError('Username cannot be blank.'); return; }
             try {
-                const response = await authenticatedFetch(`${API_BASE}/users/${userId}/`, {
-                    method: 'PATCH',
-                    body: JSON.stringify({ is_active: newState })
-                });
-                const data = await response.json();
-                if (response.ok) loadUsers();
-            } catch (e) {
-                window.alertDialog({title: 'Notice', message: 'Error updating user: ' + e.message});
-            }
-        }
-
-        // FEATURE-006: credential (password) reset — modal + confirm + toast.
-        let resetPasswordTarget = null;
-
-        function openResetPassword(userId, username) {
-            resetPasswordTarget = { userId, username };
-            document.getElementById('reset-password-username').textContent = username;
-            const input = document.getElementById('reset-password-input');
-            input.value = '';
-            document.getElementById('reset-password-error').classList.add('hidden');
-            document.getElementById('reset-password-modal').classList.remove('hidden');
-        }
-
-        function closeResetPasswordModal() {
-            document.getElementById('reset-password-modal').classList.add('hidden');
-            resetPasswordTarget = null;
-        }
-
-        async function submitResetPassword() {
-            if (!resetPasswordTarget) return;
-            const { userId, username } = resetPasswordTarget;
-            const password = document.getElementById('reset-password-input').value;
-            const errorEl = document.getElementById('reset-password-error');
-            errorEl.classList.add('hidden');
-            if (password.length < 6) {
-                errorEl.textContent = 'Password must be at least 6 characters.';
-                errorEl.classList.remove('hidden');
-                return;
-            }
-            try {
-                const response = await authenticatedFetch(`${API_BASE}/users/${userId}/reset-password/`, {
-                    method: 'PATCH',
-                    body: JSON.stringify({ password })
-                });
-                const data = await response.json().catch(() => ({}));
-                if (response.ok) {
-                    closeResetPasswordModal();
-                    window.toast({ severity: 'success', message: `Password reset for ${username}` });
-                } else {
-                    errorEl.textContent = data.error || `Reset failed (${response.status}).`;
-                    errorEl.classList.remove('hidden');
-                    window.toast({ severity: 'danger', message: `Reset failed: ${data.error || response.status}` });
-                }
-            } catch (e) {
-                window.toast({ severity: 'danger', message: `Reset failed: ${e.message}` });
-            }
-        }
-
-        // FEATURE-041: account rename — modal + uniqueness errors + toast.
-        let renameTarget = null;
-
-        function openRename(userId, username, firstName, lastName) {
-            renameTarget = { userId, username };
-            document.getElementById('rename-current-username').textContent = username;
-            document.getElementById('rename-username-input').value = username;
-            document.getElementById('rename-first-input').value = firstName || '';
-            document.getElementById('rename-last-input').value = lastName || '';
-            document.getElementById('rename-error').classList.add('hidden');
-            document.getElementById('rename-user-modal').classList.remove('hidden');
-        }
-
-        function closeRenameModal() {
-            document.getElementById('rename-user-modal').classList.add('hidden');
-            renameTarget = null;
-        }
-
-        async function submitRename() {
-            if (!renameTarget) return;
-            const { userId } = renameTarget;
-            const username = document.getElementById('rename-username-input').value.trim();
-            const first_name = document.getElementById('rename-first-input').value.trim();
-            const last_name = document.getElementById('rename-last-input').value.trim();
-            const errorEl = document.getElementById('rename-error');
-            errorEl.classList.add('hidden');
-            if (!username) {
-                errorEl.textContent = 'Username cannot be blank.';
-                errorEl.classList.remove('hidden');
-                return;
-            }
-            try {
-                const response = await authenticatedFetch(`${API_BASE}/users/${userId}/rename/`, {
+                const response = await authenticatedFetch(`${API_BASE}/users/${manageTarget.id}/rename/`, {
                     method: 'PATCH',
                     body: JSON.stringify({ username, first_name, last_name })
                 });
                 const data = await response.json().catch(() => ({}));
                 if (response.ok) {
-                    closeRenameModal();
+                    manageTarget.username = data.username;
+                    document.getElementById('manage-username-label').textContent = data.username;
                     window.toast({ severity: 'success', message: `Account renamed to ${data.username}` });
                     loadUsers();
                 } else {
-                    errorEl.textContent = data.error || `Rename failed (${response.status}).`;
-                    errorEl.classList.remove('hidden');
-                    window.toast({ severity: 'danger', message: `Rename failed: ${data.error || response.status}` });
+                    manageError(data.error || `Rename failed (${response.status}).`);
                 }
             } catch (e) {
-                window.toast({ severity: 'danger', message: `Rename failed: ${e.message}` });
+                manageError('Rename failed: ' + e.message);
             }
         }
 
-        // FEATURE-041: hard delete — confirm modal + audit-safe server guards + toast.
-        async function deleteUser(userId, username) {
+        async function saveManageRole() {
+            if (!manageTarget) return;
+            const newRole = document.getElementById('manage-role-select').value;
+            document.getElementById('manage-error').classList.add('hidden');
+            if (newRole === manageTarget.role) {
+                window.toast({ severity: 'info', message: 'Role unchanged.' });
+                return;
+            }
+            try {
+                const response = await authenticatedFetch(`${API_BASE}/users/${manageTarget.id}/role/`, {
+                    method: 'PATCH',
+                    body: JSON.stringify({ role: newRole })
+                });
+                const data = await response.json().catch(() => ({}));
+                if (response.ok) {
+                    manageTarget.role = newRole;
+                    const badge = document.getElementById('manage-role-badge');
+                    badge.className = 'ml-1 text-xs px-2 py-0.5 rounded-full ' + roleBadgeClass(newRole);
+                    badge.textContent = newRole + (manageTarget.is_active ? '' : ' · inactive');
+                    window.toast({ severity: 'success', message: `${manageTarget.username} is now ${ROLE_LABELS[newRole] || newRole}` });
+                    loadUsers();
+                } else {
+                    manageError(data.error || `Role change failed (${response.status}).`);
+                }
+            } catch (e) {
+                manageError('Role change failed: ' + e.message);
+            }
+        }
+
+        async function saveManagePassword() {
+            if (!manageTarget) return;
+            const password = document.getElementById('manage-password-input').value;
+            document.getElementById('manage-error').classList.add('hidden');
+            if (password.length < 6) { manageError('Password must be at least 6 characters.'); return; }
+            try {
+                const response = await authenticatedFetch(`${API_BASE}/users/${manageTarget.id}/reset-password/`, {
+                    method: 'PATCH',
+                    body: JSON.stringify({ password })
+                });
+                const data = await response.json().catch(() => ({}));
+                if (response.ok) {
+                    document.getElementById('manage-password-input').value = '';
+                    window.toast({ severity: 'success', message: `Password reset for ${manageTarget.username}` });
+                } else {
+                    manageError(data.error || `Reset failed (${response.status}).`);
+                }
+            } catch (e) {
+                manageError('Reset failed: ' + e.message);
+            }
+        }
+
+        async function toggleManageActive() {
+            if (!manageTarget) return;
+            const newState = !manageTarget.is_active;
+            document.getElementById('manage-error').classList.add('hidden');
+            try {
+                const response = await authenticatedFetch(`${API_BASE}/users/${manageTarget.id}/`, {
+                    method: 'PATCH',
+                    body: JSON.stringify({ is_active: newState })
+                });
+                const data = await response.json().catch(() => ({}));
+                if (response.ok) {
+                    window.toast({ severity: 'success', message: `${manageTarget.username} ${newState ? 'activated' : 'deactivated'}` });
+                    await loadUsers();
+                    openManageUser(manageTarget.id);  // re-render modal in sync with new state
+                } else {
+                    manageError(data.error || `Update failed (${response.status}).`);
+                }
+            } catch (e) {
+                manageError('Update failed: ' + e.message);
+            }
+        }
+
+        async function deleteManageUser() {
+            if (!manageTarget) return;
+            const { id, username } = manageTarget;
             const ok = await window.confirmDialog({
                 title: 'Delete account',
                 message: `Permanently delete "${username}"? This cannot be undone. Accounts with transaction or shift history must be Deactivated instead.`,
@@ -1469,18 +1466,18 @@
             });
             if (!ok) return;
             try {
-                const response = await authenticatedFetch(`${API_BASE}/users/${userId}/`, {
-                    method: 'DELETE'
-                });
+                const response = await authenticatedFetch(`${API_BASE}/users/${id}/`, { method: 'DELETE' });
                 if (response.ok || response.status === 204) {
+                    closeManageUser();
                     window.toast({ severity: 'success', message: `${username} deleted` });
                     loadUsers();
                 } else {
                     const data = await response.json().catch(() => ({}));
+                    manageError(data.error || `Delete failed (${response.status}).`);
                     window.toast({ severity: 'danger', message: data.error || `Delete failed (${response.status}).` });
                 }
             } catch (e) {
-                window.toast({ severity: 'danger', message: `Delete failed: ${e.message}` });
+                manageError('Delete failed: ' + e.message);
             }
         }
 

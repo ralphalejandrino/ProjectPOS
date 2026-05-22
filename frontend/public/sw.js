@@ -14,7 +14,8 @@
 // v73: FEATURE-040 — receipt overhaul + on-screen preview
 // v74: ISSUE-067 + FEATURE-039 — match Create Account & Wi-Fi inputs to BIR styling
 // v75: ISSUE-113 + FEATURE-041 — fix quick-login grid perms; account rename + hard delete
-const CACHE_NAME = 'tarsierpos-v75'; // canonical cache version
+// v76: FEATURE-041 — consolidate per-user actions into a single Manage Account modal
+const CACHE_NAME = 'tarsierpos-v76'; // canonical cache version
 const ASSETS = [
   'index.html',
   'login.html',
