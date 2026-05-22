@@ -139,6 +139,25 @@ class QuickLoginGridTests(APITestCase):
         resp = self.client.get(self.URL, REMOTE_ADDR='8.8.8.8')
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
 
+    def test_local_reloads_never_throttled(self):
+        # FLAG-072 — the kiosk re-fetches the grid on every reload. The 10/min
+        # throttle made it 429 → the frontend's `if (!response.ok) return;`
+        # silently dropped the grid. Local/loopback callers must not be throttled
+        # (the IP guard already protects against remote enumeration).
+        for _ in range(25):
+            resp = self.client.get(self.URL, REMOTE_ADDR='127.0.0.1')
+            self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        for _ in range(25):
+            resp = self.client.get(self.URL, REMOTE_ADDR='192.168.1.20')
+            self.assertEqual(resp.status_code, status.HTTP_200_OK)
+
+    def test_remote_caller_still_throttled(self):
+        # FLAG-072 must NOT weaken protection for non-local callers: a remote
+        # burst still trips the throttle (in addition to the 404 IP guard).
+        codes = [self.client.get(self.URL, REMOTE_ADDR='8.8.8.8').status_code
+                 for _ in range(40)]
+        self.assertIn(status.HTTP_429_TOO_MANY_REQUESTS, codes)
+
 
 class RenameEndpointTests(APITestCase):
     """FEATURE-041 — admin-only PATCH /users/<id>/rename/."""

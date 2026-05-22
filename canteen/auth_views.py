@@ -16,7 +16,28 @@ from .permissions import IsManagerOrAbove, IsAdmin
 
 
 class QuickLoginRateThrottle(AnonRateThrottle):
+    """Throttle for the kiosk quick-login grid fetch.
+
+    FLAG-072: the kiosk legitimately re-fetches the avatar grid on every page
+    reload, so a tight per-minute cap on LOCAL requests makes the grid 429 →
+    the frontend's `if (!response.ok) return;` silently drops it. The endpoint
+    is already restricted to private/loopback callers (FLAG-039), which is the
+    real enumeration protection — so skip throttling for local/loopback callers
+    while keeping it for any remote caller that somehow reaches here.
+    """
     scope = 'quick_login'
+
+    def allow_request(self, request, view):
+        import ipaddress
+        remote = (request.META.get('HTTP_X_FORWARDED_FOR', '').split(',')[0].strip()
+                  or request.META.get('REMOTE_ADDR', ''))
+        try:
+            ip = ipaddress.ip_address(remote)
+            if ip.is_private or ip.is_loopback or ip.is_link_local:
+                return True
+        except ValueError:
+            pass
+        return super().allow_request(request, view)
 
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
