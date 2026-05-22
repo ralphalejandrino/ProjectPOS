@@ -18,7 +18,8 @@
 // v77: FEATURE-041 — nested-dialog z-index (--z-dialog) + Danger Zone button hierarchy
 // v78: FEATURE-041 — replace dead (unpurged) Tailwind classes in Manage modal; fix spacing
 // v79: DEPLOY pre-flight — re-add purge-dropped utilities for FEATURE-039/040 (banner/preview)
-const CACHE_NAME = 'tarsierpos-v79'; // canonical cache version
+// v80: FLAG-072 (loopback-relaxed quick-login throttle) + FEATURE-043 (on-screen keyboard)
+const CACHE_NAME = 'tarsierpos-v80'; // canonical cache version
 const ASSETS = [
   'index.html',
   'login.html',
@@ -34,6 +35,7 @@ const ASSETS = [
   'config.js',
   'components/format.js',
   'dialogs.js',
+  'keyboard.js',
   'payments.js',
   'styles.css',
   'shared-styles.css',

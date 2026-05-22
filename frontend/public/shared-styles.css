@@ -72,6 +72,9 @@
        layer — they must stack ABOVE any --z-modal modal that opened them (e.g. a
        delete-confirm fired from the Manage Account modal) yet stay below toasts. */
     --z-dialog:         1055;
+    /* FEATURE-043: on-screen keyboard sits above dialogs/modals so it can type
+       into modal inputs, but below toasts. */
+    --z-osk:            1058;
     --z-toast:          1060;
 
     /* touch targets */
@@ -595,6 +598,92 @@ body {
   from { opacity: 0; transform: translateX(20px); }
   to   { opacity: 1; transform: translateX(0); }
 }
+
+/* =========================================================
+ * On-screen virtual keyboard — FEATURE-043
+ * Authored component CSS (token-driven). Behaviour: keyboard.js.
+ * Keys carry .touch-target-pos (48px) for POS-grade hit targets.
+ * ========================================================= */
+.osk {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: var(--z-osk);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-2) calc(var(--space-2) + env(safe-area-inset-bottom, 0px));
+  background: var(--color-surface-alt);
+  border-top: 1px solid var(--color-border);
+  box-shadow: var(--shadow-modal);
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+}
+.osk[hidden] { display: none; }
+
+.osk-row {
+  display: flex;
+  gap: var(--space-1);
+  justify-content: center;
+}
+.osk-bar { margin-top: var(--space-1); }
+
+.osk-key {
+  flex: 1 1 0;
+  min-width: 0;
+  height: var(--touch-min-pos);
+  padding: 0 var(--space-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 0.1s, transform 0.05s;
+}
+.osk-key:hover { background: var(--color-surface-alt); }
+.osk-key:active { transform: scale(0.96); background: var(--color-primary-light); }
+.osk-key:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+
+.osk-key--mod   { flex: 1.4 1 0; font-size: var(--text-base); background: var(--color-surface-alt); }
+.osk-key--wide  { flex: 2 1 0; }
+.osk-key--space { flex: 4 1 0; }
+.osk-key--accent {
+  background: var(--color-primary);
+  color: #fff;
+  border-color: var(--color-primary);
+}
+.osk-key--accent:hover { background: var(--color-primary-hover); }
+.osk-key--active {
+  background: var(--color-primary-light);
+  border-color: var(--color-primary);
+  color: var(--color-primary-hover);
+}
+.osk-key--muted { opacity: 0.4; cursor: not-allowed; }
+
+/* Numeric calculator pad */
+.osk-pad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-1);
+  max-width: 360px;
+  width: 100%;
+  margin: 0 auto;
+}
+.osk-pad .osk-key { font-size: var(--text-xl); }
+
+/* Lift bottom-pinned content above the keyboard while it's open. */
+body.osk-open { padding-bottom: 19rem; }
+
+/* Dark mode — match the dark surfaces used elsewhere */
+.dark .osk { background: #1f2937; border-top-color: #374151; }
+.dark .osk-key { background: #374151; color: #f9fafb; border-color: #4b5563; }
+.dark .osk-key:hover { background: #4b5563; }
+.dark .osk-key--mod { background: #111827; }
 
 /* --- Utilities re-added (no Tailwind build step; purge dropped these) ---
  * FEATURE-039 WiFi pending banner + FEATURE-040 receipt preview used these
