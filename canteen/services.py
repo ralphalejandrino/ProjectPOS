@@ -134,6 +134,50 @@ def _restore_ingredients(item, transaction_item, quantity,
             )
 
 
+def stock_movements_for_shift(shift):
+    """FEATURE-008: per-ingredient sold/voided quantities for a shift, read
+    live from the IngredientLog ledger (no schema change, no new migration).
+
+    Scoped via ``transaction__shift`` so only sale/void rows tied to this
+    shift's transactions are counted. ``sold`` and ``voided`` are positive
+    magnitudes (sale rows carry a negative quantity_change, void rows a
+    positive one). Ingredients with FLAG-046 track_depletion=False never wrote
+    sale rows, so they implicitly produce no entries. Returns [] when nothing
+    moved. Uses select_related('ingredient') — one query, no N+1.
+    """
+    if shift is None:
+        return []
+    logs = (
+        IngredientLog.objects
+        .filter(transaction__shift=shift, action__in=['sale', 'void'])
+        .select_related('ingredient')
+    )
+    agg = {}
+    for log in logs:
+        entry = agg.get(log.ingredient_id)
+        if entry is None:
+            entry = {
+                'ingredient_id': log.ingredient_id,
+                'ingredient_name': log.ingredient.name,
+                'sold': Decimal('0'),
+                'voided': Decimal('0'),
+            }
+            agg[log.ingredient_id] = entry
+        if log.action == 'sale':
+            entry['sold'] += -log.quantity_change
+        else:  # void
+            entry['voided'] += log.quantity_change
+    return [
+        {
+            'ingredient_id': e['ingredient_id'],
+            'ingredient_name': e['ingredient_name'],
+            'sold': float(e['sold']),
+            'voided': float(e['voided']),
+        }
+        for e in sorted(agg.values(), key=lambda e: e['ingredient_name'].lower())
+    ]
+
+
 @db_transaction.atomic
 def open_shift(cashier_user, opening_cash):
     """ISSUE-107: open a new shift for the cashier.

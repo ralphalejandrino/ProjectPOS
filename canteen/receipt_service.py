@@ -289,6 +289,30 @@ def print_z_report(z_report):
                     os_val = '+' + os_val
                 p.text(rrow('Over/Short:', os_val))
 
+            # --- Stock movement (FEATURE-008) ---
+            # Read live from the IngredientLog ledger; skip the block entirely
+            # when nothing moved. Local import avoids the services<->receipt
+            # circular import at module load.
+            try:
+                from .services import stock_movements_for_shift
+                movements = stock_movements_for_shift(
+                    getattr(z_report, 'shift', None)
+                )
+            except Exception:
+                movements = []
+            if movements:
+                p.text('-' * RECEIPT_WIDTH + '\n')
+                _pset(p, profile, align='center', bold=True)
+                p.text('STOCK MOVEMENT\n')
+                _pset(p, profile, align='left', bold=False)
+                for mv in movements:
+                    qty_str = ('%.4f' % mv['sold']).rstrip('0').rstrip('.') or '0'
+                    name = mv['ingredient_name']
+                    max_name = RECEIPT_WIDTH - len(qty_str) - 1
+                    if max_name > 0 and len(name) > max_name:
+                        name = name[:max_name]
+                    p.text(rrow(name, qty_str))
+
             # --- Footer ---
             p.text('-' * RECEIPT_WIDTH + '\n')
             _pset(p, profile, bold=True)

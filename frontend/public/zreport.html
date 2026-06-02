@@ -184,6 +184,21 @@
                 </div>
             </div>
 
+            <!-- Stock movement (FEATURE-008) — only shown when non-empty -->
+            <details id="z-stock-section" class="hidden bg-white rounded-lg shadow-lg p-6 mb-4" open>
+                <summary class="text-lg font-bold text-gray-800 border-b pb-2 cursor-pointer select-none">Stock Movement</summary>
+                <table class="w-full text-sm mt-4">
+                    <thead>
+                        <tr class="text-gray-500 border-b">
+                            <th class="text-left pb-2">Ingredient</th>
+                            <th class="text-right pb-2">Sold</th>
+                            <th class="text-right pb-2">Voided</th>
+                        </tr>
+                    </thead>
+                    <tbody id="z-stock-movements"></tbody>
+                </table>
+            </details>
+
             <div class="bg-white rounded-lg shadow-lg p-6 mb-4 text-center">
                 <p class="text-base font-bold text-gray-800">Grand Total Sales: <span id="z-grand" class="text-blue-700"></span></p>
                 <p class="text-xs text-gray-500 mt-1">Generated <span id="z-generated"></span></p>
@@ -483,8 +498,34 @@
                 osEl.className = 'font-bold text-gray-500';
             }
 
+            // FEATURE-008: stock movement — live from the IngredientLog ledger.
+            renderStockMovements(z.stock_movements);
+
             document.getElementById('z-grand').textContent = fmt(z.grand_total_sales);
             document.getElementById('z-generated').textContent = formatTS(z.finalized_at);
+        }
+
+        function fmtQty(n) {
+            const v = parseFloat(n);
+            if (isNaN(v)) return '0';
+            return parseFloat(v.toFixed(4)).toString();
+        }
+
+        function renderStockMovements(movements) {
+            const section = document.getElementById('z-stock-section');
+            const tbody = document.getElementById('z-stock-movements');
+            if (!Array.isArray(movements) || movements.length === 0) {
+                section.classList.add('hidden');
+                tbody.innerHTML = '';
+                return;
+            }
+            tbody.innerHTML = movements.map(m => `
+                <tr class="border-b border-gray-100 last:border-0">
+                    <td class="py-2 text-gray-700">${escapeHtml(m.ingredient_name)}</td>
+                    <td class="py-2 text-right font-medium text-gray-800">${fmtQty(m.sold)}</td>
+                    <td class="py-2 text-right text-red-600">${fmtQty(m.voided)}</td>
+                </tr>`).join('');
+            section.classList.remove('hidden');
         }
 
         async function printZ() {

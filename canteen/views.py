@@ -7,7 +7,7 @@ from django.utils import timezone
 from django.shortcuts import get_object_or_404
 from .services import (
     create_pos_transaction, _restore_ingredients,
-    close_shift_and_finalize_z,
+    close_shift_and_finalize_z, stock_movements_for_shift,
 )
 from .models import (
     ItemCategory, Item, ItemLog, PosTransaction, PosTransactionItem, Shift,
@@ -425,6 +425,9 @@ class PosTransactionViewSet(viewsets.ViewSet):
             'void_total': void_total,
             'net_sales': net_sales,
             'by_payment_method': by_method,
+            # FEATURE-008: per-ingredient sold/voided from the IngredientLog
+            # ledger, scoped to this open shift. Empty list when nothing moved.
+            'stock_movements': stock_movements_for_shift(shift),
         })
 
 # ============================================================================

@@ -27,7 +27,7 @@
 // in config.js). Bumped to re-precache the updated config.js. The existing
 // skipWaiting + clients.claim below already drives the controllerchange-based
 // update prompt, so no SW logic change was needed.
-const CACHE_NAME = 'tarsierpos-v85'; // canonical cache version
+const CACHE_NAME = 'tarsierpos-v86'; // canonical cache version
 const ASSETS = [
   'index.html',
   'login.html',

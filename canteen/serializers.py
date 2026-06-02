@@ -591,8 +591,15 @@ class ZReportSerializer(serializers.ModelSerializer):
     cashier_username = serializers.CharField(
         source='cashier.username', read_only=True
     )
+    # FEATURE-008: per-ingredient sold/voided for the closed shift, read live
+    # from the IngredientLog ledger at serialize time — no ZReport schema change.
+    stock_movements = serializers.SerializerMethodField()
 
     class Meta:
         model = ZReport
         fields = '__all__'
         read_only_fields = [f.name for f in ZReport._meta.fields]
+
+    def get_stock_movements(self, obj):
+        from .services import stock_movements_for_shift
+        return stock_movements_for_shift(getattr(obj, 'shift', None))
