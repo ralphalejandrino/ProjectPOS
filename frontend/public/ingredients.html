@@ -6,15 +6,16 @@
   <title>Ingredients — TarsierPOS</title>
   <script>if(localStorage.getItem('darkMode')==='true')document.documentElement.classList.add('dark');</script>
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Canonical stylesheets (match dashboard/inventory/settings). shared-styles.css
+       defines --color-primary etc. used by the tab active state. -->
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="shared-styles.css">
   <link rel="manifest" href="manifest.json" />
   <link rel="icon" type="image/png" href="assets/tarsier-icon.png" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <style>
     [x-cloak] { display: none !important; }
-    .tab-active   { background: var(--color-primary); color: #fff; }
-    .tab-inactive { background: var(--color-border); color: #374151; }
-    .tab-inactive:hover { background: #d1d5db; }
     .toast { animation: slideIn 0.3s ease, fadeOut 0.5s ease 2.5s forwards; }
     @keyframes slideIn { from { transform: translateX(120%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
     @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; pointer-events: none; } }
@@ -22,8 +23,6 @@
     .low-stock-row { background-color: #fef2f2; }
     .spinner { border: 3px solid #e5e7eb; border-top-color: #2563eb; border-radius: 50%; width: 28px; height: 28px; animation: spin 0.7s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
-    .tab-bar { scrollbar-width: none; -ms-overflow-style: none; }
-    .tab-bar::-webkit-scrollbar { display: none; }
   </style>
   <!-- config.js MUST load before the inline FLAG-028 guard below, which calls
        guardPage() (defined in config.js). Matches dashboard/inventory ordering. -->
@@ -59,12 +58,12 @@
   </div>
 
   <!-- Tab bar -->
-  <div class="tab-bar flex gap-2 overflow-x-auto mb-5 pb-1">
-    <button onclick="switchTab('ingredients')" id="tab-btn-ingredients" class="tab-active whitespace-nowrap px-4 py-2 rounded-full text-sm font-medium transition">🧪 Ingredients</button>
-    <button onclick="switchTab('suppliers')"   id="tab-btn-suppliers"   class="tab-inactive whitespace-nowrap px-4 py-2 rounded-full text-sm font-medium transition">🏭 Suppliers</button>
-    <button onclick="switchTab('units')"       id="tab-btn-units"       class="tab-inactive whitespace-nowrap px-4 py-2 rounded-full text-sm font-medium transition">📏 Units</button>
-    <button onclick="switchTab('restock')"     id="tab-btn-restock"     class="tab-inactive whitespace-nowrap px-4 py-2 rounded-full text-sm font-medium transition">📋 Restock Log</button>
-    <button onclick="switchTab('recipes')"     id="tab-btn-recipes"     class="tab-inactive whitespace-nowrap px-4 py-2 rounded-full text-sm font-medium transition">📖 Recipe Builder</button>
+  <div class="flex border-b border-gray-200 mb-6 overflow-x-auto">
+    <button onclick="switchTab('ingredients')" id="tab-btn-ingredients" class="px-5 py-3 text-sm border-b-2 whitespace-nowrap transition-colors">🧪 Ingredients</button>
+    <button onclick="switchTab('suppliers')"   id="tab-btn-suppliers"   class="px-5 py-3 text-sm border-b-2 whitespace-nowrap transition-colors">🏭 Suppliers</button>
+    <button onclick="switchTab('units')"       id="tab-btn-units"       class="px-5 py-3 text-sm border-b-2 whitespace-nowrap transition-colors">📏 Units</button>
+    <button onclick="switchTab('restock')"     id="tab-btn-restock"     class="px-5 py-3 text-sm border-b-2 whitespace-nowrap transition-colors">📋 Restock Log</button>
+    <button onclick="switchTab('recipes')"     id="tab-btn-recipes"     class="px-5 py-3 text-sm border-b-2 whitespace-nowrap transition-colors">📖 Recipe Builder</button>
   </div>
 
   <!-- ══════════════ TAB 1: INGREDIENTS ══════════════ -->
@@ -611,8 +610,13 @@ function switchTab(tab) {
   TAB_IDS.forEach(t => {
     document.getElementById('tab-' + t).classList.toggle('hidden', t !== tab);
     const btn = document.getElementById('tab-btn-' + t);
-    btn.classList.toggle('tab-active',   t === tab);
-    btn.classList.toggle('tab-inactive', t !== tab);
+    // Canonical underline tab state (matches settings.html). Inline-style with a
+    // hardcoded fallback so the active highlight is visible even if the CSS var
+    // is ever missing — the white-on-white bug from ISSUE-117.
+    const active = t === tab;
+    btn.style.color = active ? 'var(--color-primary, #1d4ed8)' : 'var(--color-ink-muted, #6b7280)';
+    btn.style.borderBottomColor = active ? 'var(--color-primary, #1d4ed8)' : 'transparent';
+    btn.style.fontWeight = active ? '600' : '500';
   });
   if (tab === 'suppliers' && !tabsLoaded.suppliers) { renderSuppliers(); tabsLoaded.suppliers = true; }
   if (tab === 'units'     && !tabsLoaded.units)     { renderUnits();     tabsLoaded.units     = true; }
@@ -1249,6 +1253,7 @@ function esc(str) {
 }
 
 // ─── Boot ─────────────────────────────────────────────────
+switchTab('ingredients'); // paint the initial active tab (canonical JS-driven state)
 checkAuth();
 </script>
 
