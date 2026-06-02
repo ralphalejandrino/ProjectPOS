@@ -18,6 +18,24 @@ if [ "$(id -u)" -ne 0 ]; then
   exit 1
 fi
 
+# FIX-PENDING-18: nginx (www-data) must be in the tarsier group to read
+# /opt/tarsierpos. Missing this is the silent failure mode on fresh installs
+# (static assets 403, blank POS). Idempotent; only runs where a `tarsier` group
+# exists (the production deploy model — skipped on dev boxes that run as the
+# login user). Requires logout / `newgrp tarsier` for the current shell, but
+# systemd picks the new group up on the next service start, so run before
+# starting nginx.
+if getent group tarsier >/dev/null 2>&1; then
+  if id -nG www-data 2>/dev/null | tr ' ' '\n' | grep -qx tarsier; then
+    echo "  www-data already in tarsier group"
+  else
+    usermod -aG tarsier www-data
+    echo "  added www-data to tarsier group (restart nginx to take effect)"
+  fi
+else
+  echo "  skip usermod: no 'tarsier' group on this box (dev model)"
+fi
+
 # B11b ops units (cert renewal, time-anchored local backup, daily health).
 UNITS=(
   tarsierpos-cert-renew.service   tarsierpos-cert-renew.timer

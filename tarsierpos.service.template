@@ -1,6 +1,11 @@
 [Unit]
 Description=TarsierPOS Gunicorn
 After=network.target
+# FIX-PENDING-17/19: crashloop ceiling (these are [Unit] directives, not
+# [Service]). Without it, Restart=always + RestartSec=5 never reaches the
+# default 5-in-10s window and a crashing gunicorn restarts forever (AUDIT-004).
+StartLimitIntervalSec=600
+StartLimitBurst=10
 
 [Service]
 User=__DEPLOY_USER__

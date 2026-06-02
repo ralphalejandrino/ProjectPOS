@@ -5,6 +5,7 @@ from rest_framework.exceptions import ValidationError
 from django.db import transaction as db_transaction
 from django.utils import timezone
 from django.shortcuts import get_object_or_404
+from django.http import Http404
 from .services import (
     create_pos_transaction, _restore_ingredients,
     close_shift_and_finalize_z, stock_movements_for_shift,
@@ -1940,3 +1941,13 @@ def remote_status(request):
         'recent_transactions': recent_data,
         'server_time': timezone.now().isoformat(),
     })
+
+
+def admin_lockdown(request):
+    """FIX-PENDING-20: explicit 404 for /admin/lockdown/.
+
+    Without this route the path fell through to the PWA catch-all, which served
+    the app shell (a 200) instead of a real 404. Registered before the Django
+    admin include in pos_config/urls.py so it shadows the admin namespace.
+    """
+    raise Http404

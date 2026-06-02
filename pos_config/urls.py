@@ -4,9 +4,12 @@ from django.conf import settings
 from django.conf.urls.static import static
 from rest_framework_simplejwt.views import TokenRefreshView
 from canteen.auth_views import CustomTokenObtainPairView, logout_view
-from canteen.views import HealthCheckView
+from canteen.views import HealthCheckView, admin_lockdown
 
 urlpatterns = [
+    # FIX-PENDING-20: explicit 404 — must precede the admin/ include so it is
+    # not swallowed by the admin namespace (or the PWA catch-all downstream).
+    path('admin/lockdown/', admin_lockdown, name='admin_lockdown'),
     path('admin/', admin.site.urls),
     path('api/health/', HealthCheckView.as_view(), name='health-check'),
     path('api/canteen/', include('canteen.urls')),
