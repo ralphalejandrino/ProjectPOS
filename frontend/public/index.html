@@ -68,7 +68,7 @@
                        oninput="searchProducts()">
                 <input aria-label="Barcode input" type="text" id="barcode-input" autocomplete="off"
                        style="position:absolute;opacity:0;pointer-events:none;width:1px;height:1px;"
-                       aria-hidden="true">
+                       tabindex="-1" inert>
 
                 <!-- Categories -->
                 <div>
@@ -140,6 +140,13 @@
                 </div>
             </div>
         </div>
+    </div>
+
+    <!-- FEATURE-035: persistent barcode-scan feedback bar (single element, not a
+         stack). Fixed bottom-centre; aria-live announces scan results without
+         moving focus. Hidden until the first scan; cleared on cart/order reset. -->
+    <div id="scan-feedback" class="scan-feedback" role="status" aria-live="polite" hidden>
+        <span id="scan-feedback-text"></span>
     </div>
 
     <!-- MODAL: CASH PAYMENT -->
@@ -533,6 +540,8 @@
         function closePaymentSuccessModal() {
             const modal = document.getElementById('payment-modal');
             if (modal) modal.classList.add('hidden');
+            // FEATURE-035: order confirmed/closed — clear the scan-feedback bar.
+            if (typeof window.clearScanFeedback === 'function') window.clearScanFeedback();
         }
 
         let _paymentInProgress = false;
@@ -879,30 +888,36 @@
 
     // --- Barcode Scanner ---
     (function() {
-        const barcodeInput = document.getElementById('barcode-input');
         let buffer = '';
         let lastKeyTime = 0;
         const SCAN_SPEED_MS = 50;   // scanners type faster than humans
         const MIN_LENGTH = 3;
 
-        // Keep barcode input focused unless user is typing in another input
+        // ISSUE-091: #barcode-input is inert (removed from tab order AND the
+        // a11y tree), so it can no longer hold focus — not even programmatically.
+        // The scanner is therefore driven entirely by this document-level key
+        // buffer; clicking off a text field just blurs it so the buffer is live
+        // again, rather than re-focusing the (now unfocusable) barcode input.
         document.addEventListener('click', function(e) {
             if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
-                barcodeInput.focus();
+                const ae = document.activeElement;
+                if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA')) ae.blur();
             }
         });
         document.addEventListener('keydown', function(e) {
+            // Ignore keystrokes while the user is typing in a real text field.
             if (document.activeElement.tagName === 'INPUT' &&
                 document.activeElement.id !== 'barcode-input') return;
             const now = Date.now();
             if (e.key === 'Enter') {
-                if (document.activeElement.id === 'barcode-input') {
-                    if (buffer.length >= MIN_LENGTH) {
-                        handleScan(buffer.trim());
-                    }
-                    buffer = '';
+                // Scanners terminate every code with Enter. A populated buffer
+                // here is a scan (real fields were excluded above); an empty
+                // buffer is a plain Enter (e.g. on a button) — let it through.
+                if (buffer.length >= MIN_LENGTH) {
+                    handleScan(buffer.trim());
                     e.preventDefault();
                 }
+                buffer = '';
                 return;
             }
             if (e.key.length === 1) {
@@ -939,26 +954,26 @@
             }
         }
 
+        // FEATURE-035: canonical scan-feedback primitive. Unlike the ephemeral
+        // toast stack, this is a single persistent bar (fixed bottom-center) that
+        // shows the most recent scan result and stays until the next scan replaces
+        // it or the cart/order is reset (clearScanFeedback). It never auto-dismisses.
         function showScanFeedback(msg, type) {
-            let el = document.getElementById('scan-feedback');
-            if (!el) {
-                el = document.createElement('div');
-                el.id = 'scan-feedback';
-                el.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);' +
-                    'padding:8px 20px;border-radius:var(--radius-sm);font-size:14px;font-weight:600;' +
-                    'z-index:var(--z-toast);transition:opacity 0.3s;pointer-events:none;';
-                document.body.appendChild(el);
-            }
-            el.textContent = msg;
-            el.style.background = type === 'success' ? 'var(--color-success)' : 'var(--color-danger)';
-            el.style.color = '#fff';
-            el.style.opacity = '1';
-            clearTimeout(el._timeout);
-            el._timeout = setTimeout(() => { el.style.opacity = '0'; }, 2000);
+            const el = document.getElementById('scan-feedback');
+            const text = document.getElementById('scan-feedback-text');
+            if (!el || !text) return;
+            text.textContent = msg;
+            el.classList.toggle('scan-feedback--error', type === 'error');
+            el.hidden = false;
         }
-
-        // Initial focus
-        barcodeInput.focus();
+        window.clearScanFeedback = function clearScanFeedback() {
+            const el = document.getElementById('scan-feedback');
+            const text = document.getElementById('scan-feedback-text');
+            if (!el || !text) return;
+            el.hidden = true;
+            el.classList.remove('scan-feedback--error');
+            text.textContent = '';
+        };
     })();
 
     async function thermalPrint() {

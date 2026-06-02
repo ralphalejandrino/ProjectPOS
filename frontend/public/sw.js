@@ -38,7 +38,7 @@
 // split UI in the cash modal, PaymentLine-based X/Z payment breakdown).
 // v91: FEATURE-035 — post-accreditation Z-counter reset (accreditation.html
 // admin page + admin nav link).
-const CACHE_NAME = 'tarsierpos-v91'; // canonical cache version
+const CACHE_NAME = 'tarsierpos-v92'; // canonical cache version
 const ASSETS = [
   'index.html',
   'login.html',

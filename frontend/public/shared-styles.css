@@ -586,6 +586,31 @@ body {
 #toast-stack .toast-danger  { background: var(--color-danger); }
 #toast-stack .toast-leaving { opacity: 0; transform: translateX(20px); transition: opacity 0.2s, transform 0.2s; }
 
+/* =========================================================
+ * Barcode scan-feedback bar — FEATURE-035
+ * Persistent single element (not the ephemeral toast stack): shows the
+ * latest scan result fixed bottom-centre until the next scan or a cart/
+ * order reset. Sits above page content (--z-sticky) but below modals.
+ * ========================================================= */
+.scan-feedback {
+  position: fixed;
+  bottom: var(--space-4);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: var(--z-sticky);
+  background: var(--color-ink);
+  color: #fff;
+  padding: var(--space-2) var(--space-5);
+  border-radius: 9999px;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  box-shadow: var(--shadow-raised);
+  white-space: nowrap;
+  pointer-events: none;
+}
+.scan-feedback[hidden] { display: none; }
+.scan-feedback--error { background: var(--color-danger); }
+
 @keyframes dialog-fade-in {
   from { opacity: 0; }
   to   { opacity: 1; }
@@ -699,3 +724,73 @@ body.osk-open { padding-bottom: 19rem; }
  * :focus-visible only (not :focus) so the outline shows for keyboard/AT
  * navigation without firing on mouse clicks. */
 :focus-visible { outline: 2px solid #1d4ed8; outline-offset: 2px; }
+
+/* dead-class patch — classes used in HTML missing from
+   stale Tailwind build; remove when build step is added.
+   Values match Tailwind v3.4.1 defaults; static utilities only —
+   state variants (dark:/hover:/focus:/disabled:) are an accepted
+   residual (the app's dark mode uses .dark overrides, not dark:*). */
+
+/* --- Sizing --- */
+.h-4 { height: 1rem; }
+.h-5 { height: 1.25rem; }
+.w-4 { width: 1rem; }
+.w-5 { width: 1.25rem; }
+.w-14 { width: 3.5rem; }
+.w-40 { width: 10rem; }
+.w-96 { width: 24rem; }
+.max-w-full { max-width: 100%; }
+.max-w-xs { max-width: 20rem; }
+.min-w-full { min-width: 100%; }
+
+/* --- Spacing --- */
+.p-2 { padding: 0.5rem; }
+.pl-4 { padding-left: 1rem; }
+.pr-16 { padding-right: 4rem; }
+.py-5 { padding-top: 1.25rem; padding-bottom: 1.25rem; }
+.py-16 { padding-top: 4rem; padding-bottom: 4rem; }
+.ml-3 { margin-left: 0.75rem; }
+.my-1 { margin-top: 0.25rem; margin-bottom: 0.25rem; }
+.gap-1\.5 { gap: 0.375rem; }
+.gap-5 { gap: 1.25rem; }
+
+/* --- Position --- */
+.inset-y-0 { top: 0; bottom: 0; }
+
+/* --- Typography --- */
+.font-extrabold { font-weight: 800; }
+.tracking-wide { letter-spacing: 0.025em; }
+.underline { text-decoration-line: underline; }
+.align-middle { vertical-align: middle; }
+
+/* --- Interaction --- */
+.outline-none { outline: 2px solid transparent; outline-offset: 2px; }
+
+/* --- Borders --- */
+.border-l { border-left-width: 1px; }
+.border-r { border-right-width: 1px; }
+.border-t-4 { border-top-width: 4px; }
+.border-gray-50 { --tw-border-opacity: 1; border-color: rgb(249 250 251 / var(--tw-border-opacity)); }
+.border-amber-500 { --tw-border-opacity: 1; border-color: rgb(245 158 11 / var(--tw-border-opacity)); }
+.divide-gray-50 > :not([hidden]) ~ :not([hidden]) {
+  --tw-divide-opacity: 1;
+  border-color: rgb(249 250 251 / var(--tw-divide-opacity));
+}
+
+/* --- Background colors --- */
+.bg-gray-700 { --tw-bg-opacity: 1; background-color: rgb(55 65 81 / var(--tw-bg-opacity)); }
+.bg-indigo-100 { --tw-bg-opacity: 1; background-color: rgb(224 231 255 / var(--tw-bg-opacity)); }
+.bg-indigo-600 { --tw-bg-opacity: 1; background-color: rgb(79 70 229 / var(--tw-bg-opacity)); }
+.bg-orange-500 { --tw-bg-opacity: 1; background-color: rgb(249 115 22 / var(--tw-bg-opacity)); }
+
+/* --- Text colors --- */
+.text-amber-600 { --tw-text-opacity: 1; color: rgb(217 119 6 / var(--tw-text-opacity)); }
+.text-blue-500 { --tw-text-opacity: 1; color: rgb(59 130 246 / var(--tw-text-opacity)); }
+.text-indigo-600 { --tw-text-opacity: 1; color: rgb(79 70 229 / var(--tw-text-opacity)); }
+.text-indigo-700 { --tw-text-opacity: 1; color: rgb(67 56 202 / var(--tw-text-opacity)); }
+.text-orange-500 { --tw-text-opacity: 1; color: rgb(249 115 22 / var(--tw-text-opacity)); }
+
+/* --- Print: drop tinted background to save ink (zreport unofficial banner) --- */
+@media print {
+  .no-print-bg { background: transparent !important; }
+}

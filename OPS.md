@@ -219,3 +219,9 @@ substitute: it reports class tokens used in HTML that resolve to no CSS rule
 (ignoring page-local `<style>` blocks, JS hooks, and `ingredients.html`, which
 uses the Tailwind CDN). Exits non-zero when dead classes are found so it can be
 wired into a pre-commit hook.
+
+Always run `check_dead_classes.py` before committing a frontend change. A known
+residual of state-variant utilities (`dark:` / `hover:` / `focus:` / `disabled:`)
+remains accepted — they have no runtime impact (dark mode uses `.dark` overrides,
+not `dark:*` utilities). New **static** utilities flagged by the checker must be
+patched into `shared-styles.css` (see the `dead-class patch` block) before commit.

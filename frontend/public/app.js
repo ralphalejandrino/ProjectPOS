@@ -41,6 +41,8 @@ function clearCartState() {
     window.cart.discountLabel = null;
     window.cart.selectedDiscountType = null;
     window.cart.pendingDiscountType = null;
+    // FEATURE-035: a fresh cart/order means the last scan result is stale.
+    if (typeof window.clearScanFeedback === 'function') window.clearScanFeedback();
 }
 window.clearCartState = clearCartState;
 
