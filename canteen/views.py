@@ -1832,4 +1832,57 @@ def period_report(request):
     })
 
 
-# FEATURE-014 insights_report + FEATURE-026 remote_status appended in later commits.
+@api_view(['GET'])
+@permission_classes([IsManagerOrAbove])
+def insights_report(request):
+    """FEATURE-014: owner insight surface.
+
+    peak_hours — completed, non-seed transaction count bucketed by PHT
+    hour-of-day over the last 30 days (all 24 hours returned so the chart has a
+    full axis). cashiers — per-cashier txn count, gross, and void count for the
+    current calendar month (PHT). All money aggregates exclude is_seed rows.
+    """
+    today = timezone.localdate()
+    thirty_days_ago = today - timedelta(days=29)
+
+    # Peak hours — bucket in PHT to avoid UTC/local drift near midnight.
+    created_times = (
+        PosTransaction.objects
+        .filter(
+            created_at__date__gte=thirty_days_ago,
+            status='completed', void=False, is_seed=False,
+        )
+        .values_list('created_at', flat=True)
+    )
+    hour_counts = [0] * 24
+    for created in created_times:
+        hour_counts[timezone.localtime(created).hour] += 1
+    peak_hours = [{'hour': h, 'count': hour_counts[h]} for h in range(24)]
+
+    # Per-cashier summary — current month, seed-free.
+    month_start = today.replace(day=1)
+    rows = (
+        PosTransaction.objects
+        .filter(created_at__date__gte=month_start, is_seed=False)
+        .values('cashier__username')
+        .annotate(
+            txns=Count('id', filter=Q(void=False, status='completed')),
+            gross=Sum('total_amount', filter=Q(void=False, status='completed')),
+            voids=Count('id', filter=Q(void=True)),
+        )
+        .order_by('-gross')
+    )
+    cashiers = [
+        {
+            'name': r['cashier__username'] or '—',
+            'txns': r['txns'],
+            'gross': _money(r['gross']),
+            'voids': r['voids'],
+        }
+        for r in rows
+    ]
+
+    return Response({'peak_hours': peak_hours, 'cashiers': cashiers})
+
+
+# FEATURE-026 remote_status appended in the next commit.
