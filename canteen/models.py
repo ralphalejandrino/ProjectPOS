@@ -188,6 +188,16 @@ class Item(BaseModelWithUUID):
     sku = models.CharField(max_length=100, blank=True, null=True, verbose_name="SKU Code")
     expiry_date = models.DateField(blank=True, null=True, verbose_name="Expiry Date")
     is_active = models.BooleanField(default=True, verbose_name="Active")
+    # FEATURE-034: VAT-exempt (zero-rated) item. When True, the line's full
+    # sale amount is booked to PosTransaction.zero_rated_sales and carries no
+    # output VAT (it is removed from the VAT-able base in
+    # services.create_pos_transaction). Used for unprocessed food and other
+    # zero-rated goods under the NIRC.
+    zero_rated = models.BooleanField(
+        default=False,
+        verbose_name="Zero-Rated (VAT-exempt)",
+        help_text="VAT-exempt item. Sale amount goes to zero_rated_sales; VAT is 0.",
+    )
 
     @property
     def profit_margin(self):

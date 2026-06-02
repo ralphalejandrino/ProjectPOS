@@ -27,9 +27,12 @@ class ItemCategoryAdmin(admin.ModelAdmin):
 
 @admin.register(Item)
 class ItemAdmin(admin.ModelAdmin):
-    list_display = ['name', 'category', 'price', 'stock', 'recipe_linked', 'created_at']
-    list_filter = ['category']
+    list_display = ['name', 'category', 'price', 'stock', 'zero_rated', 'recipe_linked', 'created_at']
+    list_filter = ['category', 'zero_rated']
     search_fields = ['name']
+    # FEATURE-034: the zero_rated checkbox carries a help_text note —
+    # "Tick for VAT-exempt items (e.g. unprocessed food). Sale total goes to
+    # zero_rated_sales on Z-report." — rendered inline on the change form.
 
     @admin.display(description='Recipe linked', boolean=False)
     def recipe_linked(self, obj):

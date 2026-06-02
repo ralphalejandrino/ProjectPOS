@@ -398,6 +398,10 @@ def create_pos_transaction(items_data, payment_method, cashier=None, **kwargs):
 
         # Calculate total and validate stock up front
         total = Decimal('0.00')
+        # FEATURE-034: running sum of line subtotals for zero-rated items.
+        # Booked to PosTransaction.zero_rated_sales and excluded from the
+        # VAT-able base so zero-rated goods carry no output VAT.
+        zero_rated_subtotal = Decimal('0.00')
         processed_items = []
 
         for item_entry in items_data:
@@ -486,6 +490,9 @@ def create_pos_transaction(items_data, payment_method, cashier=None, **kwargs):
             final_unit_price = base_price + modifier_total
             subtotal = final_unit_price * Decimal(str(quantity))
             total += subtotal
+            # FEATURE-034: zero-rated lines accumulate into zero_rated_sales.
+            if item.zero_rated:
+                zero_rated_subtotal += subtotal
 
             processed_items.append({
                 'item': item,
@@ -567,9 +574,8 @@ def create_pos_transaction(items_data, payment_method, cashier=None, **kwargs):
         _frozen_gross = total.quantize(_q, rounding=ROUND_HALF_UP)
         _frozen_discount = discount_decimal.quantize(_q, rounding=ROUND_HALF_UP)
         _frozen_net = final_total.quantize(_q, rounding=ROUND_HALF_UP)
-        # No zero-rated item flag exists in the schema yet (see FEATURE-012
-        # note); this bucket is structurally always 0.00 until one is added.
-        _frozen_zero_rated = Decimal('0.00')
+        # FEATURE-034: zero-rated bucket — full sale amount of zero-rated lines.
+        _frozen_zero_rated = zero_rated_subtotal.quantize(_q, rounding=ROUND_HALF_UP)
         _vat_enabled = bool(_bp and _bp.vat_enabled)
         # Null-aware VAT rate read from BusinessProfile — never a literal 12 / 0.12.
         _vat_rate = (
@@ -578,21 +584,30 @@ def create_pos_transaction(items_data, payment_method, cashier=None, **kwargs):
         )
         if _is_vat_exempt:
             # SC/PWD: VAT was removed (_sc_pwd_vat_amount); the charged amount
-            # is entirely VAT-exempt sales.
+            # is entirely VAT-exempt sales. A zero-rated flag does not stack on
+            # top of an SC/PWD exemption — the exemption already removed VAT.
             _frozen_vat_exempt = _frozen_net
             _frozen_vatable = Decimal('0.00')
+            _frozen_zero_rated = Decimal('0.00')
         elif _vat_enabled and _vat_rate > 0:
             _frozen_vat_exempt = Decimal('0.00')
+            # FEATURE-034: zero-rated sales carry no output VAT. Remove their
+            # gross from the VAT-able base before extracting output VAT.
+            _vatable_charged = _frozen_net - _frozen_zero_rated
+            if _vatable_charged < 0:
+                _vatable_charged = Decimal('0.00')
             _vat_inclusive = bool(_bp and _bp.vat_inclusive)
             if _vat_inclusive:
                 _output_vat = (
-                    _frozen_net * _vat_rate / (Decimal('100') + _vat_rate)
+                    _vatable_charged * _vat_rate / (Decimal('100') + _vat_rate)
                 ).quantize(_q, rounding=ROUND_HALF_UP)
-                _frozen_vatable = (_frozen_net - _output_vat).quantize(
+                _frozen_vatable = (_vatable_charged - _output_vat).quantize(
                     _q, rounding=ROUND_HALF_UP
                 )
             else:
-                _frozen_vatable = _frozen_net
+                _frozen_vatable = _vatable_charged.quantize(
+                    _q, rounding=ROUND_HALF_UP
+                )
         else:
             # VAT disabled — no VAT breakdown applies.
             _frozen_vat_exempt = Decimal('0.00')
@@ -837,11 +852,14 @@ def close_shift_and_finalize_z(shift_id, cash_counted, cashier_user):
     vat_exempt_sales = _zsum(non_voided, 'vat_exempt_amount')
     zero_rated_sales = _zsum(non_voided, 'zero_rated_sales')
 
-    # output_vat = sum(net_total - vatable_sales) over non-exempt rows
-    # (a row is "exempt" when it carries a vat_exempt_amount).
+    # output_vat = sum(net_total - vatable_sales - zero_rated_sales) over
+    # non-exempt rows (a row is "exempt" when it carries a vat_exempt_amount).
+    # FEATURE-034: zero-rated sales are VAT-inclusive in net_total but carry no
+    # output VAT, so they must be subtracted out alongside vatable_sales.
     non_exempt = non_voided.filter(vat_exempt_amount=Decimal('0'))
     output_vat = (
         _zsum(non_exempt, 'net_total') - _zsum(non_exempt, 'vatable_sales')
+        - _zsum(non_exempt, 'zero_rated_sales')
     ).quantize(_Z_CENTS, rounding=ROUND_HALF_UP)
 
     sc_discount_total = _zsum(
