@@ -3,10 +3,13 @@
 # Future sub-commits add GCS upload and offline queue.
 set -euo pipefail
 
-BACKUP_DIR=${BACKUP_DIR:-/home/ralph/TarsierPOS/backups}
+# Portable: repo root from $TARSIERPOS_DIR (set by the unit) or this script's
+# location. All defaults derive from it — no hardcoded user home.
+TARSIERPOS_DIR=${TARSIERPOS_DIR:-$(cd "$(dirname "$(realpath "$0")")/../.." && pwd)}
+BACKUP_DIR=${BACKUP_DIR:-$TARSIERPOS_DIR/backups}
 USB_MOUNT=${USB_MOUNT:-/mnt/backup}
-AUDIT_LOG=${AUDIT_LOG:-/home/ralph/TarsierPOS/logs/backup-audit.log}
-QUEUE_DIR=${QUEUE_DIR:-/home/ralph/TarsierPOS/logs/backup-queue}
+AUDIT_LOG=${AUDIT_LOG:-$TARSIERPOS_DIR/logs/backup-audit.log}
+QUEUE_DIR=${QUEUE_DIR:-$TARSIERPOS_DIR/logs/backup-queue}
 BACKOFF_INITIAL=${BACKOFF_INITIAL:-10}
 
 mkdir -p "$(dirname "$AUDIT_LOG")" "$QUEUE_DIR"
@@ -57,6 +60,28 @@ if [[ -n "${GCS_DEST:-}" ]]; then
   fi
 else
   log "gcs SKIP GCS_DEST not configured"
+fi
+
+# GCS retention prune — mirror the local GFS policy (7 daily + 4 weekly).
+# FEATURE-024. Destructive on the bucket but bounded to db_*.sqlite3 objects
+# the selector marks for deletion; pre-migrate-* objects are never matched.
+if [[ -n "${GCS_DEST:-}" ]]; then
+  gfs="$TARSIERPOS_DIR/scripts/backup/gfs_select.py"
+  if command -v python3 >/dev/null 2>&1 && [[ -f "$gfs" ]]; then
+    objs=$(gsutil ls "${GCS_DEST%/}/db_*.sqlite3" 2>/dev/null || true)
+    if [[ -n "$objs" ]]; then
+      printf '%s\n' "$objs" | python3 "$gfs" 2>/dev/null | while IFS= read -r obj; do
+        [[ -n "$obj" ]] || continue
+        if gsutil rm "$obj" >/dev/null 2>&1; then
+          log "gcs PRUNE $obj"
+        else
+          log "gcs PRUNE FAIL $obj"
+        fi
+      done
+    fi
+  else
+    log "gcs PRUNE SKIP selector or python3 unavailable"
+  fi
 fi
 
 # Offline queue — sub-commit (c)

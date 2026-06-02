@@ -1,0 +1,12 @@
+[Unit]
+Description=TarsierPOS local DB snapshot (time-anchored, GFS retention)
+# Installed by scripts/install-ops-units.sh (substitutes __TARSIERPOS_DIR__ /
+# __DEPLOY_USER__). Runs backup_db.sh, which snapshots db.sqlite3 and prunes to
+# the GFS policy (7 daily + 4 weekly).
+
+[Service]
+Type=oneshot
+User=__DEPLOY_USER__
+Group=__DEPLOY_USER__
+Environment=TARSIERPOS_DIR=__TARSIERPOS_DIR__
+ExecStart=__TARSIERPOS_DIR__/backup_db.sh

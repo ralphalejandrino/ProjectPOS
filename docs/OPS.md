@@ -323,3 +323,44 @@ sudo systemctl start "$TARSIERPOS_SERVICE"
 
 Pre-migrate snapshots use the `pre-migrate-` prefix, so the FEATURE-024 GFS
 retention prune (which only matches `db_<ts>.sqlite3`) never deletes them.
+
+## FEATURE-024: Backup retention + scheduling
+
+### Schedule (all time-anchored, `Persistent=true`)
+
+| Job                          | When            | Unit                              |
+|------------------------------|-----------------|-----------------------------------|
+| Local snapshot + GFS prune   | daily 23:30     | `tarsierpos-backup-local.timer`   |
+| Off-site mirror (USB + GCS)  | daily 23:45     | `tarsierpos-backup-offsite.timer` |
+| GCS retry flush              | hourly          | `tarsierpos-backup-retry.timer`   |
+
+`backup_db.sh` also still runs on backend shutdown (`ExecStopPost`) as a
+best-effort extra snapshot; the 23:30 timer guarantees a daily snapshot even if
+the service never restarts. Local snapshot lands before the 23:45 offsite job
+(see FLAG-070 ordering note above).
+
+### Retention (grandfather-father-son)
+
+`scripts/backup/gfs_select.py` selects what to prune: keep the **newest snapshot
+per day for the last 7 days** plus the **newest snapshot per ISO week for the
+last 4 weeks**; delete everything else matching `db_<ts>.sqlite3`. Both
+`backup_db.sh` (local) and `offsite-backup.sh` (GCS bucket) feed the same
+selector, so local and cloud retention stay identical. Override with
+`DAILY_KEEP` / `WEEKLY_KEEP` env vars. `pre-migrate-*.sqlite3` snapshots are
+never matched, so FEATURE-023 rollback points are retained independently.
+
+### Install (portable — no manual cp)
+
+```sh
+sudo TARSIERPOS_DIR="$TARSIERPOS_DIR" bash "$TARSIERPOS_DIR/scripts/install-ops-units.sh"
+systemctl list-timers | grep tarsierpos      # local 23:30, offsite 23:45, retry hourly
+```
+
+### Verify retention
+
+```sh
+"$TARSIERPOS_DIR/backup_db.sh"                                   # snapshot + prune now
+tail -3 "$TARSIERPOS_DIR/logs/backup.log"                        # "... (N kept, GFS 7d/4w)"
+ls -1 "$TARSIERPOS_DIR"/backups/db_*.sqlite3 | python3 \
+  "$TARSIERPOS_DIR/scripts/backup/gfs_select.py"                 # lists what WOULD be pruned
+```

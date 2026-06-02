@@ -1,0 +1,13 @@
+[Unit]
+Description=Daily TarsierPOS local DB snapshot at 23:30
+
+[Timer]
+# Time-anchored (wall clock), not boot-relative. Persistent=true re-runs a
+# missed snapshot after downtime. Fires before the 23:45 offsite timer so the
+# offsite job mirrors today's snapshot (see OPS.md FLAG-070 ordering note).
+OnCalendar=*-*-* 23:30:00
+Persistent=true
+RandomizedDelaySec=2min
+
+[Install]
+WantedBy=timers.target
