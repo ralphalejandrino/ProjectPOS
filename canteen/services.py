@@ -164,56 +164,62 @@ def create_pos_transaction(items_data, payment_method, cashier=None, **kwargs):
             modifier_total = Decimal('0.00')
             resolved_variants = []
 
+            # ISSUE-073: effective groups + required-variant validation must
+            # run unconditionally. Gating them behind `if variant_selections:`
+            # let a caller bypass enforcement by omitting the key entirely —
+            # a transaction missing a required variant could then be saved.
+            # Get effective variant groups for this item
+            # (category groups + product overrides)
+            # Build category-level required overrides: {group_id: is_required_override or None}
+            cat_required_override = {}
+            cat_group_ids = set()
+            if item.category_id:
+                for cvg in CategoryVariantGroup.objects.filter(category_id=item.category_id):
+                    cat_group_ids.add(cvg.group_id)
+                    cat_required_override[cvg.group_id] = cvg.is_required_override
+
+            # Build product-level overrides: {group_id: (enabled, is_required_override)}
+            prod_overrides = {
+                pvg.group_id: (pvg.enabled, pvg.is_required_override)
+                for pvg in ProductVariantGroup.objects.filter(product=item)
+            }
+
+            effective_group_ids = set()
+            for gid in cat_group_ids:
+                enabled, _req = prod_overrides.get(gid, (True, None))
+                if enabled:
+                    effective_group_ids.add(gid)
+            for gid, (enabled, _req) in prod_overrides.items():
+                if enabled:
+                    effective_group_ids.add(gid)
+
+            effective_groups = {
+                g.id: g
+                for g in VariantGroup.objects.filter(id__in=effective_group_ids, is_active=True).prefetch_related('options')
+            }
+
+            # Build required_map using the same precedence as get_effective_variant_groups:
+            # global default → category override → product override
+            required_map = {}
+            for gid, group in effective_groups.items():
+                required = group.is_required
+                if gid in cat_required_override and cat_required_override[gid] is not None:
+                    required = cat_required_override[gid]
+                if gid in prod_overrides:
+                    _enabled, prod_req = prod_overrides[gid]
+                    if prod_req is not None:
+                        required = prod_req
+                required_map[gid] = required
+
+            # Validate required groups have a selection. Runs even when
+            # variant_selections is absent/empty, so an item with required
+            # groups cannot be rung up without those selections (ISSUE-073).
+            selected_group_ids = {sel.get('group_id') for sel in variant_selections}
+            for gid, group in effective_groups.items():
+                if required_map[gid] and str(gid) not in {str(s) for s in selected_group_ids}:
+                    raise DRFValidationError(f"'{group.name}' selection is required for {item.name}.")
+
             if variant_selections:
-                # Get effective variant groups for this item
-                # (category groups + product overrides)
-                # Build category-level required overrides: {group_id: is_required_override or None}
-                cat_required_override = {}
-                cat_group_ids = set()
-                if item.category_id:
-                    for cvg in CategoryVariantGroup.objects.filter(category_id=item.category_id):
-                        cat_group_ids.add(cvg.group_id)
-                        cat_required_override[cvg.group_id] = cvg.is_required_override
-
-                # Build product-level overrides: {group_id: (enabled, is_required_override)}
-                prod_overrides = {
-                    pvg.group_id: (pvg.enabled, pvg.is_required_override)
-                    for pvg in ProductVariantGroup.objects.filter(product=item)
-                }
-
-                effective_group_ids = set()
-                for gid in cat_group_ids:
-                    enabled, _req = prod_overrides.get(gid, (True, None))
-                    if enabled:
-                        effective_group_ids.add(gid)
-                for gid, (enabled, _req) in prod_overrides.items():
-                    if enabled:
-                        effective_group_ids.add(gid)
-
-                effective_groups = {
-                    g.id: g
-                    for g in VariantGroup.objects.filter(id__in=effective_group_ids, is_active=True).prefetch_related('options')
-                }
-
-                # Build required_map using the same precedence as get_effective_variant_groups:
-                # global default → category override → product override
-                required_map = {}
-                for gid, group in effective_groups.items():
-                    required = group.is_required
-                    if gid in cat_required_override and cat_required_override[gid] is not None:
-                        required = cat_required_override[gid]
-                    if gid in prod_overrides:
-                        _enabled, prod_req = prod_overrides[gid]
-                        if prod_req is not None:
-                            required = prod_req
-                    required_map[gid] = required
-
-                # Validate required groups have a selection
-                selected_group_ids = {sel.get('group_id') for sel in variant_selections}
-                for gid, group in effective_groups.items():
-                    if required_map[gid] and str(gid) not in {str(s) for s in selected_group_ids}:
-                        raise DRFValidationError(f"'{group.name}' selection is required for {item.name}.")
-
                 for sel in variant_selections:
                     group_id = sel.get('group_id')
                     option_id = sel.get('option_id')
