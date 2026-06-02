@@ -364,3 +364,65 @@ tail -3 "$TARSIERPOS_DIR/logs/backup.log"                        # "... (N kept,
 ls -1 "$TARSIERPOS_DIR"/backups/db_*.sqlite3 | python3 \
   "$TARSIERPOS_DIR/scripts/backup/gfs_select.py"                 # lists what WOULD be pruned
 ```
+
+## FEATURE-027: Remote dev / maintenance posture
+
+### Backend logs (clean view)
+
+Gunicorn stdout/stderr already go to the systemd journal (`StandardOutput=journal`
+in the unit). `scripts/ops/logs.sh` wraps `journalctl` with the per-box service
+name (`$TARSIERPOS_SERVICE` from `.env`), so you don't have to remember it:
+
+```sh
+"$TARSIERPOS_DIR/scripts/ops/logs.sh"                  # today's backend logs
+"$TARSIERPOS_DIR/scripts/ops/logs.sh" -f               # follow live
+"$TARSIERPOS_DIR/scripts/ops/logs.sh" --since "1 hour ago"
+```
+
+Handy shell alias (add to `~/.bashrc`):
+
+```sh
+alias tplog='journalctl -u "${TARSIERPOS_SERVICE:-tarsierpos}" --no-hostname -o short-iso --since today'
+```
+
+### Daily health summary
+
+`scripts/ops/daily-health.sh` logs a once-a-day summary to the journal under the
+identifier `tarsierpos-health`: install-tree disk usage + filesystem headroom,
+last local backup timestamp, Tailscale cert days-remaining (WARNING < 30), and
+backend service status. Driven by `tarsierpos-daily-health.timer` (08:00,
+`Persistent=true`) — no external email needed.
+
+```sh
+journalctl -t tarsierpos-health --since today --no-pager   # read the summary
+"$TARSIERPOS_DIR/scripts/ops/daily-health.sh"              # run on demand
+```
+
+Installed by `scripts/install-ops-units.sh` (see the Conventions section).
+
+### Key rotation
+
+Both keys live in `$TARSIERPOS_DIR/.env`. Rotating requires a service restart to
+take effect.
+
+**`DJANGO_SECRET_KEY`** — safe to rotate anytime; only invalidates active
+sessions (users must log in again).
+
+```sh
+NEW=$("$TARSIERPOS_DIR/venv/bin/python" -c "import secrets,string; print(''.join(secrets.choice(string.ascii_letters+string.digits+'!@#\$%^&*') for _ in range(50)))")
+sed -i "s|^DJANGO_SECRET_KEY=.*|DJANGO_SECRET_KEY=$NEW|" "$TARSIERPOS_DIR/.env"
+sudo systemctl restart "${TARSIERPOS_SERVICE:-tarsierpos}"
+```
+
+**`FERNET_KEY`** — ⚠️ DESTRUCTIVE. This key encrypts payment-gateway configs;
+rotating it makes all previously-encrypted values **unreadable**. Only rotate if
+the key is believed compromised, and be ready to re-enter every encrypted secret
+afterward.
+
+```sh
+# Decrypt/export any needed encrypted settings FIRST, then:
+NEW=$("$TARSIERPOS_DIR/venv/bin/python" -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")
+sed -i "s|^FERNET_KEY=.*|FERNET_KEY=$NEW|" "$TARSIERPOS_DIR/.env"
+sudo systemctl restart "${TARSIERPOS_SERVICE:-tarsierpos}"
+# Re-enter payment-gateway credentials in the admin UI (old ciphertext is dead).
+```
