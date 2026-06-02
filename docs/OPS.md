@@ -1,5 +1,28 @@
 # Operations
 
+## Conventions (portability)
+
+This system runs on the dev OptiPlex today and ships to pos-01 and future
+client boxes via `git pull`. Nothing is hardcoded to a user home. All commands
+below use `$TARSIERPOS_DIR` for the repo root — export it once per shell:
+
+```sh
+export TARSIERPOS_DIR=$HOME/TarsierPOS     # dev (or wherever the repo lives)
+# export TARSIERPOS_DIR=/opt/tarsierpos    # example: a box that installs to /opt
+```
+
+Per-box settings live in `$TARSIERPOS_DIR/.env` (git-ignored). Ops scripts read:
+
+| Variable             | Purpose                                   | Example                                    |
+|----------------------|-------------------------------------------|--------------------------------------------|
+| `TAILSCALE_HOSTNAME` | Tailscale MagicDNS name for cert renewal  | `ralph-optiplex-3060.example-tailnet.ts.net`    |
+| `TARSIERPOS_SERVICE` | systemd unit name of the backend          | `tarsierpos` (dev) — default `tarsierpos-backend` |
+
+`scripts/install-ops-units.sh` installs all B11b ops timers (cert renewal,
+time-anchored local backup, daily health) — it templates the repo root and
+deploy user into the unit files, so there are **no manual `cp` steps** and it
+works on any machine/user.
+
 ## Logs
 
 ### Django application log (WARNING + ERROR level)
@@ -268,3 +291,35 @@ fires; the offsite script reads the newest `db_[0-9]*.sqlite3` and silently
 re-uploads yesterday's snapshot if the 23:30 job hasn't landed yet. Don't
 narrow that gap without also adding `After=` / ordering between the two
 timers.
+
+## FEATURE-023: Backup-before-migrate (`safe_migrate`)
+
+Migrations otherwise run live with no safety net. `python manage.py
+safe_migrate` takes a consistent SQLite snapshot to
+`$TARSIERPOS_DIR/backups/pre-migrate-<timestamp>.sqlite3` (the dir is derived
+from `settings.BASE_DIR`, created if missing), verifies it is non-zero bytes,
+then runs `migrate`. If migrate fails it prints copy-paste rollback steps and
+exits non-zero, leaving the live DB untouched.
+
+```sh
+cd "$TARSIERPOS_DIR"
+venv/bin/python manage.py safe_migrate              # snapshot + migrate all
+venv/bin/python manage.py safe_migrate canteen 0033 # snapshot + migrate a target
+venv/bin/python manage.py safe_migrate --noinput    # non-interactive (deploys)
+```
+
+Always use `safe_migrate` instead of bare `migrate` on a box with data.
+
+### Rollback (if a migration fails or corrupts data)
+
+The command prints these steps automatically on failure; `<snapshot>` is the
+path it logged just before migrating, `$TARSIERPOS_SERVICE` is the backend unit:
+
+```sh
+sudo systemctl stop "$TARSIERPOS_SERVICE"
+cp "$TARSIERPOS_DIR/backups/pre-migrate-<timestamp>.sqlite3" "$TARSIERPOS_DIR/db.sqlite3"
+sudo systemctl start "$TARSIERPOS_SERVICE"
+```
+
+Pre-migrate snapshots use the `pre-migrate-` prefix, so the FEATURE-024 GFS
+retention prune (which only matches `db_<ts>.sqlite3`) never deletes them.
