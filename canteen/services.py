@@ -1,7 +1,7 @@
 from decimal import Decimal, ROUND_HALF_UP
 from django.db import transaction as db_transaction
 from django.db import IntegrityError
-from django.db.models import F
+from django.db.models import F, Q
 from django.core.exceptions import ValidationError
 from rest_framework.exceptions import ValidationError as DRFValidationError
 from djmoney.money import Money
@@ -50,17 +50,29 @@ def _deplete_ingredients(item, variant_option_ids, quantity):
 def _restore_ingredients(item, transaction_item, quantity):
     """
     Restore ingredient stock when a transaction is voided.
-    Matches variant selections by option_name snapshot.
+    Matches variant selections by (group_name, option_name) pair snapshot.
+
+    ISSUE-072: matching by option_name alone is ambiguous — if two variant
+    groups each define an option with the same name (e.g. both have "Large"),
+    a name-only match restores both groups' ingredients. We match on the full
+    (group_name, option_name) pair so only the correct group's recipe is
+    restored.
     Silently skips if no recipe is configured.
     """
     restored_ingredient_ids = set()
 
-    # Get variant option IDs from snapshot names
-    variant_option_ids = list(
-        VariantOption.objects.filter(
-            name__in=transaction_item.variant_selections.values_list('option_name', flat=True)
-        ).values_list('id', flat=True)
-    )
+    # Resolve variant option IDs from snapshot (group_name, option_name) pairs.
+    name_pairs = list(transaction_item.variant_selections.values_list(
+        'group_name', 'option_name'
+    ))
+    variant_option_ids = []
+    if name_pairs:
+        pair_filter = Q()
+        for group_name, option_name in name_pairs:
+            pair_filter |= Q(group__name=group_name, name=option_name)
+        variant_option_ids = list(
+            VariantOption.objects.filter(pair_filter).values_list('id', flat=True)
+        )
 
     # Variant-level restore first
     if variant_option_ids:
