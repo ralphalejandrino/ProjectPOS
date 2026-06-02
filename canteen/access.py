@@ -37,6 +37,8 @@ _NON_GATEABLE_DEFAULT_ROLES = {
     'period':   ('manager', 'admin'),
     'insights': ('manager', 'admin'),
     'remote':   ('admin',),
+    # FEATURE-035: one-time BIR accreditation reset — admin-only ops surface.
+    'accreditation': ('admin',),
 }
 
 _DEFAULT_ROLES = {row[0]: row[2] for row in _PAGE_ROWS}

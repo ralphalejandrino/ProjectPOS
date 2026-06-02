@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="manifest" href="manifest.json">
+    <title>BIR Accreditation — TarsierPOS</title>
+    <script>if(localStorage.getItem('darkMode')==='true')document.documentElement.classList.add('dark');</script>
+    <link rel="icon" type="image/png" href="assets/tarsier-icon.png">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="shared-styles.css">
+    <script src="config.js"></script>
+    <script src="keyboard.js"></script>
+    <script src="components/format.js"></script>
+    <script src="components/nav.js"></script>
+</head>
+<body class="bg-gray-50" data-page="accreditation" style="visibility:hidden">
+    <script>
+        // Admin-only ops surface — hide body until the page guard passes to
+        // prevent a flash of the reset control for non-admins.
+        (function () {
+            if (!guardPage('accreditation')) return;
+            document.body.style.visibility = '';
+        })();
+    </script>
+
+    <!-- NAVIGATION (FEATURE-029: canonical shared nav) -->
+    <div id="nav-mount"></div>
+    <script>renderNav({ activePage: 'accreditation' });</script>
+
+    <div class="h-[calc(100vh-73px)] overflow-y-auto bg-gray-50">
+    <div class="container mx-auto px-4 py-6 max-w-2xl">
+
+        <!-- PAGE HEADER -->
+        <div class="mb-6">
+            <h2 class="text-3xl font-bold text-gray-800">🏛️ BIR Accreditation</h2>
+            <p class="text-gray-600">Restart the official Z-counter at #1 when the café receives BIR accreditation.</p>
+        </div>
+
+        <!-- STATUS CARD -->
+        <div class="bg-white rounded-lg shadow p-6 mb-6">
+            <div class="text-xs text-gray-500 uppercase tracking-wide mb-1">Accreditation Status</div>
+            <div id="acc-status" class="text-xl font-bold text-gray-800">Loading…</div>
+            <div id="acc-detail" class="text-sm text-gray-600 mt-1"></div>
+        </div>
+
+        <!-- RESET CARD -->
+        <div id="acc-reset-card" class="bg-white rounded-lg shadow p-6 hidden">
+            <h3 class="text-lg font-bold text-gray-800 mb-2">Apply accreditation reset</h3>
+            <p class="text-sm text-gray-600 mb-4">
+                This resets the Z-counter to 0 and the running grand total to ₱0.
+                All existing Z-reports are marked pre-accreditation. The next Z
+                closed becomes official Z-0001. <strong>This action cannot be undone.</strong>
+            </p>
+            <button id="acc-reset-btn" type="button"
+                class="touch-target-pos w-full bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg transition px-4 py-3">
+                Apply BIR accreditation reset
+            </button>
+            <div id="acc-error" class="text-sm text-red-600 mt-3 hidden"></div>
+        </div>
+
+    </div>
+    </div>
+
+    <script>
+        async function loadStatus() {
+            const statusEl = document.getElementById('acc-status');
+            const detailEl = document.getElementById('acc-detail');
+            const resetCard = document.getElementById('acc-reset-card');
+            try {
+                const resp = await authenticatedFetch(`${API_BASE}/accreditation/`);
+                const data = await resp.json();
+                if (data.accredited) {
+                    const when = new Date(data.accredited_at).toLocaleString();
+                    statusEl.textContent = '✅ Accredited';
+                    detailEl.textContent = `Accredited on ${when}`
+                        + (data.reset_by ? ` by ${data.reset_by}` : '');
+                    resetCard.classList.add('hidden');
+                } else {
+                    statusEl.textContent = '⏳ Not yet accredited';
+                    detailEl.textContent = 'The Z-series is running in pre-accreditation mode.';
+                    resetCard.classList.remove('hidden');
+                }
+            } catch (e) {
+                statusEl.textContent = 'Unable to load status';
+                detailEl.textContent = '';
+            }
+        }
+
+        async function applyReset() {
+            const errEl = document.getElementById('acc-error');
+            const btn = document.getElementById('acc-reset-btn');
+            errEl.classList.add('hidden');
+
+            const typed = window.prompt(
+                'This will reset the Z-counter to 0 and grand total to ₱0.\n'
+                + 'All existing Z-reports will be marked pre-accreditation.\n'
+                + 'This action cannot be undone.\n\n'
+                + 'Type CONFIRM to proceed.'
+            );
+            if (typed !== 'CONFIRM') return;
+
+            btn.disabled = true;
+            btn.textContent = 'Applying…';
+            try {
+                const resp = await authenticatedFetch(`${API_BASE}/accreditation/reset/`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: '{}',
+                });
+                const data = await resp.json();
+                if (!resp.ok) {
+                    errEl.textContent = data.error || 'Reset failed.';
+                    errEl.classList.remove('hidden');
+                    btn.disabled = false;
+                    btn.textContent = 'Apply BIR accreditation reset';
+                    return;
+                }
+                await loadStatus();
+            } catch (e) {
+                errEl.textContent = 'Reset failed. Please try again.';
+                errEl.classList.remove('hidden');
+                btn.disabled = false;
+                btn.textContent = 'Apply BIR accreditation reset';
+            }
+        }
+
+        document.getElementById('acc-reset-btn').addEventListener('click', applyReset);
+        loadStatus();
+    </script>
+</body>
+</html>

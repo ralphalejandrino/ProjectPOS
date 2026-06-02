@@ -935,6 +935,10 @@ def close_shift_and_finalize_z(shift_id, cash_counted, cashier_user):
 
     # Gapless Z numbering + running grand total (locked singleton).
     counter, _ = ZCounter.objects.select_for_update().get_or_create(pk=1)
+    # FEATURE-035: once BIR accreditation has been applied, every Z in the
+    # official series is is_official regardless of the live MIN read.
+    if counter.accredited_at:
+        is_official = True
     next_z = counter.z_counter + 1
     next_reset = counter.reset_counter
     if next_z > 9999:
@@ -996,3 +1000,50 @@ def close_shift_and_finalize_z(shift_id, cash_counted, cashier_user):
     shift.save()
 
     return z_report
+
+
+class AccreditationAlreadyApplied(Exception):
+    """FEATURE-035: raised when an accreditation reset is attempted twice."""
+
+    def __init__(self, accredited_at):
+        self.accredited_at = accredited_at
+        super().__init__(
+            f"Accreditation reset already applied on {accredited_at.date()}"
+        )
+
+
+@db_transaction.atomic
+def apply_accreditation_reset(user):
+    """FEATURE-035: restart the official Z-series at #1 for BIR accreditation.
+
+    Locks the singleton ZCounter, stamps the accreditation event on it,
+    zeroes the Z counter and running grand total, and flags every existing
+    (pre-accreditation) ZReport is_official=False. Idempotent guard: a second
+    call raises AccreditationAlreadyApplied.
+
+    Returns the locked ZCounter. The next close_shift_and_finalize_z produces
+    z_counter=1, is_official=True.
+    """
+    from .models import ZCounter, ZReport
+    from django.utils import timezone as dj_tz
+
+    counter, _ = ZCounter.objects.select_for_update().get_or_create(pk=1)
+    if counter.accredited_at:
+        raise AccreditationAlreadyApplied(counter.accredited_at)
+
+    now = dj_tz.now()
+    counter.accredited_at = now
+    counter.reset_by = user
+    counter.z_counter = 0
+    counter.grand_total = Decimal('0')
+    # Start a fresh reset series so the official Z-1 does not collide with the
+    # retained pre-accreditation Z-1 (z_counter is unique per reset series).
+    counter.reset_counter = counter.reset_counter + 1
+    counter.save()
+
+    # Every existing ZReport is pre-accreditation. ZReport.save() rejects
+    # re-saves (immutable), so use a bulk queryset UPDATE to flag them without
+    # tripping that guard.
+    ZReport.objects.all().update(is_official=False)
+
+    return counter

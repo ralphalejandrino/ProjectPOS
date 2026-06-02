@@ -29,9 +29,24 @@ class IsAdmin(permissions.BasePermission):
     """
     def has_permission(self, request, view):
         return bool(
-            request.user and 
-            request.user.is_authenticated and 
+            request.user and
+            request.user.is_authenticated and
             request.user.role == 'admin'
+        )
+
+
+class IsAdminOrStaff(permissions.BasePermission):
+    """FEATURE-035: allows admins (role) or Django staff/superusers.
+
+    Used to gate the one-time BIR accreditation reset, which the spec
+    requires be callable only by an admin-role or is_staff account.
+    """
+    def has_permission(self, request, view):
+        user = request.user
+        return bool(
+            user
+            and user.is_authenticated
+            and (getattr(user, 'role', '') == 'admin' or user.is_staff)
         )
 
 class IsManagerOrAbove(permissions.BasePermission):

@@ -1017,6 +1017,22 @@ class ZCounter(models.Model):
     z_counter = models.PositiveIntegerField(default=0)
     reset_counter = models.PositiveIntegerField(default=0)  # wraps at 9999
     grand_total = models.DecimalField(max_digits=16, decimal_places=2, default=0)
+    # FEATURE-035: post-accreditation reset audit trail. The single ZCounter
+    # row carries the accreditation event itself — no separate model needed.
+    # When the café receives BIR accreditation the official Z-series restarts
+    # at #1 (z_counter -> 0, grand_total -> 0); pre-accreditation ZReports stay
+    # immutable but are flagged is_official=False.
+    accredited_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="When the BIR accreditation reset was applied (null = not yet accredited).",
+    )
+    reset_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name='accreditation_resets',
+        help_text="User who applied the accreditation reset.",
+    )
 
     class Meta:
         constraints = [
@@ -1032,7 +1048,11 @@ class ZReport(models.Model):
     services.close_shift_and_finalize_z from frozen PosTransaction columns;
     never updated (see save())."""
 
-    z_counter = models.PositiveIntegerField(unique=True)
+    # FEATURE-035: z_counter is unique WITHIN a reset series, not globally. A
+    # post-accreditation reset (and the 9999 wrap) starts a new series with an
+    # incremented reset_counter, so z_counter=1 can legitimately recur in a
+    # later series while the immutable pre-reset Z-1 is retained.
+    z_counter = models.PositiveIntegerField()
     reset_counter = models.PositiveIntegerField(default=0)
     business_date = models.DateField()                   # PHT-localdate of opened_at
     started_at = models.DateTimeField()                  # = shift.opened_at
@@ -1106,10 +1126,17 @@ class ZReport(models.Model):
     )
 
     class Meta:
-        ordering = ['-z_counter']
+        ordering = ['-reset_counter', '-z_counter']
         indexes = [
             models.Index(fields=['business_date']),
             models.Index(fields=['finalized_at']),
+        ]
+        constraints = [
+            # FEATURE-035: gapless numbering is per reset series.
+            models.UniqueConstraint(
+                fields=['reset_counter', 'z_counter'],
+                name='zreport_unique_series_counter',
+            ),
         ]
 
     def __str__(self):

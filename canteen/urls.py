@@ -34,6 +34,9 @@ urlpatterns = [
     path('network/', views.network_status, name='network-status'),
     path('network/apply/', views.network_apply, name='network-apply'),
     path('network/confirm/', views.network_confirm, name='network-confirm'),
+    # FEATURE-035: post-accreditation Z-series reset (admin/staff only)
+    path('accreditation/', views.accreditation_status, name='accreditation-status'),
+    path('accreditation/reset/', views.accreditation_reset, name='accreditation-reset'),
     path('business/', views.get_business_profile, name='get_business_profile'),
     path('business/update/', views.update_business_profile, name='update_business_profile'),
     path('business/logo/', views.upload_business_logo, name='upload-business-logo'),

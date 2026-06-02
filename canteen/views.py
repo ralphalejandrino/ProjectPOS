@@ -40,7 +40,7 @@ from datetime import datetime, timedelta, date, timezone as dt_tz
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.views import APIView
-from .permissions import IsManagerOrAbove, IsCashierOrAbove, IsAdmin, HasPageAccess
+from .permissions import IsManagerOrAbove, IsCashierOrAbove, IsAdmin, IsAdminOrStaff, HasPageAccess
 from . import network_service
 import csv, io, logging, subprocess
 
@@ -982,6 +982,51 @@ def get_terminal_credential_status(request, gateway):
     })
 
 
+def _accreditation_payload(counter):
+    """Shared status shape for the accreditation endpoints."""
+    accredited = bool(counter and counter.accredited_at)
+    reset_by = counter.reset_by if counter else None
+    return {
+        'accredited': accredited,
+        'accredited_at': counter.accredited_at.isoformat()
+        if accredited else None,
+        'reset_by': reset_by.username if reset_by else None,
+    }
+
+
+@api_view(['GET'])
+@permission_classes([IsAdminOrStaff])
+def accreditation_status(request):
+    """FEATURE-035: current BIR accreditation status (admin/staff only)."""
+    from .models import ZCounter
+    counter = ZCounter.objects.filter(pk=1).first()
+    return Response(_accreditation_payload(counter))
+
+
+@api_view(['POST'])
+@permission_classes([IsAdminOrStaff])
+def accreditation_reset(request):
+    """FEATURE-035: one-time post-accreditation Z-series reset (admin/staff).
+
+    Resets z_counter -> 0 and grand_total -> 0, stamps the accreditation
+    event on the ZCounter, and flags every existing ZReport as
+    pre-accreditation (is_official=False). Callable once; a second call
+    returns 400.
+    """
+    from .services import apply_accreditation_reset, AccreditationAlreadyApplied
+    try:
+        counter = apply_accreditation_reset(request.user)
+    except AccreditationAlreadyApplied as e:
+        return Response(
+            {'error': str(e)}, status=status.HTTP_400_BAD_REQUEST
+        )
+    payload = _accreditation_payload(counter)
+    payload['message'] = (
+        'BIR accreditation applied. The official Z-series will start at #1.'
+    )
+    return Response(payload, status=status.HTTP_200_OK)
+
+
 @api_view(['POST'])
 @permission_classes([IsManagerOrAbove])
 def upload_payment_qr(request, gateway):
@@ -1399,11 +1444,28 @@ class ZReportViewSet(viewsets.ReadOnlyModelViewSet):
     lookup_field = 'z_counter'
 
     def get_queryset(self):
-        qs = ZReport.objects.all().order_by('-z_counter')
+        qs = ZReport.objects.all().order_by('-reset_counter', '-z_counter')
         business_date = self.request.query_params.get('business_date')
         if business_date:
             qs = qs.filter(business_date=business_date)
         return qs
+
+    def get_object(self):
+        """FEATURE-035: z_counter is unique per reset series, so a value may
+        recur across an accreditation reset. Resolve detail lookups to the most
+        recent series (highest reset_counter) for the requested z_counter."""
+        from django.http import Http404
+        z_counter = self.kwargs[self.lookup_field]
+        obj = (
+            self.filter_queryset(self.get_queryset())
+            .filter(z_counter=z_counter)
+            .order_by('-reset_counter')
+            .first()
+        )
+        if obj is None:
+            raise Http404('No ZReport matches the given z_counter.')
+        self.check_object_permissions(self.request, obj)
+        return obj
 
     @action(detail=True, methods=['post'])
     def print(self, request, z_counter=None):

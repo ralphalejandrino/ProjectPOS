@@ -36,7 +36,9 @@
 // refund section).
 // v90: FEATURE-016 — split / multi-payment transactions (PaymentLine model,
 // split UI in the cash modal, PaymentLine-based X/Z payment breakdown).
-const CACHE_NAME = 'tarsierpos-v90'; // canonical cache version
+// v91: FEATURE-035 — post-accreditation Z-counter reset (accreditation.html
+// admin page + admin nav link).
+const CACHE_NAME = 'tarsierpos-v91'; // canonical cache version
 const ASSETS = [
   'index.html',
   'login.html',
@@ -50,6 +52,7 @@ const ASSETS = [
   'period.html',
   'insights.html',
   'remote.html',
+  'accreditation.html',
   'denied.html',
   'app.js',
   'config.js',

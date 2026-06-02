@@ -15,6 +15,7 @@
     { key: 'period',      href: 'period.html',      emoji: '🗓️', label: 'Period Report', roles: ['manager', 'admin'] },
     { key: 'insights',    href: 'insights.html',    emoji: '💡', label: 'Insights',    roles: ['manager', 'admin'] },
     { key: 'remote',      href: 'remote.html',      emoji: '📱', label: 'Remote View', roles: ['admin'] },
+    { key: 'accreditation', href: 'accreditation.html', emoji: '🏛️', label: 'BIR Accreditation', roles: ['admin'] },
     { key: 'settings',    href: 'settings.html',    emoji: '⚙️', label: 'Settings',    roles: ['admin'] },
   ];
 
