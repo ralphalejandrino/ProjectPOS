@@ -1,0 +1,11 @@
+[Unit]
+Description=TarsierPOS Tailscale cert renewal
+After=network-online.target tailscaled.service
+Wants=network-online.target
+# Installed by scripts/install-ops-units.sh (substitutes __TARSIERPOS_DIR__).
+# Runs as root: writes root-owned certs/ and reloads nginx.
+
+[Service]
+Type=oneshot
+Environment=TARSIERPOS_DIR=__TARSIERPOS_DIR__
+ExecStart=__TARSIERPOS_DIR__/scripts/cert/renew-cert.sh

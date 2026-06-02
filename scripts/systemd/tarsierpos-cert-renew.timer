@@ -1,0 +1,10 @@
+[Unit]
+Description=Monthly TarsierPOS Tailscale cert renewal
+
+[Timer]
+OnCalendar=monthly
+Persistent=true
+RandomizedDelaySec=30min
+
+[Install]
+WantedBy=timers.target
