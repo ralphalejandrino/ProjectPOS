@@ -78,11 +78,35 @@ class VariantGroup(models.Model):
         default='single',
     )
     is_required = models.BooleanField(default=False)
+    # FEATURE-010: multi-select cardinality. Both nullable — null means
+    # unconstrained. Only enforced when selection_type == 'multi' (see
+    # services.create_pos_transaction and clean()).
+    min_selections = models.PositiveIntegerField(
+        null=True, blank=True,
+        help_text="Min selections required (multi only)",
+    )
+    max_selections = models.PositiveIntegerField(
+        null=True, blank=True,
+        help_text="Max selections allowed (multi only)",
+    )
     sort_order = models.PositiveSmallIntegerField(default=0)
     is_active = models.BooleanField(default=True)
 
     class Meta:
         ordering = ['sort_order', 'name']
+
+    def clean(self):
+        # FEATURE-010: an impossible window (min > max) is rejected at the
+        # model level so it can never be persisted via admin/form/full_clean.
+        super().clean()
+        if (
+            self.min_selections is not None
+            and self.max_selections is not None
+            and self.min_selections > self.max_selections
+        ):
+            raise ValidationError(
+                "min_selections cannot be greater than max_selections."
+            )
 
     def __str__(self):
         return self.name

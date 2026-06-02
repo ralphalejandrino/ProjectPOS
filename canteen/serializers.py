@@ -191,7 +191,9 @@ class VariantGroupSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = VariantGroup
-        fields = ['id', 'name', 'selection_type', 'is_required', 'sort_order', 'is_active', 'options']
+        fields = ['id', 'name', 'selection_type', 'is_required',
+                  'min_selections', 'max_selections',
+                  'sort_order', 'is_active', 'options']
 
 
 class CategoryVariantGroupSerializer(serializers.ModelSerializer):

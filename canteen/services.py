@@ -408,6 +408,27 @@ def create_pos_transaction(items_data, payment_method, cashier=None, **kwargs):
                         'option_id': option.id,   # required by _deplete_ingredients
                     })
 
+            # FEATURE-010: multi-select cardinality (min/max). Counts per group
+            # come from the resolved selections. min/max are ignored for single
+            # groups (those are already capped at exactly one above). Each bound
+            # is enforced only when set (null means unconstrained).
+            for gid, group in effective_groups.items():
+                if group.selection_type != 'multi':
+                    continue
+                selected_count = sum(
+                    1 for r in resolved_variants if r['group_id'] == gid
+                )
+                if group.min_selections is not None and selected_count < group.min_selections:
+                    raise DRFValidationError(
+                        f"'{group.name}' requires at least {group.min_selections} "
+                        f"selection(s) for {item.name}."
+                    )
+                if group.max_selections is not None and selected_count > group.max_selections:
+                    raise DRFValidationError(
+                        f"'{group.name}' allows at most {group.max_selections} "
+                        f"selection(s) for {item.name}."
+                    )
+
             final_unit_price = base_price + modifier_total
             subtotal = final_unit_price * Decimal(str(quantity))
             total += subtotal

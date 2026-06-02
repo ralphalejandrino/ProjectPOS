@@ -316,10 +316,19 @@ function showVariantPicker(item) {
         const required = eg.is_required;
         const section = document.createElement('div');
         section.className = 'border border-gray-200 dark:border-gray-700 rounded-lg p-3';
+        // FEATURE-010: surface multi-select cardinality hints. Only meaningful
+        // for multi groups; single groups always read "Choose one".
+        let cardinalityHint = g.selection_type === 'multi' ? 'Choose multiple' : 'Choose one';
+        if (g.selection_type === 'multi') {
+            const hints = [];
+            if (g.min_selections != null) hints.push(`at least ${g.min_selections}`);
+            if (g.max_selections != null) hints.push(`up to ${g.max_selections}`);
+            if (hints.length) cardinalityHint = `Choose ${hints.join(', ')}`;
+        }
         section.innerHTML = `<div class="flex items-center gap-2 mb-2">
             <span class="font-medium text-sm text-gray-700 dark:text-gray-300">${escapeHtml(g.name)}</span>
             ${required ? '<span class="text-xs text-red-500">Required</span>' : ''}
-            <span class="text-xs text-gray-400">${g.selection_type === 'multi' ? 'Choose multiple' : 'Choose one'}</span>
+            <span class="text-xs text-gray-400">${escapeHtml(cardinalityHint)}</span>
         </div>`;
         const opts = document.createElement('div');
         opts.className = 'flex flex-col gap-1';
@@ -337,10 +346,29 @@ function showVariantPicker(item) {
         groups.appendChild(section);
     });
     groups.querySelectorAll('.variant-input').forEach(input => {
-        input.addEventListener('change', updateVariantPrice);
+        input.addEventListener('change', () => {
+            enforceVariantMax();
+            updateVariantPrice();
+        });
     });
+    enforceVariantMax();
     updateVariantPrice();
     document.getElementById('variant-modal').classList.remove('hidden');
+}
+
+function enforceVariantMax() {
+    // FEATURE-010: once a multi group reaches max_selections, disable its
+    // remaining unchecked checkboxes so no further option can be added.
+    const item = _variantPickerItem;
+    if (!item) return;
+    (item.effective_variant_groups || []).forEach(eg => {
+        const g = eg.group;
+        if (g.selection_type !== 'multi' || g.max_selections == null) return;
+        const inputs = document.querySelectorAll(`.variant-input[data-group="${g.id}"]`);
+        const checkedCount = Array.from(inputs).filter(i => i.checked).length;
+        const atMax = checkedCount >= g.max_selections;
+        inputs.forEach(i => { i.disabled = atMax && !i.checked; });
+    });
 }
 
 function updateVariantPrice() {
@@ -373,6 +401,19 @@ function confirmVariantSelection() {
             window.alertDialog({ title: 'Selection Required', message: `Please select a "${g.name}" option.`, icon: '⚠️' });
             valid = false;
             return;
+        }
+        // FEATURE-010: client-side min/max pre-validation for multi groups.
+        if (g.selection_type === 'multi') {
+            if (g.min_selections != null && checked.length < g.min_selections) {
+                window.alertDialog({ title: 'More Selections Needed', message: `Please choose at least ${g.min_selections} option(s) for "${g.name}".`, icon: '⚠️' });
+                valid = false;
+                return;
+            }
+            if (g.max_selections != null && checked.length > g.max_selections) {
+                window.alertDialog({ title: 'Too Many Selections', message: `Please choose at most ${g.max_selections} option(s) for "${g.name}".`, icon: '⚠️' });
+                valid = false;
+                return;
+            }
         }
         checked.forEach(input => {
             const opt = (g.options || []).find(o => String(o.id) === String(input.value));

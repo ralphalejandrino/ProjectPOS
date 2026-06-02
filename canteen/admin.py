@@ -16,6 +16,8 @@ from .models import (
     ZReport,
     ZCounter,
     IngredientLog,
+    VariantGroup,
+    VariantOption,
 )
 
 @admin.register(ItemCategory)
@@ -38,6 +40,35 @@ class ItemAdmin(admin.ModelAdmin):
 @admin.register(ItemLog)
 class ItemLogAdmin(admin.ModelAdmin):
     list_display = ['item', 'action', 'created_at']
+
+
+class VariantOptionInline(admin.TabularInline):
+    model = VariantOption
+    extra = 1
+
+
+@admin.register(VariantGroup)
+class VariantGroupAdmin(admin.ModelAdmin):
+    # FEATURE-010: min_selections/max_selections only apply to multi-select
+    # groups (selection_type == 'multi'); they are ignored for single groups.
+    list_display = ['name', 'selection_type', 'is_required',
+                    'min_selections', 'max_selections', 'sort_order', 'is_active']
+    list_filter = ['selection_type', 'is_active']
+    search_fields = ['name']
+    fields = ['name', 'selection_type', 'is_required',
+              'min_selections', 'max_selections', 'sort_order', 'is_active']
+    inlines = [VariantOptionInline]
+
+    def get_fieldsets(self, request, obj=None):
+        return (
+            (None, {
+                'fields': self.fields,
+                'description': (
+                    "min_selections and max_selections only apply to "
+                    "multi-select groups; they are ignored for single-select."
+                ),
+            }),
+        )
 
 @admin.register(OfficialReceiptCounter)
 class OfficialReceiptCounterAdmin(admin.ModelAdmin):

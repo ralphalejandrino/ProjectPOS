@@ -30,7 +30,9 @@
 // v87: B13 — period report, owner insights, and admin remote ops view
 // (FEATURE-013 / FEATURE-014 / FEATURE-026, FLAG-055 partial). New pages +
 // nav/config page-access keys; bumped to precache the three pages.
-const CACHE_NAME = 'tarsierpos-v87'; // canonical cache version
+// v88: FEATURE-010 — multi-select cardinality (min/max) hints + client-side
+// enforcement in the variant picker.
+const CACHE_NAME = 'tarsierpos-v88'; // canonical cache version
 const ASSETS = [
   'index.html',
   'login.html',
