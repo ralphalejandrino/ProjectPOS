@@ -643,6 +643,40 @@ class PosTransactionItem(BaseModelWithUUID):
         return f"{self.item.name} x{self.quantity} = {format_currency(self.subtotal)}"
 
 
+class PaymentLine(models.Model):
+    """FEATURE-016: one tendered amount per payment method on a transaction.
+
+    A transaction may be split across methods (e.g. ₱50 cash + ₱100 GCash).
+    The amounts represent actual tender and sum to the transaction's charged
+    total (net_total — equal to gross_total when there is no discount). The
+    X/Z payment breakdown and cash reconciliation aggregate over these rows
+    rather than the single PosTransaction.payment_method, which is retained as
+    the "primary method" (the method of the largest line) for backward compat.
+    """
+    METHOD_CHOICES = [
+        ('cash', 'Cash'),
+        ('card', 'Card'),
+        ('gcash', 'GCash'),
+        ('maya', 'Maya'),
+    ]
+
+    transaction = models.ForeignKey(
+        PosTransaction, on_delete=models.CASCADE, related_name='payment_lines'
+    )
+    method = models.CharField(max_length=10, choices=METHOD_CHOICES)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                check=models.Q(amount__gt=0), name='payline_positive'
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.method}: {format_currency(self.amount)}"
+
+
 class TransactionItemVariant(models.Model):
     # NOTE: group_name and option_name are stored as plain CharFields (snapshot at transaction time).
     # This is intentional for receipt immutability — variant renames/deletes do not affect historical records.

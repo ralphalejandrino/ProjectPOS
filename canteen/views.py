@@ -204,6 +204,7 @@ class PosTransactionViewSet(viewsets.ViewSet):
                 items_data=items_data,
                 payment_method=payment_method,
                 cashier=request.user,
+                payment_lines=request.data.get('payment_lines'),  # FEATURE-016: split payment
                 cash_received=request.data.get('cash_received'),
                 gcash_reference=request.data.get('gcash_reference', ''),
                 maya_reference=request.data.get('maya_reference', ''),
@@ -219,7 +220,7 @@ class PosTransactionViewSet(viewsets.ViewSet):
                 'success': True,
                 'transaction_no': transaction.transaction_no,
                 'total': float(transaction.total_amount.amount),
-                'payment_method': payment_method,
+                'payment_method': transaction.payment_method,
                 'cash_received': request.data.get('cash_received'),
                 'change': float(transaction.change_given) if transaction.change_given else 0,
                 'gcash_reference': transaction.gcash_reference or '',
@@ -441,15 +442,23 @@ class PosTransactionViewSet(viewsets.ViewSet):
         average_transaction = round(
             gross / transaction_count, 2) if transaction_count else 0
 
+        # FEATURE-016: payment breakdown comes from the PaymentLine tender rows
+        # of the sale transactions (grouped by method), supporting split
+        # payments, instead of the single payment_method field.
+        from .models import PaymentLine
+        pl_rows = (
+            PaymentLine.objects.filter(transaction__in=completed)
+            .values('method')
+            .annotate(total=Sum('amount'), cnt=Count('id'))
+        )
+        pl_by_method = {r['method']: r for r in pl_rows}
         by_method = []
-        for method in ['cash', 'gcash', 'maya']:
-            mqs = completed.filter(payment_method=method)
-            subtotal = float(
-                mqs.aggregate(t=Sum('total_amount'))['t'] or 0)
+        for method in ['cash', 'gcash', 'maya', 'card']:
+            row = pl_by_method.get(method)
             by_method.append({
                 'payment_method': method,
-                'count': mqs.count(),
-                'subtotal': subtotal,
+                'count': row['cnt'] if row else 0,
+                'subtotal': float(row['total']) if row else 0.0,
             })
 
         return Response({

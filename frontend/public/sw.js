@@ -34,7 +34,9 @@
 // enforcement in the variant picker.
 // v89: FEATURE-015 — refund accounting (manager/admin refund button, X/Z
 // refund section).
-const CACHE_NAME = 'tarsierpos-v89'; // canonical cache version
+// v90: FEATURE-016 — split / multi-payment transactions (PaymentLine model,
+// split UI in the cash modal, PaymentLine-based X/Z payment breakdown).
+const CACHE_NAME = 'tarsierpos-v90'; // canonical cache version
 const ASSETS = [
   'index.html',
   'login.html',

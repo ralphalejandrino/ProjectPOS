@@ -9,7 +9,7 @@ from .utils.currency import format_currency
 from .models import (
     Item, PosTransaction, PosTransactionItem, Shift,
     VariantOption, TransactionItemVariant,
-    RecipeIngredient, Ingredient, IngredientLog,
+    RecipeIngredient, Ingredient, IngredientLog, PaymentLine,
 )
 import threading
 from .receipt_service import print_receipt, kick_cash_drawer
@@ -322,6 +322,58 @@ def variant_ingredient_conflict(variant_option, ingredient, exclude_pk=None):
     return None
 
 
+_VALID_PAYMENT_METHODS = {'cash', 'card', 'gcash', 'maya'}
+_PAYMENT_CENTS = Decimal('0.01')
+
+
+def _resolve_payment_lines(payment_lines, fallback_method, charged_total):
+    """FEATURE-016: normalise the requested payment lines for a sale.
+
+    ``payment_lines`` is an optional list of ``{method, amount}``. When absent
+    or empty, a single line for ``fallback_method`` covering the whole charged
+    total is synthesised (backward compat — every transaction ends up with at
+    least one line). The amounts represent actual tender and must sum to the
+    charged total (net_total) within ±1 centavo of rounding tolerance.
+
+    Returns ``(lines, primary_method)`` where ``lines`` is a list of
+    ``(method, Decimal amount)`` and ``primary_method`` is the method of the
+    largest line (first on a tie) — persisted as PosTransaction.payment_method.
+    Raises DRFValidationError on any invalid method, non-positive amount, or a
+    sum that does not match the charged total.
+    """
+    charged_total = Decimal(str(charged_total)).quantize(
+        _PAYMENT_CENTS, rounding=ROUND_HALF_UP
+    )
+    if not payment_lines:
+        method = fallback_method if fallback_method in _VALID_PAYMENT_METHODS else 'cash'
+        return [(method, charged_total)], method
+
+    parsed = []
+    for line in payment_lines:
+        method = line.get('method')
+        if method not in _VALID_PAYMENT_METHODS:
+            raise DRFValidationError(f"Invalid payment method: {method!r}.")
+        try:
+            amount = Decimal(str(line.get('amount'))).quantize(
+                _PAYMENT_CENTS, rounding=ROUND_HALF_UP
+            )
+        except (TypeError, ArithmeticError, ValueError):
+            raise DRFValidationError(f"Invalid payment amount: {line.get('amount')!r}.")
+        if amount <= 0:
+            raise DRFValidationError("Payment line amounts must be greater than zero.")
+        parsed.append((method, amount))
+
+    total = sum((a for _, a in parsed), Decimal('0.00'))
+    if abs(total - charged_total) > _PAYMENT_CENTS:
+        raise DRFValidationError(
+            f"Split payment total ({format_currency(total)}) must equal the "
+            f"amount due ({format_currency(charged_total)})."
+        )
+
+    primary_method = max(parsed, key=lambda p: p[1])[0]
+    return parsed, primary_method
+
+
 def create_pos_transaction(items_data, payment_method, cashier=None, **kwargs):
     """
     Service function to create a POS transaction, its items, and update inventory.
@@ -550,6 +602,14 @@ def create_pos_transaction(items_data, payment_method, cashier=None, **kwargs):
         # this atomic block (ISSUE-104).
         current_shift = _enforced_shift
 
+        # FEATURE-016: resolve payment lines (split payment support). The
+        # amounts represent actual tender and must sum to the charged total
+        # (final_total / net_total). primary_method is persisted as the
+        # PosTransaction.payment_method for backward compat.
+        payment_lines, primary_method = _resolve_payment_lines(
+            kwargs.get('payment_lines'), payment_method, final_total
+        )
+
         # Create transaction
         cash_received = kwargs.get('cash_received')
         cash_received_amount = Decimal(str(cash_received)) if cash_received else None
@@ -571,7 +631,7 @@ def create_pos_transaction(items_data, payment_method, cashier=None, **kwargs):
             zero_rated_sales=_frozen_zero_rated,
             net_total=_frozen_net,
             status='completed',
-            payment_method=payment_method,
+            payment_method=primary_method,
             cash_received=cash_received_amount,
             change_given=change_given,
             gcash_reference=kwargs.get('gcash_reference', ''),
@@ -627,6 +687,13 @@ def create_pos_transaction(items_data, payment_method, cashier=None, **kwargs):
                     item, variant_option_ids, entry['quantity'],
                     transaction=transaction, performed_by=cashier,
                 )
+
+        # FEATURE-016: persist the tender breakdown. Every sale gets at least
+        # one PaymentLine; split payments get one per method.
+        PaymentLine.objects.bulk_create([
+            PaymentLine(transaction=transaction, method=method, amount=amount)
+            for method, amount in payment_lines
+        ])
 
         # Fire-and-forget print + cashbox kick — never blocks the sale
         threading.Thread(target=print_receipt, args=(transaction,), daemon=True).start()
@@ -787,11 +854,28 @@ def close_shift_and_finalize_z(shift_id, cash_counted, cashier_user):
         non_voided.filter(discount_type='promo'), 'discount_total'
     )
 
+    # FEATURE-016: payment breakdown + cash reconciliation come from the
+    # PaymentLine tender rows (grouped by method) of the sale transactions, not
+    # the single PosTransaction.payment_method. Refunds carry no PaymentLines,
+    # so they are handled separately below.
+    from django.db.models import Sum
+    from .models import PaymentLine
+    pl_rows = (
+        PaymentLine.objects.filter(transaction__in=non_voided)
+        .values('method')
+        .annotate(total=Sum('amount'))
+    )
+    pl_by_method = {r['method']: r['total'] for r in pl_rows}
+
+    def _pl(method):
+        amt = pl_by_method.get(method)
+        return (Decimal(str(amt)) if amt is not None else Decimal('0')).quantize(
+            _Z_CENTS, rounding=ROUND_HALF_UP
+        )
+
     payment_breakdown = {}
     for method in ['cash', 'gcash', 'maya', 'card']:
-        payment_breakdown[method] = str(
-            _zsum(non_voided.filter(payment_method=method), 'net_total')
-        )
+        payment_breakdown[method] = str(_pl(method))
 
     # FEATURE-015: refund aggregates. refund_total is a positive magnitude
     # (refund rows carry negative gross_total, so negate the sum).
@@ -804,9 +888,7 @@ def close_shift_and_finalize_z(shift_id, cash_counted, cashier_user):
         refunds.filter(payment_method='cash'), 'net_total'
     )).quantize(_Z_CENTS, rounding=ROUND_HALF_UP)
 
-    cash_collected = _zsum(
-        non_voided.filter(payment_method='cash'), 'net_total'
-    )
+    cash_collected = _pl('cash')
     opening_cash = (
         Decimal(str(shift.opening_cash or 0))
     ).quantize(_Z_CENTS, rounding=ROUND_HALF_UP)

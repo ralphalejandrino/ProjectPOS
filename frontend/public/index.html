@@ -183,6 +183,30 @@
                 <div class="text-2xl font-bold" id="cash-change">0.00</div>
             </div>
 
+            <!-- FEATURE-016: SPLIT PAYMENT (V1: cash + one other method) -->
+            <button onclick="toggleSplitPayment()" id="split-toggle-btn"
+                    class="w-full mt-1 mb-2 py-1.5 border border-dashed border-gray-300 rounded-lg text-sm text-gray-500 hover:border-gray-400 hover:text-gray-700 transition">
+                ➗ Split Payment
+            </button>
+            <div id="split-section" class="hidden mb-4 p-3 border border-gray-200 rounded-lg">
+                <div class="flex items-center gap-2 mb-2">
+                    <select id="split-method" aria-label="Second payment method"
+                            class="border border-gray-300 rounded-lg px-2 py-2 text-sm" oninput="updateSplit()">
+                        <option value="gcash">GCash</option>
+                        <option value="maya">Maya</option>
+                        <option value="card">Card</option>
+                    </select>
+                    <input id="split-amount" type="number" step="0.01" min="0" placeholder="0.00"
+                           aria-label="Second payment amount" oninput="updateSplit()"
+                           class="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm text-right">
+                </div>
+                <div class="flex justify-between text-sm text-gray-600">
+                    <span id="split-cash-label">Cash portion:</span>
+                    <span class="font-semibold" id="split-cash-amount">0.00</span>
+                </div>
+                <div id="split-error" class="hidden text-xs text-red-600 mt-1"></div>
+            </div>
+
             <!-- DISCOUNT SECTION -->
             <div id="cash-discount-section" class="hidden mt-3 pt-3 border-t border-gray-100">
                 <div class="flex gap-2 mb-3" id="cash-discount-type-buttons">
@@ -315,12 +339,67 @@
                 return;
             }
             initModalDiscount('cash');
+            resetSplitPayment();
             document.getElementById('cash-modal').classList.remove('hidden');
             document.getElementById('cash-total').textContent = `${formatCurrency(window.cart.total)}`;
             document.getElementById('cash-received').value = '';
             document.getElementById('cash-change-display').classList.add('hidden');
             document.getElementById('cash-insufficient').classList.add('hidden');
             document.getElementById('cash-received').focus();
+        }
+
+        // FEATURE-016: split-payment state lives in the DOM. When the split
+        // section is visible, part of the total is paid by a second method and
+        // the cash portion is the remainder.
+        function splitActive() {
+            return !document.getElementById('split-section').classList.contains('hidden');
+        }
+
+        function splitAmount() {
+            return parseFloat(document.getElementById('split-amount').value) || 0;
+        }
+
+        // Amount that must be covered by cash (full total unless split).
+        function cashDueAmount() {
+            return splitActive()
+                ? Math.max(0, window.cart.total - splitAmount())
+                : window.cart.total;
+        }
+
+        function resetSplitPayment() {
+            document.getElementById('split-section').classList.add('hidden');
+            document.getElementById('split-amount').value = '';
+            document.getElementById('split-error').classList.add('hidden');
+            const toggle = document.getElementById('split-toggle-btn');
+            if (toggle) toggle.textContent = '➗ Split Payment';
+        }
+
+        function toggleSplitPayment() {
+            const section = document.getElementById('split-section');
+            const toggle = document.getElementById('split-toggle-btn');
+            const willShow = section.classList.contains('hidden');
+            section.classList.toggle('hidden', !willShow);
+            toggle.textContent = willShow ? '✕ Cancel Split' : '➗ Split Payment';
+            if (!willShow) {
+                document.getElementById('split-amount').value = '';
+                document.getElementById('split-error').classList.add('hidden');
+            }
+            updateSplit();
+        }
+
+        function updateSplit() {
+            // Cash portion auto-fills as the remainder after the second amount.
+            const cashPortion = cashDueAmount();
+            document.getElementById('split-cash-amount').textContent = formatCurrency(cashPortion);
+            const err = document.getElementById('split-error');
+            const amt = splitAmount();
+            if (splitActive() && (amt <= 0 || amt >= window.cart.total)) {
+                err.textContent = 'Second amount must be more than 0 and less than the total.';
+                err.classList.remove('hidden');
+            } else {
+                err.classList.add('hidden');
+            }
+            calculateChange();
         }
 
         function closeCashModal() {
@@ -335,7 +414,9 @@
         }
 
         function calculateChange() {
-            const total = window.cart.total;
+            // FEATURE-016: under a split payment only the cash portion is due
+            // in cash; change is measured against that, not the full total.
+            const total = cashDueAmount();
             const received = parseFloat(document.getElementById('cash-received').value) || 0;
             const change = received - total;
 
@@ -463,10 +544,29 @@
                 return;
             }
             const total = window.cart.total;
+            // FEATURE-016: build split payment lines when active. The cash
+            // portion is the remainder; lines must sum to the total.
+            let paymentLines = null;
+            const isSplit = splitActive();
+            if (isSplit) {
+                const splitAmt = splitAmount();
+                const cashPortion = +(total - splitAmt).toFixed(2);
+                if (splitAmt <= 0 || splitAmt >= total) {
+                    document.getElementById('split-error').textContent =
+                        'Second amount must be more than 0 and less than the total.';
+                    document.getElementById('split-error').classList.remove('hidden');
+                    return;
+                }
+                paymentLines = [
+                    { method: 'cash', amount: cashPortion },
+                    { method: document.getElementById('split-method').value, amount: +splitAmt.toFixed(2) },
+                ];
+            }
+            const cashDue = isSplit ? +(total - splitAmount()).toFixed(2) : total;
             const received = parseFloat(document.getElementById('cash-received').value) || 0;
-            const change = received - total;
+            const change = received - cashDue;
 
-            if (received < total) {
+            if (received < cashDue) {
                 document.getElementById('cash-insufficient').classList.remove('hidden');
                 return;
             }
@@ -499,6 +599,7 @@
                             })),
                         })),
                         payment_method: 'cash',
+                        payment_lines: paymentLines,
                         cash_received: received,
                         change_given: change,
                         total_amount: total,
