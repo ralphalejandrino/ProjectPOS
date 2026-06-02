@@ -24,9 +24,15 @@ class ItemCategoryAdmin(admin.ModelAdmin):
 
 @admin.register(Item)
 class ItemAdmin(admin.ModelAdmin):
-    list_display = ['name', 'category', 'price', 'stock', 'created_at']
+    list_display = ['name', 'category', 'price', 'stock', 'recipe_linked', 'created_at']
     list_filter = ['category']
     search_fields = ['name']
+
+    @admin.display(description='Recipe linked', boolean=False)
+    def recipe_linked(self, obj):
+        # FLAG-045: surface the recipe-coverage gap at a glance. ✓ when the
+        # item has at least one item-level RecipeIngredient, ✗ otherwise.
+        return '✓' if obj.recipe_ingredients.exists() else '✗'
 
 @admin.register(ItemLog)
 class ItemLogAdmin(admin.ModelAdmin):
