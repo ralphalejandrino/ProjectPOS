@@ -1059,7 +1059,7 @@ class Ingredient(models.Model):
     # sale. This validator only protects manual/declarative edits.
     current_stock = models.DecimalField(
         max_digits=10, decimal_places=4, default=0,
-        validators=[MinValueValidator(0)],
+        validators=[MinValueValidator(Decimal('0'))],
     )
     par_level = models.DecimalField(max_digits=10, decimal_places=4, default=0)
     supplier = models.ForeignKey(Supplier, null=True, blank=True, on_delete=models.SET_NULL)
