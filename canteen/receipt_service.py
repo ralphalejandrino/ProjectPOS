@@ -225,6 +225,16 @@ def print_z_report(z_report):
             finalized = z_report.finalized_at.strftime('%Y-%m-%d %H:%M')
             p.text(f'Period: {started} - {finalized}\n')
             p.text(f'Cashier: {z_report.cashier.username}\n')
+            # ISSUE-094: explicit shift attribution. Opener comes from the
+            # Shift record (shift.cashier); closer is the finalizing cashier
+            # on the frozen ZReport. Accessed defensively so a Z snapshot
+            # without a live shift link still prints.
+            _shift = getattr(z_report, 'shift', None)
+            _opener = getattr(getattr(_shift, 'cashier', None), 'username', None)
+            if _opener:
+                p.text(f'Opened by: {_opener}\n')
+            if z_report.cashier:
+                p.text(f'Closed by: {z_report.cashier.username}\n')
             p.text(rrow(f'From: {z_report.first_or_number or "-"}',
                         f'To: {z_report.last_or_number or "-"}'))
             p.text(f'Voided: {z_report.voided_count}\n')
@@ -325,6 +335,10 @@ def print_xreport_summary(data):
             _pset(p, profile, align='left', bold=False)
             if data.get('cashier'):
                 p.text(f"Cashier: {data['cashier']}\n")
+                # ISSUE-094: an X-report is a mid-shift reading of an OPEN
+                # shift, so only the opener is known. "Closed by" is printed
+                # on the Z-report at finalization, not here.
+                p.text(f"Opened by: {data['cashier']}\n")
             if data.get('opened_at'):
                 p.text(f"Opened: {str(data['opened_at'])[:16]}\n")
             p.text('-' * RECEIPT_WIDTH + '\n')

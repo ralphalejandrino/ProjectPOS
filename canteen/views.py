@@ -267,6 +267,7 @@ class PosTransactionViewSet(viewsets.ViewSet):
                             current_stock=refreshed.stock,
                             action='return',
                             remarks=f"Void reversal — OR#{transaction.transaction_no} (ID: {transaction.pk})",
+                            created_by=request.user,
                         )
 
                 transaction.void = True
@@ -1077,7 +1078,8 @@ class ItemViewSet(viewsets.ModelViewSet):
                 quantity=adjustment,
                 current_stock=item.stock,
                 action='adjustment',
-                remarks=f"Changed from {old_stock} to {item.stock}"
+                remarks=f"Changed from {old_stock} to {item.stock}",
+                created_by=request.user,
             )
 
         return Response({
