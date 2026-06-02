@@ -10,17 +10,49 @@ from .models import (
     Item, PosTransaction, PosTransactionItem, Shift,
     VariantGroup, VariantOption,
     CategoryVariantGroup, ProductVariantGroup, TransactionItemVariant,
-    RecipeIngredient, Ingredient,
+    RecipeIngredient, Ingredient, IngredientLog,
 )
 import threading
 from .receipt_service import print_receipt, kick_cash_drawer
 
 
-def _deplete_ingredients(item, variant_option_ids, quantity):
+def _move_ingredient(ingredient_pk, signed_delta, action, transaction, performed_by):
+    """ISSUE-069: lock one ingredient row, snapshot before/after, apply the
+    signed stock move, and append an IngredientLog row.
+
+    ``signed_delta`` is negative for depletion (sale) and positive for restore
+    (void). Returns silently without touching anything when the ingredient has
+    FLAG-046 ``track_depletion=False``. Stock is allowed to go negative — that
+    is the owner-investigate signal and must never block the sale/void.
     """
-    Deplete ingredient stock for a sold item.
+    ingredient = Ingredient.objects.select_for_update().get(pk=ingredient_pk)
+    if not ingredient.track_depletion:
+        return
+    before = ingredient.current_stock
+    after = before + signed_delta
+    ingredient.current_stock = after
+    ingredient.save(update_fields=['current_stock', 'updated_at'])
+    IngredientLog.objects.create(
+        ingredient=ingredient,
+        action=action,
+        quantity_change=signed_delta,
+        stock_before=before,
+        stock_after=after,
+        transaction=transaction,
+        performed_by=performed_by,
+    )
+
+
+def _deplete_ingredients(item, variant_option_ids, quantity,
+                         transaction=None, performed_by=None):
+    """
+    Deplete ingredient stock for a sold item and write the IngredientLog ledger.
     Variant recipes take priority over item recipes.
-    Uses F() for atomic DB updates.
+
+    ISSUE-069: each depletion locks the ingredient row (select_for_update),
+    snapshots stock_before/stock_after, and writes an IngredientLog(action='sale')
+    attributed to ``performed_by`` and linked to ``transaction``. Per-ingredient
+    FLAG-046 gate (track_depletion) lives in _move_ingredient.
     Silently skips if no recipe is configured.
     """
     depleted_ingredient_ids = set()
@@ -31,8 +63,9 @@ def _deplete_ingredients(item, variant_option_ids, quantity):
             variant_id__in=variant_option_ids
         ).select_related('ingredient')
         for recipe in variant_recipes:
-            Ingredient.objects.filter(pk=recipe.ingredient.pk).update(
-                current_stock=F('current_stock') - (recipe.quantity_used * quantity)
+            _move_ingredient(
+                recipe.ingredient.pk, -(recipe.quantity_used * quantity),
+                'sale', transaction, performed_by,
             )
             depleted_ingredient_ids.add(recipe.ingredient.pk)
 
@@ -42,14 +75,17 @@ def _deplete_ingredients(item, variant_option_ids, quantity):
     ).select_related('ingredient')
     for recipe in item_recipes:
         if recipe.ingredient.pk not in depleted_ingredient_ids:
-            Ingredient.objects.filter(pk=recipe.ingredient.pk).update(
-                current_stock=F('current_stock') - (recipe.quantity_used * quantity)
+            _move_ingredient(
+                recipe.ingredient.pk, -(recipe.quantity_used * quantity),
+                'sale', transaction, performed_by,
             )
 
 
-def _restore_ingredients(item, transaction_item, quantity):
+def _restore_ingredients(item, transaction_item, quantity,
+                         transaction=None, performed_by=None):
     """
-    Restore ingredient stock when a transaction is voided.
+    Restore ingredient stock when a transaction is voided and mirror the move
+    into the IngredientLog ledger (ISSUE-069, action='void').
     Matches variant selections by (group_name, option_name) pair snapshot.
 
     ISSUE-072: matching by option_name alone is ambiguous — if two variant
@@ -80,8 +116,9 @@ def _restore_ingredients(item, transaction_item, quantity):
             variant_id__in=variant_option_ids
         ).select_related('ingredient')
         for recipe in variant_recipes:
-            Ingredient.objects.filter(pk=recipe.ingredient.pk).update(
-                current_stock=F('current_stock') + (recipe.quantity_used * quantity)
+            _move_ingredient(
+                recipe.ingredient.pk, (recipe.quantity_used * quantity),
+                'void', transaction, performed_by,
             )
             restored_ingredient_ids.add(recipe.ingredient.pk)
 
@@ -91,8 +128,9 @@ def _restore_ingredients(item, transaction_item, quantity):
     ).select_related('ingredient')
     for recipe in item_recipes:
         if recipe.ingredient.pk not in restored_ingredient_ids:
-            Ingredient.objects.filter(pk=recipe.ingredient.pk).update(
-                current_stock=F('current_stock') + (recipe.quantity_used * quantity)
+            _move_ingredient(
+                recipe.ingredient.pk, (recipe.quantity_used * quantity),
+                'void', transaction, performed_by,
             )
 
 
@@ -433,12 +471,16 @@ def create_pos_transaction(items_data, payment_method, cashier=None, **kwargs):
                         f"Insufficient stock for: {item.name} (sold out during checkout)"
                     )
 
-                # Ingredient depletion
+                # Ingredient depletion + ledger (ISSUE-069). Attributed to the
+                # ringing cashier and linked to this transaction.
                 variant_option_ids = [
                     rv.get('option_id') for rv in entry.get('resolved_variants', [])
                     if rv.get('option_id')
                 ]
-                _deplete_ingredients(item, variant_option_ids, entry['quantity'])
+                _deplete_ingredients(
+                    item, variant_option_ids, entry['quantity'],
+                    transaction=transaction, performed_by=cashier,
+                )
 
         # Fire-and-forget print + cashbox kick — never blocks the sale
         threading.Thread(target=print_receipt, args=(transaction,), daemon=True).start()

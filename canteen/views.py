@@ -253,8 +253,13 @@ class PosTransactionViewSet(viewsets.ViewSet):
                         Item.objects.filter(pk=item_entry.item.pk).update(
                             stock=F('stock') + item_entry.quantity
                         )
-                        # Ingredient stock restore
-                        _restore_ingredients(item_entry.item, item_entry, item_entry.quantity)
+                        # Ingredient stock restore + ledger (ISSUE-069):
+                        # mirrors the sale depletion in reverse (action='void'),
+                        # attributed to the voiding user and linked to the txn.
+                        _restore_ingredients(
+                            item_entry.item, item_entry, item_entry.quantity,
+                            transaction=transaction, performed_by=request.user,
+                        )
                         refreshed = Item.objects.get(pk=item_entry.item.pk)
                         ItemLog.objects.create(
                             item=refreshed,
