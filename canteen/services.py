@@ -81,10 +81,12 @@ def _deplete_ingredients(item, variant_option_ids, quantity,
 
 
 def _restore_ingredients(item, transaction_item, quantity,
-                         transaction=None, performed_by=None):
+                         transaction=None, performed_by=None, action='void'):
     """
-    Restore ingredient stock when a transaction is voided and mirror the move
-    into the IngredientLog ledger (ISSUE-069, action='void').
+    Restore ingredient stock when a transaction is voided (action='void') or
+    refunded (FEATURE-015, action='refund') and mirror the move into the
+    IngredientLog ledger (ISSUE-069). ``action`` tags the ledger rows so void
+    and refund restores stay distinguishable in the audit trail.
     Matches variant selections by (group_name, option_name) pair snapshot.
 
     ISSUE-072: matching by option_name alone is ambiguous — if two variant
@@ -117,7 +119,7 @@ def _restore_ingredients(item, transaction_item, quantity,
         for recipe in variant_recipes:
             _move_ingredient(
                 recipe.ingredient.pk, (recipe.quantity_used * quantity),
-                'void', transaction, performed_by,
+                action, transaction, performed_by,
             )
             restored_ingredient_ids.add(recipe.ingredient.pk)
 
@@ -129,7 +131,7 @@ def _restore_ingredients(item, transaction_item, quantity,
         if recipe.ingredient.pk not in restored_ingredient_ids:
             _move_ingredient(
                 recipe.ingredient.pk, (recipe.quantity_used * quantity),
-                'void', transaction, performed_by,
+                action, transaction, performed_by,
             )
 
 
@@ -632,6 +634,78 @@ def create_pos_transaction(items_data, payment_method, cashier=None, **kwargs):
         return transaction
 
 
+@db_transaction.atomic
+def refund_transaction(original_id, performed_by):
+    """FEATURE-015: issue a refund for a prior sale.
+
+    A refund leaves the original transaction untouched and immutable and posts
+    a NEW negative PosTransaction (transaction_type='refund', refund_of=
+    original) to the refunder's current open shift — so the refund's financial
+    impact lands in the shift it is processed, not retroactively on the
+    original's Z. Ingredient stock is restored via the IngredientLog ledger
+    (action='refund'). Returns the new refund transaction.
+
+    Raises DRFValidationError when the original is a refund, already voided,
+    already refunded, or when the refunder has no open shift.
+    """
+    original = PosTransaction.objects.select_for_update().get(pk=original_id)
+
+    if original.transaction_type == 'refund':
+        raise DRFValidationError("A refund transaction cannot itself be refunded.")
+    if original.void or original.status == 'void':
+        raise DRFValidationError("A voided transaction cannot be refunded.")
+    if original.refunds.exists():
+        raise DRFValidationError("This transaction has already been refunded.")
+
+    shift = Shift.objects.filter(
+        cashier=performed_by, is_open=True
+    ).order_by('-opened_at').first() if performed_by else None
+    if not shift:
+        raise DRFValidationError(
+            "No open shift. Open a shift before issuing refunds."
+        )
+
+    def _neg(value):
+        return -(Decimal(str(value))) if value is not None else Decimal('0.00')
+
+    refund = PosTransaction.objects.create(
+        total_amount=Money(_neg(original.net_total), 'PHP'),
+        transaction_type='refund',
+        refund_of=original,
+        status='refunded',
+        payment_method=original.payment_method,
+        # Mirror the frozen totals as negatives so every downstream aggregate
+        # (X/Z sales, payment breakdown, cash reconciliation) nets correctly.
+        gross_total=_neg(original.gross_total),
+        net_total=_neg(original.net_total),
+        discount_total=_neg(original.discount_total),
+        discount_amount=_neg(original.discount_amount),
+        vat_amount=_neg(original.vat_amount),
+        vat_exempt_amount=_neg(original.vat_exempt_amount),
+        vatable_sales=_neg(original.vatable_sales),
+        zero_rated_sales=_neg(original.zero_rated_sales),
+        vat_exempt=original.vat_exempt,
+        discount_type=original.discount_type,
+        cashier=performed_by,
+        shift=shift,
+        is_seed=False,
+    )
+
+    # Restore ingredient stock (action='refund'). Item.stock is intentionally
+    # left untouched — FEATURE-015 scopes the refund restore to the ingredient
+    # ledger only.
+    from .models import BusinessProfile
+    _bp = BusinessProfile.objects.first()
+    if not _bp or _bp.track_inventory:
+        for item_entry in original.items.all():
+            _restore_ingredients(
+                item_entry.item, item_entry, item_entry.quantity,
+                transaction=refund, performed_by=performed_by, action='refund',
+            )
+
+    return refund
+
+
 _Z_CENTS = Decimal('0.01')
 
 
@@ -676,11 +750,17 @@ def close_shift_and_finalize_z(shift_id, cash_counted, cashier_user):
 
     # FLAG-047: seed/demo rows are excluded from every Z aggregate so a
     # quarantined demo transaction can never leak into a BIR-grade Z total.
+    # FEATURE-015: refunds are negative transactions posted to this shift. They
+    # are kept OUT of the sales aggregates (which must stay pure sales for BIR
+    # gross/net sales) and surfaced on a dedicated "Refunds" deduction line.
     non_voided = PosTransaction.objects.filter(
         shift=shift, voided_at__isnull=True, is_seed=False,
-    )
+    ).exclude(transaction_type='refund')
     voided = PosTransaction.objects.filter(
         shift=shift, voided_at__isnull=False, is_seed=False,
+    ).exclude(transaction_type='refund')
+    refunds = PosTransaction.objects.filter(
+        shift=shift, is_seed=False, transaction_type='refund',
     )
 
     gross_sales = _zsum(non_voided, 'gross_total')
@@ -713,13 +793,25 @@ def close_shift_and_finalize_z(shift_id, cash_counted, cashier_user):
             _zsum(non_voided.filter(payment_method=method), 'net_total')
         )
 
+    # FEATURE-015: refund aggregates. refund_total is a positive magnitude
+    # (refund rows carry negative gross_total, so negate the sum).
+    refund_count = refunds.count()
+    refund_total = (-_zsum(refunds, 'gross_total')).quantize(
+        _Z_CENTS, rounding=ROUND_HALF_UP
+    )
+    # Cash paid out on refunds (refund cash net_total is negative).
+    refund_cash = (-_zsum(
+        refunds.filter(payment_method='cash'), 'net_total'
+    )).quantize(_Z_CENTS, rounding=ROUND_HALF_UP)
+
     cash_collected = _zsum(
         non_voided.filter(payment_method='cash'), 'net_total'
     )
     opening_cash = (
         Decimal(str(shift.opening_cash or 0))
     ).quantize(_Z_CENTS, rounding=ROUND_HALF_UP)
-    cash_expected = (opening_cash + cash_collected).quantize(
+    # Refunded cash left the drawer this shift, so it reduces what we expect.
+    cash_expected = (opening_cash + cash_collected - refund_cash).quantize(
         _Z_CENTS, rounding=ROUND_HALF_UP
     )
     counted = (
@@ -773,6 +865,8 @@ def close_shift_and_finalize_z(shift_id, cash_counted, cashier_user):
         voided_or_numbers=voided_or_numbers,
         transaction_count=non_voided.count(),
         voided_count=voided.count(),
+        refund_count=refund_count,
+        refund_total=refund_total,
         gross_sales=gross_sales,
         discount_total=discount_total,
         net_sales=net_sales,

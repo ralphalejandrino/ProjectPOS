@@ -155,6 +155,7 @@
                     <div class="flex justify-between pl-4"><span class="text-gray-500">SC Discount</span><span id="z-disc-sc" class="text-gray-700"></span></div>
                     <div class="flex justify-between pl-4"><span class="text-gray-500">PWD Discount</span><span id="z-disc-pwd" class="text-gray-700"></span></div>
                     <div class="flex justify-between pl-4"><span class="text-gray-500">Promo Discount</span><span id="z-disc-promo" class="text-gray-700"></span></div>
+                    <div class="flex justify-between"><span class="text-gray-600">Less Refunds (<span id="z-refund-count">0</span>)</span><span id="z-refund-total" class="font-medium text-orange-600"></span></div>
                     <div class="flex justify-between border-t pt-2"><span class="text-base font-bold text-gray-800">Net Sales</span><span id="z-net" class="text-xl font-bold text-blue-600"></span></div>
                     <div class="flex justify-between"><span class="text-gray-600">Vatable Sales</span><span id="z-vatable" class="font-medium text-gray-800"></span></div>
                     <div class="flex justify-between"><span class="text-gray-600">Output VAT</span><span id="z-vat" class="font-medium text-gray-800"></span></div>
@@ -460,6 +461,8 @@
             document.getElementById('z-disc-sc').textContent = '-' + fmt(z.sc_discount_total);
             document.getElementById('z-disc-pwd').textContent = '-' + fmt(z.pwd_discount_total);
             document.getElementById('z-disc-promo').textContent = '-' + fmt(z.promo_discount_total);
+            document.getElementById('z-refund-count').textContent = z.refund_count || 0;
+            document.getElementById('z-refund-total').textContent = '-' + fmt(z.refund_total || 0);
             document.getElementById('z-net').textContent = fmt(z.net_sales);
             document.getElementById('z-vatable').textContent = fmt(z.vatable_sales);
             document.getElementById('z-vat').textContent = fmt(z.output_vat);

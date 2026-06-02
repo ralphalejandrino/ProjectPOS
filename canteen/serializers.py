@@ -250,6 +250,7 @@ class PosTransactionSerializer(serializers.ModelSerializer):
             'status', 'cashier', 'cashier_name', 'customer_name',
             'customer_phone', 'items', 'created_at', 'void',
             'purpose_of_void', 'remarks',
+            'transaction_type', 'refund_of',
             'discount_amount', 'discount_type', 'discount_id_number'
         ]
 

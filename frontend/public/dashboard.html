@@ -403,6 +403,7 @@
 
         let currentVoidId = null;
         let currentDetailId = null;
+        let currentDetailAmount = 0;
 
         function openVoidModal(id) {
             currentVoidId = id;
@@ -417,6 +418,40 @@
             document.getElementById('void-modal').classList.add('hidden');
             currentVoidId = null;
         }
+
+        // FEATURE-015: issue a refund (manager/admin only). Confirms, posts to
+        // the refund endpoint, and reports the new refund transaction ID.
+        async function issueRefund(id) {
+            if (!id) return;
+            const ok = await window.confirmDialog({
+                title: 'Issue Refund',
+                message: `Refund ${formatCurrency(currentDetailAmount)} to customer?`,
+                okLabel: 'Refund',
+                cancelLabel: 'Cancel',
+                danger: true,
+            });
+            if (!ok) return;
+            try {
+                const response = await authenticatedFetch(
+                    `${API_BASE}/transactions/${id}/refund/`, { method: 'POST' }
+                );
+                const data = await response.json();
+                if (!response.ok) {
+                    showDashboardAlert('Refund failed: ' + (data.error || 'Unknown error'));
+                    return;
+                }
+                closeDetailModal();
+                await window.alertDialog({
+                    title: 'Refund Issued',
+                    message: `Refund recorded as ${data.refund_transaction_no || data.refund_id}.`,
+                    icon: '✓',
+                });
+                loadDashboardData();
+            } catch (err) {
+                showDashboardAlert('Refund failed. Please try again.');
+            }
+        }
+        window.issueRefund = issueRefund;
 
         async function detailPrintReceipt(transactionId) {
             if (!transactionId) return;
@@ -444,7 +479,8 @@
                 const response = await authenticatedFetch(`${API_BASE}/transactions/${id}/`);
                 if (!response.ok) throw new Error('Failed to fetch transaction details');
                 const t = await response.json();
-                
+                currentDetailAmount = parseFloat(t.total_amount || t.total || 0);
+
                 const date = formatDT(t.created_at);
                 const itemsHtml = t.items.map(item => `
                     <div class="flex justify-between text-sm py-1 border-b border-gray-100 last:border-0">
@@ -586,6 +622,14 @@
                 // Show/hide void button based on whether transaction is already voided
                 const voidBtn = document.getElementById('detail-void-btn');
                 if (voidBtn) voidBtn.classList.toggle('hidden', !!t.void);
+                // FEATURE-015: refund only for a non-voided sale that hasn't been
+                // refunded and isn't itself a refund.
+                const refundBtn = document.getElementById('detail-refund-btn');
+                if (refundBtn) {
+                    const refundable = !t.void && t.transaction_type !== 'refund'
+                        && t.status !== 'refunded';
+                    refundBtn.classList.toggle('hidden', !refundable);
+                }
                 document.getElementById('detail-modal').classList.remove('hidden');
             } catch (error) {
                 console.error('Error loading transaction details:', error);
@@ -753,6 +797,8 @@
                 <div class="flex gap-2">
                     <button id="detail-print-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition flex items-center gap-1">🖨️ Print</button>
                     <button id="detail-void-btn" onclick="openVoidModal(currentDetailId); closeDetailModal();" class="bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded-lg transition">Void</button>
+                    <!-- FEATURE-015: refund is manager/admin only — the whole dashboard is already role-gated. -->
+                    <button id="detail-refund-btn" onclick="issueRefund(currentDetailId)" class="bg-orange-500 hover:bg-orange-600 text-white font-medium py-2 px-4 rounded-lg transition">Issue Refund</button>
                 </div>
                 <button onclick="closeDetailModal()" class="bg-white hover:bg-gray-100 text-gray-700 font-medium py-2 px-6 border border-gray-300 rounded-lg transition">Close</button>
             </div>

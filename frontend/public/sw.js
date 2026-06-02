@@ -32,7 +32,9 @@
 // nav/config page-access keys; bumped to precache the three pages.
 // v88: FEATURE-010 — multi-select cardinality (min/max) hints + client-side
 // enforcement in the variant picker.
-const CACHE_NAME = 'tarsierpos-v88'; // canonical cache version
+// v89: FEATURE-015 — refund accounting (manager/admin refund button, X/Z
+// refund section).
+const CACHE_NAME = 'tarsierpos-v89'; // canonical cache version
 const ASSETS = [
   'index.html',
   'login.html',

@@ -86,6 +86,11 @@
                     <div class="text-xs text-gray-500 uppercase tracking-wide mb-1">Voids</div>
                     <div class="text-2xl font-bold text-red-500" id="rpt-void-count"></div>
                 </div>
+                <!-- FEATURE-015: refunds processed this shift -->
+                <div class="bg-white rounded-xl shadow p-4 text-center">
+                    <div class="text-xs text-gray-500 uppercase tracking-wide mb-1">Refunds</div>
+                    <div class="text-2xl font-bold text-orange-500" id="rpt-refund-count"></div>
+                </div>
             </div>
 
             <!-- Payment method breakdown -->
@@ -123,6 +128,10 @@
                 <div class="flex justify-between">
                     <span>Void Total</span>
                     <span class="font-semibold text-red-500" id="rpt-void-total"></span>
+                </div>
+                <div class="flex justify-between mt-1">
+                    <span>Refund Total</span>
+                    <span class="font-semibold text-orange-500" id="rpt-refund-total"></span>
                 </div>
                 <div class="flex justify-between mt-1">
                     <span>Average Transaction</span>
@@ -236,6 +245,8 @@
                 document.getElementById('rpt-txn-count').textContent = data.transaction_count;
                 document.getElementById('rpt-void-count').textContent = data.void_count;
                 document.getElementById('rpt-void-total').textContent = fmt(data.void_total);
+                document.getElementById('rpt-refund-count').textContent = data.refund_count || 0;
+                document.getElementById('rpt-refund-total').textContent = fmt(data.refund_total || 0);
                 document.getElementById('rpt-avg').textContent = fmt(data.average_transaction);
 
                 const methodLabels = { cash: '💵 Cash', gcash: '💙 GCash', maya: '💚 Maya' };

@@ -330,6 +330,19 @@ class PosTransaction(Transaction):
         ('completed', 'Completed'),
         ('pending', 'Pending'),
         ('void', 'Void'),
+        ('refunded', 'Refunded'),
+    ]
+
+    # FEATURE-015: a refund is distinct from a void. A void cancels a sale in
+    # the same shift (fully reverses, mutates the original's void bookkeeping).
+    # A refund leaves the original untouched and immutable and posts a NEW
+    # negative transaction to the current shift. transaction_type is the
+    # canonical discriminator; the legacy `void` flag and `status` are kept for
+    # backward compatibility with existing code and queries.
+    TRANSACTION_TYPE_CHOICES = [
+        ('sale', 'Sale'),
+        ('void', 'Void'),
+        ('refund', 'Refund'),
     ]
 
     PAYMENT_METHOD_CHOICES = [
@@ -521,6 +534,22 @@ class PosTransaction(Transaction):
     # live money query — X/Z reports, dashboard totals, and the IngredientLog
     # stock-movement feed — so demo data never contaminates BIR-grade figures.
     is_seed = models.BooleanField(default=False)
+    # FEATURE-015: refund accounting. transaction_type defaults to 'sale';
+    # refund rows carry 'refund' and link back to the original via refund_of
+    # (the original is never mutated). related_name='refunds' lets a sale
+    # report whether it has already been refunded.
+    transaction_type = models.CharField(
+        max_length=10,
+        choices=TRANSACTION_TYPE_CHOICES,
+        default='sale',
+    )
+    refund_of = models.ForeignKey(
+        'self',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='refunds',
+    )
 
     class Meta:
         ordering = ['-created_at']
@@ -985,6 +1014,11 @@ class ZReport(models.Model):
     # Counts
     transaction_count = models.PositiveIntegerField(default=0)
     voided_count = models.PositiveIntegerField(default=0)
+    # FEATURE-015: refunds processed in this shift, shown as a separate BIR
+    # deduction line (refund_total is a positive magnitude; refunds also reduce
+    # net revenue via their negative transactions posted to this shift).
+    refund_count = models.PositiveIntegerField(default=0)
+    refund_total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
 
     # Sales totals (sum of PosTransaction frozen columns over non-voided rows)
     gross_sales = models.DecimalField(max_digits=12, decimal_places=2, default=0)
@@ -1171,6 +1205,7 @@ class IngredientLog(models.Model):
     ACTION_CHOICES = [
         ('sale', 'Sale'),
         ('void', 'Void'),
+        ('refund', 'Refund'),  # FEATURE-015: ingredient restore on customer refund
         ('adjustment', 'Adjustment'),
         ('restock', 'Restock'),
     ]

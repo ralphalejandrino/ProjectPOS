@@ -7,7 +7,7 @@ from django.utils import timezone
 from django.shortcuts import get_object_or_404
 from django.http import Http404
 from .services import (
-    create_pos_transaction, _restore_ingredients,
+    create_pos_transaction, _restore_ingredients, refund_transaction,
     close_shift_and_finalize_z, stock_movements_for_shift,
 )
 from .models import (
@@ -182,6 +182,7 @@ class PosTransactionViewSet(viewsets.ViewSet):
                 'change_given': float(transaction.change_given) if transaction.change_given else None,
                 'void': transaction.void,
                 'status': transaction.status,
+                'transaction_type': transaction.transaction_type,
                 'voided_by': transaction.voided_by.get_full_name() or transaction.voided_by.username if transaction.voided_by else None,
                 'voided_at': transaction.voided_at.isoformat() if transaction.voided_at else None,
                 'void_reason': transaction.purpose_of_void or '',
@@ -291,6 +292,34 @@ class PosTransactionViewSet(viewsets.ViewSet):
             logger.exception('Void failed')
             return Response({'error': 'An unexpected error occurred.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+    @action(detail=True, methods=['post'], permission_classes=[IsManagerOrAbove])
+    def refund(self, request, pk=None):
+        """FEATURE-015: issue a refund for a prior sale (manager/admin only).
+
+        A refund is distinct from a void: the original is left untouched and a
+        new negative transaction is posted to the refunder's current open
+        shift. Cashiers cannot refund.
+        """
+        try:
+            refund = refund_transaction(pk, request.user)
+        except PosTransaction.DoesNotExist:
+            return Response({'error': 'Transaction not found'},
+                            status=status.HTTP_404_NOT_FOUND)
+        except ValidationError as e:
+            return Response({'error': e.detail if hasattr(e, 'detail') else str(e)},
+                            status=status.HTTP_400_BAD_REQUEST)
+        except Exception:
+            logger.exception('Refund failed')
+            return Response({'error': 'An unexpected error occurred.'},
+                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({
+            'success': True,
+            'refund_id': str(refund.id),
+            'refund_transaction_no': refund.transaction_no,
+            'transaction_type': refund.transaction_type,
+            'amount': float(refund.gross_total or 0),
+        }, status=status.HTTP_201_CREATED)
+
     @action(detail=True, methods=['post'], permission_classes=[IsCashierOrAbove])
     def print_receipt(self, request, pk=None):
         from .receipt_service import print_receipt as do_print
@@ -392,8 +421,11 @@ class PosTransactionViewSet(viewsets.ViewSet):
         shift_qs = PosTransaction.objects.filter(
             shift=shift, is_seed=False,
         )
+        # FEATURE-015: refunds (status='refunded') are excluded from sales by
+        # the status='completed' filter; they are surfaced separately below.
         completed = shift_qs.filter(void=False, status='completed')
         voided = shift_qs.filter(void=True)
+        refunds = shift_qs.filter(transaction_type='refund')
 
         gross = float(completed.aggregate(
             total=Sum('total_amount'))['total'] or 0)
@@ -401,6 +433,10 @@ class PosTransactionViewSet(viewsets.ViewSet):
         void_count = voided.count()
         void_total = float(voided.aggregate(
             total=Sum('total_amount'))['total'] or 0)
+        # refund_total is a positive magnitude (refund total_amount is negative).
+        refund_count = refunds.count()
+        refund_total = abs(float(refunds.aggregate(
+            total=Sum('total_amount'))['total'] or 0))
         net_sales = round(gross, 2)
         average_transaction = round(
             gross / transaction_count, 2) if transaction_count else 0
@@ -426,6 +462,8 @@ class PosTransactionViewSet(viewsets.ViewSet):
             'average_transaction': average_transaction,
             'void_count': void_count,
             'void_total': void_total,
+            'refund_count': refund_count,
+            'refund_total': refund_total,
             'net_sales': net_sales,
             'by_payment_method': by_method,
             # FEATURE-008: per-ingredient sold/voided from the IngredientLog
