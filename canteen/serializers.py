@@ -515,8 +515,20 @@ class IngredientSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'name', 'unit', 'unit_detail', 'cost_per_unit',
             'current_stock', 'par_level', 'supplier', 'supplier_detail',
-            'is_active', 'is_low_stock'
+            'is_active', 'is_low_stock', 'track_depletion', 'updated_at'
         ]
+        read_only_fields = ['updated_at']
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # ISSUE-071: current_stock is ledger-controlled. It may be seeded at
+        # creation (opening balance), but PATCH/PUT must never write it
+        # directly — that produced untracked stock changes. On update the
+        # field becomes read-only; the only sanctioned path to move stock is
+        # POST /ingredients/{id}/adjust/ (or restock), which writes an
+        # IngredientLog. self.instance is set only when updating.
+        if self.instance is not None and not isinstance(self.instance, (list, tuple)):
+            self.fields['current_stock'].read_only = True
 
 
 class IngredientRestockLogSerializer(serializers.ModelSerializer):

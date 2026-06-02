@@ -13,7 +13,7 @@ from .models import (
     ItemCategory, Item, ItemLog, PosTransaction, PosTransactionItem, Shift,
     VariantGroup, VariantOption, CategoryVariantGroup, ProductVariantGroup,
     TransactionItemVariant, BusinessProfile, RecipeIngredient, Ingredient,
-    IngredientUnit, Supplier, IngredientRestockLog, ZReport,
+    IngredientUnit, Supplier, IngredientRestockLog, ZReport, IngredientLog,
 )
 from .serializers import (
     ItemCategorySerializer,
@@ -1498,6 +1498,46 @@ class IngredientViewSet(viewsets.ModelViewSet):
         logs = ingredient.restock_logs.all().order_by('-date')[:50]
         serializer = IngredientRestockLogSerializer(logs, many=True)
         return Response(serializer.data)
+
+    @action(detail=True, methods=['post'])
+    def adjust(self, request, pk=None):
+        """ISSUE-071: the only sanctioned path to move current_stock directly.
+
+        Direct current_stock writes via PATCH are blocked (serializer makes the
+        field read-only on update). A manual correction goes through here, which
+        updates stock atomically under select_for_update() and writes an
+        IngredientLog(action='adjustment') attributed to request.user.
+
+        Body: { quantity_change: decimal (signed), notes: string }
+        """
+        from decimal import Decimal, InvalidOperation
+        raw = request.data.get('quantity_change')
+        notes = request.data.get('notes', '') or ''
+        try:
+            qty = Decimal(str(raw))
+        except (InvalidOperation, TypeError, ValueError):
+            return Response({'error': 'quantity_change must be a number.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        if qty == 0:
+            return Response({'error': 'quantity_change cannot be zero.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        with db_transaction.atomic():
+            ingredient = Ingredient.objects.select_for_update().get(pk=pk)
+            before = ingredient.current_stock
+            after = before + qty
+            ingredient.current_stock = after
+            ingredient.save(update_fields=['current_stock', 'updated_at'])
+            IngredientLog.objects.create(
+                ingredient=ingredient,
+                action='adjustment',
+                quantity_change=qty,
+                stock_before=before,
+                stock_after=after,
+                performed_by=request.user,
+                notes=notes,
+            )
+        return Response(self.get_serializer(ingredient).data)
 
     @action(detail=False, methods=['get'])
     def low_stock(self, request):
