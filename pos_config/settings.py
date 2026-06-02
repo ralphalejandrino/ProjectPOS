@@ -157,6 +157,13 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 DEFAULT_CURRENCY = 'PHP'
+# FLAG-065: restrict djmoney's currency choices to the only currency this POS
+# uses. Without this, djmoney emits the full ~300-currency choices list, whose
+# display names drift between py-moneyed releases — that recurring AlterField
+# drift had to be stripped from migrations 0034 and 0035. Pinning CURRENCIES
+# kills the drift at the source (a one-element choices list cannot drift) and
+# makes the resulting 0036 the last currency-choices migration needed.
+CURRENCIES = ('PHP',)
 
 # Custom User Model
 AUTH_USER_MODEL = 'canteen.User'
