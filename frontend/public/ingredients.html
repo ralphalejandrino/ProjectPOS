@@ -25,6 +25,9 @@
     .tab-bar { scrollbar-width: none; -ms-overflow-style: none; }
     .tab-bar::-webkit-scrollbar { display: none; }
   </style>
+  <!-- config.js MUST load before the inline FLAG-028 guard below, which calls
+       guardPage() (defined in config.js). Matches dashboard/inventory ordering. -->
+  <script src="config.js"></script>
 </head>
 <body class="bg-gray-50 min-h-screen font-sans" data-page="ingredients" style="visibility:hidden">
 <script>
@@ -39,7 +42,6 @@
 
 <!-- NAVIGATION (FEATURE-029: canonical shared nav) -->
 <div id="nav-mount"></div>
-<script src="config.js"></script>
 <script src="keyboard.js"></script>
     <script src="components/format.js"></script>
 <script src="components/nav.js"></script>
