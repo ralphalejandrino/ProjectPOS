@@ -8,6 +8,7 @@ from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.conf import settings
 from django.core.exceptions import ValidationError
+from django.core.validators import MinValueValidator
 from django.utils import timezone as dj_tz
 from djmoney.models.fields import MoneyField
 
@@ -1051,10 +1052,23 @@ class Ingredient(models.Model):
     name = models.CharField(max_length=255)
     unit = models.ForeignKey(IngredientUnit, on_delete=models.PROTECT)
     cost_per_unit = models.DecimalField(max_digits=10, decimal_places=4)
-    current_stock = models.DecimalField(max_digits=10, decimal_places=4, default=0)
+    # FLAG-048: declarative non-negative guard for form/admin/full_clean input.
+    # The sale-depletion path (services._deplete_ingredients) writes via F()
+    # UPDATE which bypasses field validators by design — ISSUE-069 deliberately
+    # lets stock go negative as an owner-investigate signal, never blocking a
+    # sale. This validator only protects manual/declarative edits.
+    current_stock = models.DecimalField(
+        max_digits=10, decimal_places=4, default=0,
+        validators=[MinValueValidator(0)],
+    )
     par_level = models.DecimalField(max_digits=10, decimal_places=4, default=0)
     supplier = models.ForeignKey(Supplier, null=True, blank=True, on_delete=models.SET_NULL)
     is_active = models.BooleanField(default=True)
+    # FLAG-046: depletion gate independent of Item.track_inventory. Ingredient
+    # stock is only depleted on sale/void when this is True.
+    track_depletion = models.BooleanField(default=True)
+    # FLAG-048: surfaces last-touched time for stock/audit reconciliation.
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ['name']
@@ -1113,3 +1127,50 @@ class RecipeIngredient(models.Model):
 
     def __str__(self):
         return f"{self.ingredient.name} x{self.quantity_used} for {self.item or self.variant}"
+
+
+class IngredientLog(models.Model):
+    """FEATURE-009: append-only ledger of every ingredient stock movement.
+
+    One row per stock change (sale, void, manual adjustment, restock). Rows
+    snapshot stock_before/stock_after at write time so the ledger stays an
+    accurate audit trail even if the live Ingredient.current_stock is later
+    touched by another path. There are no update/delete endpoints and the
+    admin registration is read-only — the ledger is immutable history.
+    """
+
+    ACTION_CHOICES = [
+        ('sale', 'Sale'),
+        ('void', 'Void'),
+        ('adjustment', 'Adjustment'),
+        ('restock', 'Restock'),
+    ]
+
+    ingredient = models.ForeignKey(
+        Ingredient, on_delete=models.PROTECT, related_name='logs'
+    )
+    action = models.CharField(max_length=20, choices=ACTION_CHOICES)
+    # Negative = depletion (sale), positive = restock/upward adjustment.
+    quantity_change = models.DecimalField(max_digits=10, decimal_places=4)
+    stock_before = models.DecimalField(max_digits=10, decimal_places=4)
+    stock_after = models.DecimalField(max_digits=10, decimal_places=4)
+    # Linked when action is sale/void; null for manual adjustment/restock.
+    transaction = models.ForeignKey(
+        'PosTransaction', null=True, blank=True,
+        on_delete=models.SET_NULL, related_name='ingredient_logs'
+    )
+    performed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name='ingredient_logs'
+    )
+    timestamp = models.DateTimeField(default=dj_tz.now)
+    notes = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        ordering = ['-timestamp']
+
+    def __str__(self):
+        return (
+            f"{self.ingredient.name} {self.action} "
+            f"{self.quantity_change} ({self.stock_after})"
+        )

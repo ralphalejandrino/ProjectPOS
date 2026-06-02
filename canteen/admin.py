@@ -15,6 +15,7 @@ from .models import (
     BusinessProfile,
     ZReport,
     ZCounter,
+    IngredientLog,
 )
 
 @admin.register(ItemCategory)
@@ -123,6 +124,25 @@ class ZReportAdmin(admin.ModelAdmin):
                     'gross_sales', 'net_sales']
     list_filter = ['business_date', 'cashier']
     readonly_fields = [f.name for f in ZReport._meta.fields]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(IngredientLog)
+class IngredientLogAdmin(admin.ModelAdmin):
+    """FEATURE-009: append-only ledger — read-only in admin."""
+    list_display = ['ingredient', 'action', 'quantity_change',
+                    'stock_before', 'stock_after', 'performed_by', 'timestamp']
+    list_filter = ['action', 'timestamp']
+    search_fields = ['ingredient__name', 'notes']
+    readonly_fields = [f.name for f in IngredientLog._meta.fields]
 
     def has_add_permission(self, request):
         return False
