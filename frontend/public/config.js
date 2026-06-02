@@ -1,9 +1,11 @@
 // Shared API configuration - included before all other scripts
-const isNginx = window.location.port === '' || window.location.port === '443';
-const _base = `${window.location.protocol}//${window.location.hostname}`;
-const API_BASE = isNginx ? `${_base}/api/canteen` : `${_base}:9000/api/canteen`;
-const PAYMENTS_API = isNginx ? `${_base}/api/payments` : `${_base}:9000/api/payments`;
-const AUTH_API = isNginx ? `${_base}/api/auth` : `${_base}:9000/api/auth`;
+// FLAG-068: API and frontend are served from the same nginx origin, so the
+// base URL is empty and every endpoint is a relative path. This works on any
+// hostname (localhost, LAN IP, Tailscale host) with no rebuild and no env
+// injection — the browser resolves the path against the current origin.
+const API_BASE = '/api/canteen';
+const PAYMENTS_API = '/api/payments';
+const AUTH_API = '/api/auth';
 const API_URL = API_BASE;
 
 // XSS defense — escape user/API string data before innerHTML injection
