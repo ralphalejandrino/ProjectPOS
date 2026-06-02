@@ -265,6 +265,61 @@ def resolve_effective_variant_groups(item):
     return resolved
 
 
+def _items_for_group(group_id):
+    """Set of Item ids on which the given variant group is effective.
+
+    Mirrors resolve_effective_variant_groups at the group level: category
+    assignment provides the base set (all items in the assigned categories),
+    product overrides then disable or enable specific items.
+    """
+    from .models import Item, CategoryVariantGroup, ProductVariantGroup
+    cat_ids = list(
+        CategoryVariantGroup.objects.filter(group_id=group_id)
+        .values_list('category_id', flat=True)
+    )
+    item_ids = set(
+        Item.objects.filter(category_id__in=cat_ids).values_list('id', flat=True)
+    ) if cat_ids else set()
+    for pid, enabled in ProductVariantGroup.objects.filter(
+        group_id=group_id
+    ).values_list('product_id', 'enabled'):
+        if enabled:
+            item_ids.add(pid)
+        else:
+            item_ids.discard(pid)
+    return item_ids
+
+
+def variant_ingredient_conflict(variant_option, ingredient, exclude_pk=None):
+    """FLAG-050: would adding ``ingredient`` to ``variant_option``'s recipe make
+    the same ingredient resolve from two different variant groups on one sale?
+
+    At sale time, every selected variant option's recipe is depleted
+    (services._deplete_ingredients). If two options from *different* groups both
+    contribute the same ingredient and both can be selected on one transaction
+    (i.e. both groups are effective on a shared item), the quantities silently
+    add. This detects that overlap at authoring time so it can be rejected.
+
+    Returns the conflicting VariantOption, or None when there is no overlap.
+    """
+    group_id = variant_option.group_id
+    my_items = _items_for_group(group_id)
+    if not my_items:
+        return None
+    candidates = (
+        RecipeIngredient.objects
+        .filter(variant__isnull=False, ingredient=ingredient)
+        .exclude(variant__group_id=group_id)
+        .select_related('variant', 'variant__group')
+    )
+    if exclude_pk is not None:
+        candidates = candidates.exclude(pk=exclude_pk)
+    for recipe in candidates:
+        if my_items & _items_for_group(recipe.variant.group_id):
+            return recipe.variant
+    return None
+
+
 def create_pos_transaction(items_data, payment_method, cashier=None, **kwargs):
     """
     Service function to create a POS transaction, its items, and update inventory.

@@ -541,6 +541,27 @@ class RecipeIngredientSerializer(serializers.ModelSerializer):
         model = RecipeIngredient
         fields = ['id', 'item', 'variant', 'ingredient', 'ingredient_detail', 'quantity_used']
 
+    def validate(self, attrs):
+        # FLAG-050: reject a variant recipe that would make the same ingredient
+        # resolve from two different variant groups co-occurring on one sale
+        # (their quantities would otherwise silently add at depletion time).
+        variant = attrs.get('variant') or getattr(self.instance, 'variant', None)
+        ingredient = attrs.get('ingredient') or getattr(self.instance, 'ingredient', None)
+        if variant and ingredient:
+            from .services import variant_ingredient_conflict
+            conflict = variant_ingredient_conflict(
+                variant, ingredient,
+                exclude_pk=self.instance.pk if self.instance else None,
+            )
+            if conflict is not None:
+                raise serializers.ValidationError(
+                    f"'{ingredient.name}' is already used by variant option "
+                    f"'{conflict.group.name} — {conflict.name}', which can be "
+                    f"selected on the same item. Two variant groups contributing "
+                    f"the same ingredient would double-count it at sale time."
+                )
+        return attrs
+
 
 # ============================================================================
 # BUSINESS PROFILE SERIALIZER
