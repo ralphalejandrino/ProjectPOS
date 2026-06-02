@@ -8,8 +8,7 @@ from djmoney.money import Money
 from .utils.currency import format_currency
 from .models import (
     Item, PosTransaction, PosTransactionItem, Shift,
-    VariantGroup, VariantOption,
-    CategoryVariantGroup, ProductVariantGroup, TransactionItemVariant,
+    VariantOption, TransactionItemVariant,
     RecipeIngredient, Ingredient, IngredientLog,
 )
 import threading
@@ -207,6 +206,65 @@ def open_shift(cashier_user, opening_cash):
         )
 
 
+def resolve_effective_variant_groups(item):
+    """FLAG-049: single source of truth for an item's effective variant groups.
+
+    Consolidates the resolution that previously lived in two places — the
+    inline block of ``create_pos_transaction`` (sale validation) and
+    ``ItemSerializer.get_effective_variant_groups`` (product API). Both now
+    call this.
+
+    Resolution precedence:
+      * category assignment (CategoryVariantGroup) provides the base set;
+      * product overrides (ProductVariantGroup) enable/disable groups;
+      * ``required`` resolves global default → category override → product
+        override, each only when it is not None.
+    Inactive groups are dropped.
+
+    Returns an ordered list (VariantGroup Meta ordering: sort_order, name) of
+    dicts ``{'group': VariantGroup, 'required': bool, 'source': 'category'
+    |'product'}``. Reads relations via the related managers so a caller that
+    prefetched ``category__variant_groups__group__options`` and
+    ``variant_group_overrides__group__options`` (the items endpoint) stays
+    N+1-free.
+    """
+    group_objs = {}        # group_id -> VariantGroup
+    cat_required = {}      # group_id -> is_required_override (may be None)
+    if item.category_id:
+        for cvg in item.category.variant_groups.all():
+            group_objs[cvg.group_id] = cvg.group
+            cat_required[cvg.group_id] = cvg.is_required_override
+    prod_overrides = {}    # group_id -> (enabled, is_required_override)
+    for pvg in item.variant_group_overrides.all():
+        group_objs[pvg.group_id] = pvg.group
+        prod_overrides[pvg.group_id] = (pvg.enabled, pvg.is_required_override)
+
+    effective_ids = set()
+    for gid in cat_required:
+        enabled, _ = prod_overrides.get(gid, (True, None))
+        if enabled:
+            effective_ids.add(gid)
+    for gid, (enabled, _) in prod_overrides.items():
+        if enabled:
+            effective_ids.add(gid)
+
+    resolved = []
+    for gid in effective_ids:
+        group = group_objs[gid]
+        if not group.is_active:
+            continue
+        required = group.is_required
+        if cat_required.get(gid) is not None:
+            required = cat_required[gid]
+        if gid in prod_overrides and prod_overrides[gid][1] is not None:
+            required = prod_overrides[gid][1]
+        source = 'product' if gid in prod_overrides else 'category'
+        resolved.append({'group': group, 'required': required, 'source': source})
+
+    resolved.sort(key=lambda r: (r['group'].sort_order, r['group'].name))
+    return resolved
+
+
 def create_pos_transaction(items_data, payment_method, cashier=None, **kwargs):
     """
     Service function to create a POS transaction, its items, and update inventory.
@@ -253,48 +311,11 @@ def create_pos_transaction(items_data, payment_method, cashier=None, **kwargs):
             # run unconditionally. Gating them behind `if variant_selections:`
             # let a caller bypass enforcement by omitting the key entirely —
             # a transaction missing a required variant could then be saved.
-            # Get effective variant groups for this item
-            # (category groups + product overrides)
-            # Build category-level required overrides: {group_id: is_required_override or None}
-            cat_required_override = {}
-            cat_group_ids = set()
-            if item.category_id:
-                for cvg in CategoryVariantGroup.objects.filter(category_id=item.category_id):
-                    cat_group_ids.add(cvg.group_id)
-                    cat_required_override[cvg.group_id] = cvg.is_required_override
-
-            # Build product-level overrides: {group_id: (enabled, is_required_override)}
-            prod_overrides = {
-                pvg.group_id: (pvg.enabled, pvg.is_required_override)
-                for pvg in ProductVariantGroup.objects.filter(product=item)
-            }
-
-            effective_group_ids = set()
-            for gid in cat_group_ids:
-                enabled, _req = prod_overrides.get(gid, (True, None))
-                if enabled:
-                    effective_group_ids.add(gid)
-            for gid, (enabled, _req) in prod_overrides.items():
-                if enabled:
-                    effective_group_ids.add(gid)
-
-            effective_groups = {
-                g.id: g
-                for g in VariantGroup.objects.filter(id__in=effective_group_ids, is_active=True).prefetch_related('options')
-            }
-
-            # Build required_map using the same precedence as get_effective_variant_groups:
-            # global default → category override → product override
-            required_map = {}
-            for gid, group in effective_groups.items():
-                required = group.is_required
-                if gid in cat_required_override and cat_required_override[gid] is not None:
-                    required = cat_required_override[gid]
-                if gid in prod_overrides:
-                    _enabled, prod_req = prod_overrides[gid]
-                    if prod_req is not None:
-                        required = prod_req
-                required_map[gid] = required
+            # FLAG-049: effective groups + required map come from the single
+            # canonical resolver shared with the product API serializer.
+            resolved_groups = resolve_effective_variant_groups(item)
+            effective_groups = {r['group'].id: r['group'] for r in resolved_groups}
+            required_map = {r['group'].id: r['required'] for r in resolved_groups}
 
             # Validate required groups have a selection. Runs even when
             # variant_selections is absent/empty, so an item with required

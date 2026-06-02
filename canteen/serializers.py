@@ -114,27 +114,17 @@ class ItemSerializer(serializers.ModelSerializer):
         return DEMO_PHOTO_MAP.get(obj.name, "https://picsum.photos/seed/cafe-default/400/300")
 
     def get_effective_variant_groups(self, obj):
-        # Category-assigned groups
-        cat_groups = {}
-        if obj.category_id:
-            for cvg in obj.category.variant_groups.select_related('group').prefetch_related('group__options'):
-                cat_groups[str(cvg.group.id)] = {
-                    'group': VariantGroupSerializer(cvg.group).data,
-                    'is_required': cvg.is_required_override if cvg.is_required_override is not None else cvg.group.is_required,
-                    'source': 'category',
-                }
-        # Product overrides
-        for pvg in obj.variant_group_overrides.select_related('group').prefetch_related('group__options'):
-            gid = str(pvg.group.id)
-            if not pvg.enabled:
-                cat_groups.pop(gid, None)
-            else:
-                cat_groups[gid] = {
-                    'group': VariantGroupSerializer(pvg.group).data,
-                    'is_required': pvg.is_required_override if pvg.is_required_override is not None else pvg.group.is_required,
-                    'source': 'product',
-                }
-        return list(cat_groups.values())
+        # FLAG-049: resolution lives in the single canonical resolver shared
+        # with the POS sale path; this serializer only shapes the output.
+        from .services import resolve_effective_variant_groups
+        return [
+            {
+                'group': VariantGroupSerializer(r['group']).data,
+                'is_required': r['required'],
+                'source': r['source'],
+            }
+            for r in resolve_effective_variant_groups(obj)
+        ]
 
     class Meta:
         model = Item

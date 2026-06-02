@@ -1038,6 +1038,29 @@ class ItemViewSet(viewsets.ModelViewSet):
             'average_profit_margin': round(avg_margin, 2),
         })
     
+    @action(detail=True, methods=['get'], permission_classes=[HasPageAccess('ingredients')])
+    def variants(self, request, pk=None):
+        """ISSUE-070: variant options effective for this item, for the recipe
+        builder's variant selector (so variant-specific recipes can be authored).
+
+        Flattens the item's effective variant groups (single canonical resolver,
+        FLAG-049) into their active options. ``id`` is the VariantOption id the
+        recipe builder posts as ``variant``; ``name`` is prefixed with the group
+        so same-named options across groups (e.g. two "Large"s) stay distinct.
+        """
+        from .services import resolve_effective_variant_groups
+        item = self.get_object()
+        options = []
+        for resolved in resolve_effective_variant_groups(item):
+            group = resolved['group']
+            for option in group.options.all():
+                if option.is_active:
+                    options.append({
+                        'id': str(option.id),
+                        'name': f'{group.name} — {option.name}',
+                    })
+        return Response(options)
+
     @action(detail=True, methods=['get'], permission_classes=[IsManagerOrAbove])
     def logs(self, request, pk=None):
         """Return last 50 stock audit log entries for this item."""
