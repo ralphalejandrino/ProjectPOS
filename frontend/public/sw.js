@@ -23,7 +23,11 @@
 // v84: FEATURE-031 — accessibility foundation (aria-labels, input labels,
 // img alt, :focus-visible). NOTE: const was already at v83 (ahead of the
 // changelog above); bumped to the real next version, not the plan's stale v69.
-const CACHE_NAME = 'tarsierpos-v84'; // canonical cache version
+// v85: FEATURE-030 — PWA UX (install prompt, offline banner, SW update notice
+// in config.js). Bumped to re-precache the updated config.js. The existing
+// skipWaiting + clients.claim below already drives the controllerchange-based
+// update prompt, so no SW logic change was needed.
+const CACHE_NAME = 'tarsierpos-v85'; // canonical cache version
 const ASSETS = [
   'index.html',
   'login.html',
