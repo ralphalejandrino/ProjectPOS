@@ -60,6 +60,13 @@ class CustomTokenObtainPairView(TokenObtainPairView):
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def login_view(request):
+    # FLAG-042 — the PIN/password auth POST. AllowAny (the caller has no token
+    # before authenticating) but brute-force-capped below: 10 failed attempts
+    # per (ip, username) within a 15-minute window → 429 on the 11th. The window
+    # is intentionally stricter than a flat 10/minute throttle, and the counter
+    # resets on a successful login so legitimate users are never locked out by
+    # their own typos once they get in.
+    #
     # Prefer X-Real-IP set by nginx over REMOTE_ADDR (which is always 127.0.0.1
     # behind a local reverse proxy). Fall back to X-Forwarded-For, then REMOTE_ADDR.
     forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR', '')
@@ -332,9 +339,25 @@ class UserViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'], permission_classes=[AllowAny],
             throttle_classes=[QuickLoginRateThrottle], url_path='quick-login')
     def quick_login(self, request):
-        """Return usernames for quick-login kiosk buttons. Restricted to private/loopback IPs
-        to prevent external username enumeration. Returns 404 to non-private callers so the
-        endpoint's existence isn't telegraphed."""
+        """Return the pre-login kiosk avatar grid (cashier/manager display labels).
+
+        FLAG-042 — intentional AllowAny, defence-in-depth against enumeration:
+          * AllowAny is REQUIRED: the cashier has no token yet when the login
+            screen needs to draw the grid, so this fetch is necessarily
+            unauthenticated. The design is loopback/LAN-only — FLAG-039 blocks
+            Tailscale/remote access at the network edge, and this view ALSO
+            returns 404 to any non-private caller (below) so the endpoint's
+            existence isn't telegraphed off-LAN.
+          * Throttled (QuickLoginRateThrottle) to mitigate enumeration: remote
+            callers that somehow reach the view are rate-limited; local/loopback
+            kiosk reloads are exempt (FLAG-072) because the IP guard is their
+            real protection and a per-minute cap would 429 the grid on reload.
+          * Minimal payload (FLAG-042): only ``username`` (the login identifier
+            the kiosk fills into the form — the POST authenticates
+            username+password) and ``first_name`` (the display label). No
+            ``last_name``/``email``/``phone``/PII is returned, so a LAN caller
+            can't harvest a staff roster of full names from this endpoint.
+        """
         import ipaddress
         remote = (request.META.get('HTTP_X_FORWARDED_FOR', '').split(',')[0].strip()
                   or request.META.get('REMOTE_ADDR', ''))
@@ -346,6 +369,6 @@ class UserViewSet(viewsets.ModelViewSet):
             return Response(status=status.HTTP_404_NOT_FOUND)
         users = (User.objects
                  .filter(is_active=True, role__in=['cashier', 'manager'])
-                 .values('username', 'first_name', 'last_name')
+                 .values('username', 'first_name')
                  .order_by('username'))
         return Response(list(users))

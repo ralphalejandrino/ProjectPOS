@@ -159,6 +159,53 @@ class QuickLoginGridTests(APITestCase):
         self.assertIn(status.HTTP_429_TOO_MANY_REQUESTS, codes)
 
 
+class QuickLoginEnumerationHardeningTests(APITestCase):
+    """FLAG-042 — the kiosk grid must expose only the minimum needed to draw a
+    button (display label + the login identifier) and never leak a staff roster
+    of full names / contact PII to a LAN caller."""
+
+    URL = '/api/canteen/users/quick-login/'
+
+    def setUp(self):
+        cache.clear()
+        User.objects.create_user(
+            username='cash', password='x', role='cashier',
+            first_name='Maria', last_name='Santos', email='maria@example.com')
+
+    def test_grid_returns_only_display_fields(self):
+        resp = self.client.get(self.URL, REMOTE_ADDR='127.0.0.1')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertTrue(resp.data, 'grid should not be empty')
+        row = resp.data[0]
+        # Exactly the minimal set: login identifier + display label.
+        self.assertEqual(set(row.keys()), {'username', 'first_name'})
+        # Enumeration guard: no surname / contact PII leaks to a LAN caller.
+        for leaked in ('last_name', 'email', 'phone', 'password', 'is_active', 'role'):
+            self.assertNotIn(leaked, row)
+
+
+class LoginBruteForceThrottleTests(APITestCase):
+    """FLAG-042 — the PIN/password auth POST is brute-force-capped: the 11th
+    attempt in the window is rejected with 429 (10 failures allowed)."""
+
+    URL = '/api/canteen/auth/login/'
+
+    def setUp(self):
+        cache.clear()
+        User.objects.create_user(username='cash', password='secret123', role='cashier')
+
+    def test_eleventh_attempt_is_throttled(self):
+        # 10 wrong-password POSTs are processed (400); the 11th trips the cap (429).
+        for i in range(10):
+            resp = self.client.post(
+                self.URL, {'username': 'cash', 'password': 'wrong'}, format='json')
+            self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST,
+                             f'attempt {i + 1} should be processed, not throttled')
+        resp = self.client.post(
+            self.URL, {'username': 'cash', 'password': 'wrong'}, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+
+
 class RenameEndpointTests(APITestCase):
     """FEATURE-041 — admin-only PATCH /users/<id>/rename/."""
 
