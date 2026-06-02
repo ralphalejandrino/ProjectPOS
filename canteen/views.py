@@ -1885,4 +1885,58 @@ def insights_report(request):
     return Response({'peak_hours': peak_hours, 'cashiers': cashiers})
 
 
-# FEATURE-026 remote_status appended in the next commit.
+@api_view(['GET'])
+@permission_classes([IsAdmin])
+def remote_status(request):
+    """FEATURE-026 (succeeds FLAG-055): phone-friendly live cafe status for the
+    owner over Tailscale. Poll-friendly JSON — no WebSocket.
+
+    Returns the current open shift (if any), today's seed-free gross (current
+    PHT calendar day), the last backup timestamp (same source as FEATURE-020
+    local status), and the last 5 transactions with no PII.
+    """
+    today = timezone.localdate()
+
+    shift = Shift.objects.filter(is_open=True).select_related('cashier').order_by('-opened_at').first()
+    today_qs = PosTransaction.objects.filter(
+        created_at__date=today, status='completed', void=False, is_seed=False,
+    )
+    today_gross = today_qs.aggregate(t=Sum('total_amount'))['t'] or 0
+
+    shift_data = None
+    if shift:
+        shift_txn_today = PosTransaction.objects.filter(
+            shift=shift, created_at__date=today,
+            status='completed', void=False, is_seed=False,
+        ).count()
+        shift_data = {
+            'id': shift.id,
+            'cashier': shift.cashier.username if shift.cashier else '—',
+            'opened_at': shift.opened_at.isoformat(),
+            'transaction_count_today': shift_txn_today,
+        }
+
+    recent = (
+        PosTransaction.objects
+        .filter(status='completed', void=False, is_seed=False)
+        .order_by('-created_at')[:5]
+    )
+    recent_data = [
+        {
+            'time': t.created_at.isoformat(),
+            'amount': _money(t.total_amount),
+            'payment_method': t.payment_method,
+        }
+        for t in recent
+    ]
+
+    backup = _latest_backup_info()
+
+    return Response({
+        'shift_open': shift is not None,
+        'shift': shift_data,
+        'today_gross': _money(today_gross),
+        'last_backup': backup['mtime'] if backup else None,
+        'recent_transactions': recent_data,
+        'server_time': timezone.now().isoformat(),
+    })

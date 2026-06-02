@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Remote View — TarsierPOS</title>
+    <script>if(localStorage.getItem('darkMode')==='true')document.documentElement.classList.add('dark');</script>
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/png" href="assets/tarsier-icon.png">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="shared-styles.css">
+    <script src="config.js"></script>
+    <script src="components/format.js"></script>
+    <script src="components/nav.js"></script>
+</head>
+<body class="bg-gray-50" data-page="remote" style="visibility:hidden">
+    <script>
+        // FEATURE-026: admin-only phone-friendly live cafe status.
+        (function () {
+            if (!guardPage('remote')) return;
+            document.body.style.visibility = '';
+        })();
+    </script>
+
+    <!-- NAVIGATION (FEATURE-029: canonical shared nav) -->
+    <div id="nav-mount"></div>
+    <script>renderNav({ activePage: 'remote' });</script>
+
+    <!-- Phone-first single-column layout — designed narrow from the start. -->
+    <div class="h-[calc(100vh-73px)] overflow-y-auto bg-gray-50">
+    <div class="max-w-md mx-auto px-4 py-6 flex flex-col gap-5">
+
+        <div class="flex items-center justify-between">
+            <h2 class="text-2xl font-bold text-gray-800">📱 Remote View</h2>
+            <span id="updated-at" class="text-xs text-gray-400"></span>
+        </div>
+
+        <!-- SHIFT STATUS -->
+        <div class="bg-white rounded-xl shadow-lg p-5">
+            <div class="flex items-center justify-between mb-3">
+                <span class="text-sm font-medium text-gray-500 uppercase tracking-wide">Shift Status</span>
+                <span id="shift-pill"
+                    class="inline-flex items-center px-3 py-1 rounded-full text-sm font-bold bg-gray-200 text-gray-600">…</span>
+            </div>
+            <div id="shift-detail" class="text-gray-700 text-lg">Loading…</div>
+        </div>
+
+        <!-- TODAY'S GROSS -->
+        <div class="bg-white rounded-xl shadow-lg p-6 text-center border-t-4 border-emerald-500">
+            <p class="text-sm font-medium text-gray-500 uppercase tracking-wide mb-2">Today's Gross</p>
+            <p id="today-gross" class="text-5xl font-extrabold text-emerald-600">—</p>
+        </div>
+
+        <!-- LAST BACKUP -->
+        <div class="bg-white rounded-xl shadow-lg p-5 flex items-center justify-between">
+            <span class="text-sm font-medium text-gray-500 uppercase tracking-wide">Last Backup</span>
+            <span id="last-backup" class="text-gray-700 font-medium">—</span>
+        </div>
+
+        <!-- RECENT TRANSACTIONS -->
+        <div class="bg-white rounded-xl shadow-lg overflow-hidden">
+            <div class="px-5 py-4 border-b border-gray-100">
+                <h3 class="text-base font-semibold text-gray-700">Recent Transactions</h3>
+            </div>
+            <ul id="recent-list" class="divide-y divide-gray-50">
+                <li class="px-5 py-4 text-gray-400 text-center">Loading…</li>
+            </ul>
+        </div>
+
+        <p class="text-center text-gray-400 text-xs">Auto-refreshes every 60 seconds</p>
+
+    </div>
+    </div>
+
+    <script>
+        loadSiteName();
+
+        const PAY_LABEL = { cash: '💵 Cash', gcash: '🔵 GCash', maya: '🟢 Maya', card: '💳 Card' };
+
+        function backupAge(iso) {
+            if (!iso) return 'No backup found';
+            const then = new Date(iso).getTime();
+            const mins = Math.floor((Date.now() - then) / 60000);
+            if (mins < 1) return 'just now';
+            if (mins < 60) return `${mins} min ago`;
+            const hrs = Math.floor(mins / 60);
+            if (hrs < 24) return `${hrs} hr ago`;
+            const days = Math.floor(hrs / 24);
+            return `${days} day${days === 1 ? '' : 's'} ago`;
+        }
+
+        async function loadRemote() {
+            try {
+                const res = await authenticatedFetch(`${API_BASE}/remote/`);
+                if (!res.ok) throw new Error('load failed');
+                const data = await res.json();
+                renderRemote(data);
+            } catch (e) {
+                document.getElementById('shift-detail').textContent = 'Failed to load.';
+            }
+        }
+
+        function renderRemote(data) {
+            const pill = document.getElementById('shift-pill');
+            const detail = document.getElementById('shift-detail');
+            if (data.shift_open && data.shift) {
+                pill.textContent = 'OPEN';
+                pill.className = 'inline-flex items-center px-3 py-1 rounded-full text-sm font-bold bg-green-100 text-green-700';
+                detail.innerHTML = `
+                    <div class="font-semibold">${escapeHtml(data.shift.cashier)}</div>
+                    <div class="text-sm text-gray-500">Opened ${formatTS(data.shift.opened_at)} ·
+                        ${data.shift.transaction_count_today} txn${data.shift.transaction_count_today === 1 ? '' : 's'} today</div>`;
+            } else {
+                pill.textContent = 'CLOSED';
+                pill.className = 'inline-flex items-center px-3 py-1 rounded-full text-sm font-bold bg-gray-200 text-gray-600';
+                detail.innerHTML = '<span class="text-gray-500">No open shift</span>';
+            }
+
+            document.getElementById('today-gross').textContent = formatCurrency(parseFloat(data.today_gross));
+            document.getElementById('last-backup').textContent = backupAge(data.last_backup);
+
+            const list = document.getElementById('recent-list');
+            if (!data.recent_transactions.length) {
+                list.innerHTML = '<li class="px-5 py-4 text-gray-400 text-center">No transactions yet.</li>';
+            } else {
+                list.innerHTML = data.recent_transactions.map(t => `
+                    <li class="px-5 py-3 flex items-center justify-between">
+                        <div>
+                            <div class="font-semibold text-gray-800">${formatCurrency(parseFloat(t.amount))}</div>
+                            <div class="text-xs text-gray-500">${PAY_LABEL[t.payment_method] || escapeHtml(t.payment_method)}</div>
+                        </div>
+                        <span class="text-sm text-gray-400">${formatTS(t.time)}</span>
+                    </li>
+                `).join('');
+            }
+
+            document.getElementById('updated-at').textContent = 'Updated ' + formatTS(data.server_time);
+        }
+
+        loadRemote();
+        // FEATURE-026: poll-friendly auto-refresh (no WebSocket needed for V1).
+        setInterval(loadRemote, 60000);
+    </script>
+</body>
+</html>
