@@ -24,6 +24,8 @@ urlpatterns = [
     path('auth/me/', auth_views.current_user, name='current_user'),
     path('status/', views.local_status, name='local-status'),
     path('status/snapshot/', views.local_status_snapshot, name='local-status-snapshot'),
+    # B13: reporting + remote ops
+    path('reports/period/', views.period_report, name='reports-period'),
     # FEATURE-040: on-screen receipt preview (parity with printed layout)
     path('receipt/preview/', views.receipt_preview, name='receipt-preview'),
     # FEATURE-039: WiFi network management (admin-only)

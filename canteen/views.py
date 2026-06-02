@@ -33,7 +33,7 @@ from .serializers import (
     ItemLogSerializer,
     ZReportSerializer,
 )
-from django.db.models import Sum, Count, F, FloatField
+from django.db.models import Sum, Count, F, FloatField, Q
 from django.db.models.functions import TruncDate
 from datetime import datetime, timedelta, date, timezone as dt_tz
 from rest_framework.permissions import IsAuthenticated, AllowAny
@@ -1725,3 +1725,111 @@ def network_confirm(request):
     if not ok:
         return Response({'error': message}, status=400)
     return Response({'detail': message, 'pending': network_service.get_state()})
+
+
+# ============================================================================
+# B13 — Reporting + remote ops
+# ============================================================================
+
+from decimal import Decimal as _Dec, ROUND_HALF_UP as _RHU
+
+_MONEY_Q = _Dec('0.01')
+
+
+def _money(value):
+    """Decimal money as a 2dp string (matches ZReportSerializer convention —
+    Decimals serialize as strings so no float precision is lost). Accepts a
+    MoneyField Sum result (a Money instance), a Decimal, or None."""
+    if value is None:
+        value = 0
+    if hasattr(value, 'amount'):   # djmoney Money
+        value = value.amount
+    return str(_Dec(str(value)).quantize(_MONEY_Q, rounding=_RHU))
+
+
+@api_view(['GET'])
+@permission_classes([IsManagerOrAbove])
+def period_report(request):
+    """FEATURE-013: multi-day / period report.
+
+    Aggregates across the immutable ZReports whose business_date (PHT-localdate
+    of the shift's opened_at) falls within [from, to]. ZReport columns are built
+    seed-free at finalize time (FLAG-047), so period totals never include
+    is_seed transactions. Returns a summary plus one daily row per ZReport/shift
+    for drill-down. 400 when from > to; an empty (not 404) result when the range
+    holds no ZReports.
+    """
+    frm = request.query_params.get('from')
+    to = request.query_params.get('to')
+    try:
+        d_from = datetime.strptime(frm, '%Y-%m-%d').date()
+        d_to = datetime.strptime(to, '%Y-%m-%d').date()
+    except (TypeError, ValueError):
+        return Response(
+            {'error': 'from and to are required as YYYY-MM-DD.'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    if d_from > d_to:
+        return Response(
+            {'error': 'from must not be after to.'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    reports = (
+        ZReport.objects
+        .filter(business_date__gte=d_from, business_date__lte=d_to)
+        .select_related('shift', 'shift__cashier')
+        .order_by('business_date', 'z_counter')
+    )
+
+    gross = discount = vat = net = _Dec('0')
+    cash = card = gcash = maya = _Dec('0')
+    txn_count = void_count = 0
+    daily = []
+    for z in reports:
+        pb = z.payment_breakdown or {}
+        z_cash = _Dec(str(pb.get('cash') or 0))
+        z_card = _Dec(str(pb.get('card') or 0))
+        z_gcash = _Dec(str(pb.get('gcash') or 0))
+        z_maya = _Dec(str(pb.get('maya') or 0))
+        gross += z.gross_sales
+        discount += z.discount_total
+        vat += z.output_vat
+        net += z.net_sales
+        cash += z_cash
+        card += z_card
+        gcash += z_gcash
+        maya += z_maya
+        txn_count += z.transaction_count
+        void_count += z.voided_count
+        daily.append({
+            'date': z.business_date.strftime('%Y-%m-%d'),
+            'z_counter': z.z_counter,
+            'shift_id': z.shift_id,
+            'cashier': z.shift.cashier.username if (z.shift and z.shift.cashier) else '—',
+            'gross': _money(z.gross_sales),
+            'net': _money(z.net_sales),
+            'transaction_count': z.transaction_count,
+            'void_count': z.voided_count,
+        })
+
+    return Response({
+        'from': d_from.strftime('%Y-%m-%d'),
+        'to': d_to.strftime('%Y-%m-%d'),
+        'summary': {
+            'gross_total': _money(gross),
+            'discount_total': _money(discount),
+            'vat_amount': _money(vat),
+            'net_total': _money(net),
+            'cash_total': _money(cash),
+            'card_total': _money(card),
+            'gcash_total': _money(gcash),
+            'maya_total': _money(maya),
+            'transaction_count': txn_count,
+            'void_count': void_count,
+        },
+        'daily': daily,
+    })
+
+
+# FEATURE-014 insights_report + FEATURE-026 remote_status appended in later commits.

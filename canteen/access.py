@@ -28,9 +28,15 @@ SENSITIVE_PAGES = {row[0] for row in _PAGE_ROWS if row[3]}
 
 # Non-gateable pages always follow the role default (never user-overridable).
 # 'pos' is the cashier hot path — everyone authenticated gets it.
+# B13: period/insights are manager+admin reporting surfaces; remote is the
+# admin-only phone ops view. Kept non-gateable (like 'status') — they follow
+# role and never appear in the per-user toggle UI.
 _NON_GATEABLE_DEFAULT_ROLES = {
-    'pos':    ('cashier', 'manager', 'admin'),
-    'status': ('manager', 'admin'),
+    'pos':      ('cashier', 'manager', 'admin'),
+    'status':   ('manager', 'admin'),
+    'period':   ('manager', 'admin'),
+    'insights': ('manager', 'admin'),
+    'remote':   ('admin',),
 }
 
 _DEFAULT_ROLES = {row[0]: row[2] for row in _PAGE_ROWS}

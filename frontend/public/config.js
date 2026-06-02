@@ -71,8 +71,8 @@ function getUserRole() {
 // with canteen/access.py.
 // ============================================================
 const ROLE_DEFAULT_PAGES = {
-    admin:   ['pos', 'inventory', 'ingredients', 'dashboard', 'xreport', 'zreport', 'settings', 'status'],
-    manager: ['pos', 'inventory', 'ingredients', 'dashboard', 'xreport', 'zreport', 'status'],
+    admin:   ['pos', 'inventory', 'ingredients', 'dashboard', 'xreport', 'zreport', 'settings', 'status', 'period', 'insights', 'remote'],
+    manager: ['pos', 'inventory', 'ingredients', 'dashboard', 'xreport', 'zreport', 'status', 'period', 'insights'],
     cashier: ['pos'],
 };
 

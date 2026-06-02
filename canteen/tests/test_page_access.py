@@ -22,11 +22,13 @@ class AccessLogicTests(APITestCase):
         # Deploy safety: no override → exactly the historical role mapping.
         self.assertEqual(
             access.effective_pages(self.admin),
-            {'pos', 'status', 'inventory', 'ingredients', 'dashboard', 'xreport', 'zreport', 'settings'},
+            {'pos', 'status', 'period', 'insights', 'remote',
+             'inventory', 'ingredients', 'dashboard', 'xreport', 'zreport', 'settings'},
         )
         self.assertEqual(
             access.effective_pages(self.manager),
-            {'pos', 'status', 'inventory', 'ingredients', 'dashboard', 'xreport', 'zreport'},
+            {'pos', 'status', 'period', 'insights',
+             'inventory', 'ingredients', 'dashboard', 'xreport', 'zreport'},
         )
         self.assertEqual(access.effective_pages(self.cashier), {'pos'})
 

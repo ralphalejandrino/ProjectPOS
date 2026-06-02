@@ -27,7 +27,10 @@
 // in config.js). Bumped to re-precache the updated config.js. The existing
 // skipWaiting + clients.claim below already drives the controllerchange-based
 // update prompt, so no SW logic change was needed.
-const CACHE_NAME = 'tarsierpos-v86'; // canonical cache version
+// v87: B13 — period report, owner insights, and admin remote ops view
+// (FEATURE-013 / FEATURE-014 / FEATURE-026, FLAG-055 partial). New pages +
+// nav/config page-access keys; bumped to precache the three pages.
+const CACHE_NAME = 'tarsierpos-v87'; // canonical cache version
 const ASSETS = [
   'index.html',
   'login.html',
@@ -38,6 +41,9 @@ const ASSETS = [
   'xreport.html',
   'zreport.html',
   'status.html',
+  'period.html',
+  'insights.html',
+  'remote.html',
   'denied.html',
   'app.js',
   'config.js',
