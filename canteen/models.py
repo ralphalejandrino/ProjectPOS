@@ -247,7 +247,15 @@ class ItemLog(BaseModelWithUUID):
 # ============================================================================
 
 class OfficialReceiptCounter(models.Model):
-    """Atomic per-day OR number counter. One row per calendar day (PHT)."""
+    """Atomic OR number counter, one row per calendar day (PHT) for audit/history.
+
+    FLAG-057: the ``counter`` value is installation-wide *monotonic* — it is NOT
+    reset to 0 on a new day. Each new day's row continues from the global
+    high-water mark, so the NNNN suffix of an OR number never repeats across the
+    lifetime of the installation (required for BIR Form 1900 / CSET evaluation).
+    The human-readable format stays ``OR-YYYYMMDD-NNNN``; only the date segment
+    rolls over daily, NNNN keeps climbing.
+    """
     date = models.DateField(unique=True)
     counter = models.PositiveIntegerField(default=0)
     updated_at = models.DateTimeField(auto_now=True)
@@ -505,15 +513,28 @@ class PosTransaction(Transaction):
     @staticmethod
     def _generate_or_number():
         from django.db import transaction as db_tx
+        from django.db.models import Max
         from datetime import timezone as dt_tz, timedelta
         from django.utils import timezone as dj_tz
         PHT = dt_tz(timedelta(hours=8))
         today = dj_tz.now().astimezone(PHT).date()
         with db_tx.atomic():
-            counter_obj, _ = OfficialReceiptCounter.objects.select_for_update().get_or_create(
+            counter_obj, created = OfficialReceiptCounter.objects.select_for_update().get_or_create(
                 date=today,
                 defaults={'counter': 0},
             )
+            if created:
+                # FLAG-057: OR numbering is installation-wide monotonic. A brand
+                # new day's row must continue from the global high-water mark
+                # rather than resetting to 0001, so NNNN is never reused across
+                # days. Past-day rows are immutable, so this Max read is stable.
+                highest = (
+                    OfficialReceiptCounter.objects
+                    .exclude(pk=counter_obj.pk)
+                    .aggregate(m=Max('counter'))['m']
+                    or 0
+                )
+                counter_obj.counter = highest
             counter_obj.counter += 1
             counter_obj.save(update_fields=['counter', 'updated_at'])
             return f'OR-{today.strftime("%Y%m%d")}-{counter_obj.counter:04d}'
