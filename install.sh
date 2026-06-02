@@ -69,6 +69,10 @@ FERNET_KEY=$("$VENV/bin/python" -c "from cryptography.fernet import Fernet; prin
 DB_PASS=$("$VENV/bin/python" -c "import secrets, string; chars = string.ascii_letters + string.digits + '@#%^&*'; print(''.join(secrets.choice(chars) for _ in range(32)))")
 LAN_IP=$(hostname -I | awk '{print $1}')
 TAILSCALE_IP=$(tailscale ip -4 2>/dev/null || echo "N/A")
+# Tailscale MagicDNS name for cert renewal (FEATURE-018). Empty if Tailscale is
+# not up yet — the cert-renew timer will log an error until TAILSCALE_HOSTNAME
+# is filled in.
+TAILSCALE_HOST=$(tailscale status --json 2>/dev/null | "$VENV/bin/python" -c "import sys,json; print(json.load(sys.stdin)['Self']['DNSName'].rstrip('.'))" 2>/dev/null || echo "")
 
 printf 'DJANGO_SECRET_KEY=%s\n' "$SECRET_KEY"                          >  "$PROJ/.env"
 printf 'FERNET_KEY=%s\n'        "$FERNET_KEY"                          >> "$PROJ/.env"
@@ -76,6 +80,9 @@ printf 'DB_PASSWORD=%s\n'       "$DB_PASS"                             >> "$PROJ
 printf 'ALLOWED_HOSTS=%s\n'     "*" >> "$PROJ/.env"
 printf 'BACKUP_PATH=%s\n'       "$PROJ/backups"                        >> "$PROJ/.env"
 printf 'DEBUG=%s\n'             "False"                                >> "$PROJ/.env"
+# B11b ops vars (FEATURE-018/024/027): cert hostname + backend unit name.
+printf 'TAILSCALE_HOSTNAME=%s\n' "$TAILSCALE_HOST"                     >> "$PROJ/.env"
+printf 'TARSIERPOS_SERVICE=%s\n' "tarsierpos"                         >> "$PROJ/.env"
 
 chown "$DEPLOY_USER:$DEPLOY_USER" "$PROJ/.env"
 chmod 600 "$PROJ/.env"
@@ -83,8 +90,8 @@ chmod 600 "$PROJ/.env"
 # Verify .env integrity
 ENV_LINES=$(grep -c "^[A-Z]" "$PROJ/.env")
 KEY_LEN=${#SECRET_KEY}
-if [ "$ENV_LINES" -ne 6 ]; then
-    echo "  ERROR: .env has $ENV_LINES lines (expected 6)" >&2; exit 1
+if [ "$ENV_LINES" -ne 8 ]; then
+    echo "  ERROR: .env has $ENV_LINES lines (expected 8)" >&2; exit 1
 fi
 if [ "$KEY_LEN" -ne 50 ]; then
     echo "  ERROR: SECRET_KEY is $KEY_LEN chars (expected 50)" >&2; exit 1
@@ -184,6 +191,15 @@ chmod 664 "$PROJ/db.sqlite3" 2>/dev/null || true
 
 systemctl enable tarsierpos.service
 systemctl start  tarsierpos.service
+
+# ── 9b. Ops timers (cert renewal, daily local backup, daily health) ───────────
+echo "[9b/11] Installing ops systemd timers (B11b)..."
+if [ -f "$PROJ/scripts/install-ops-units.sh" ]; then
+    TARSIERPOS_DIR="$PROJ" SUDO_USER="$DEPLOY_USER" bash "$PROJ/scripts/install-ops-units.sh" || \
+        echo "  WARNING: ops-unit install reported an error — check 'systemctl list-timers'" >&2
+else
+    echo "  WARNING: scripts/install-ops-units.sh not found — skipping ops timers" >&2
+fi
 
 # ── 10. Cron watchdog (root crontab) ──────────────────────────────────────────
 echo "[10/11] Adding health-check cron job..."
