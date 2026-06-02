@@ -6,7 +6,10 @@ After=network.target
 User=__DEPLOY_USER__
 Group=www-data
 WorkingDirectory=/home/__DEPLOY_USER__/TarsierPOS
-ExecStart=/home/__DEPLOY_USER__/TarsierPOS/venv/bin/gunicorn pos_config.wsgi:application --bind 127.0.0.1:9000 --workers 3 --timeout 60
+# FLAG-069: --log-level warning suppresses gunicorn's info-level shutdown
+# messages, which otherwise trigger a benign "reentrant call inside
+# BufferedWriter" RuntimeError when SIGTERM interrupts a logging write on stop.
+ExecStart=/home/__DEPLOY_USER__/TarsierPOS/venv/bin/gunicorn pos_config.wsgi:application --bind 127.0.0.1:9000 --workers 3 --timeout 60 --log-level warning
 Restart=always
 RestartSec=5
 EnvironmentFile=/home/__DEPLOY_USER__/TarsierPOS/.env
