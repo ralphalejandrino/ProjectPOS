@@ -852,6 +852,7 @@ class Command(BaseCommand):
                     payment_method=payment,
                     status=status,
                     void=is_void,
+                    is_seed=True,  # FLAG-047: quarantine demo rows from live totals
                     discount_type=disc_type,
                     discount_amount=disc_amount,
                     discount_id_number=disc_id,

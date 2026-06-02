@@ -147,9 +147,12 @@ def stock_movements_for_shift(shift):
     """
     if shift is None:
         return []
+    # FLAG-047: skip ledger rows tied to seed transactions — a quarantined
+    # demo sale/void must not surface in the X/Z stock-movement section.
     logs = (
         IngredientLog.objects
         .filter(transaction__shift=shift, action__in=['sale', 'void'])
+        .exclude(transaction__is_seed=True)
         .select_related('ingredient')
     )
     agg = {}
@@ -574,11 +577,13 @@ def close_shift_and_finalize_z(shift_id, cash_counted, cashier_user):
     bp = BusinessProfile.objects.first()
     is_official = bool(bp and (bp.machine_identification_number or '').strip())
 
+    # FLAG-047: seed/demo rows are excluded from every Z aggregate so a
+    # quarantined demo transaction can never leak into a BIR-grade Z total.
     non_voided = PosTransaction.objects.filter(
-        shift=shift, voided_at__isnull=True
+        shift=shift, voided_at__isnull=True, is_seed=False,
     )
     voided = PosTransaction.objects.filter(
-        shift=shift, voided_at__isnull=False
+        shift=shift, voided_at__isnull=False, is_seed=False,
     )
 
     gross_sales = _zsum(non_voided, 'gross_total')

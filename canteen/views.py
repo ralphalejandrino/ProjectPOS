@@ -386,8 +386,10 @@ class PosTransactionViewSet(viewsets.ViewSet):
                 status=status.HTTP_404_NOT_FOUND
             )
 
+        # FLAG-047: exclude seed rows from the X-report so demo data never
+        # contaminates the live shift summary.
         shift_qs = PosTransaction.objects.filter(
-            shift=shift
+            shift=shift, is_seed=False,
         )
         completed = shift_qs.filter(void=False, status='completed')
         voided = shift_qs.filter(void=True)
@@ -500,50 +502,50 @@ class DashboardViewSet(viewsets.ViewSet):
     def list(self, request):
         """Get dashboard data"""
         today = timezone.now().date()
-        
+
+        # FLAG-047: every dashboard money/count query excludes seed rows so
+        # demo data never shows up in live totals or charts.
+        base = PosTransaction.objects.filter(status='completed', is_seed=False)
+
         # Today's stats
-        today_transactions = PosTransaction.objects.filter(
+        today_transactions = base.filter(
             created_at__date=today,
-            status='completed'
         )
         today_revenue = today_transactions.aggregate(
             total=Sum('total_amount')
         )['total'] or 0
         today_count = today_transactions.count()
-        
+
         # This week's stats
         week_start = today - timedelta(days=today.weekday())
-        week_transactions = PosTransaction.objects.filter(
+        week_transactions = base.filter(
             created_at__date__gte=week_start,
-            status='completed'
         )
         week_revenue = week_transactions.aggregate(
             total=Sum('total_amount')
         )['total'] or 0
-        
+
         # This month's stats
         month_start = today.replace(day=1)
-        month_transactions = PosTransaction.objects.filter(
+        month_transactions = base.filter(
             created_at__date__gte=month_start,
-            status='completed'
         )
         month_revenue = month_transactions.aggregate(
             total=Sum('total_amount')
         )['total'] or 0
-        
+
         # All time stats
-        all_transactions = PosTransaction.objects.filter(status='completed')
+        all_transactions = base
         total_revenue = all_transactions.aggregate(
             total=Sum('total_amount')
         )['total'] or 0
         total_count = all_transactions.count()
-        
+
         # Last 7 days daily revenue — single query
         seven_days_ago = today - timedelta(days=6)
         daily_totals = dict(
-            PosTransaction.objects.filter(
+            base.filter(
                 created_at__date__gte=seven_days_ago,
-                status='completed'
             ).annotate(
                 day=TruncDate('created_at')
             ).values('day').annotate(
@@ -563,6 +565,7 @@ class DashboardViewSet(viewsets.ViewSet):
         top_items = PosTransactionItem.objects.filter(
             pos_transaction__created_at__date=today,
             pos_transaction__void=False,
+            pos_transaction__is_seed=False,  # FLAG-047
         ).values(
             'item__name'
         ).annotate(

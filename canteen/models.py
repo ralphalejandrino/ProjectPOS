@@ -492,6 +492,11 @@ class PosTransaction(Transaction):
         related_name='transactions'
     )
     voided_at = models.DateTimeField(blank=True, null=True)
+    # FLAG-047: demo/seed quarantine. True marks a transaction created by the
+    # seed_demo fixture (never a real sale). Seed rows are excluded from every
+    # live money query — X/Z reports, dashboard totals, and the IngredientLog
+    # stock-movement feed — so demo data never contaminates BIR-grade figures.
+    is_seed = models.BooleanField(default=False)
 
     class Meta:
         ordering = ['-created_at']
