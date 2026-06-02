@@ -87,7 +87,7 @@
 
     <!-- Toolbar -->
     <div class="flex flex-col sm:flex-row gap-3 mb-4 items-start sm:items-center justify-between">
-      <input id="ingredientSearch" type="text" placeholder="Search ingredients…"
+      <input aria-label="Search ingredients…" id="ingredientSearch" type="text" placeholder="Search ingredients…"
         class="w-full sm:w-72 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
         oninput="filterIngredients()" />
       <button onclick="openModal('ingredient', null)"
@@ -199,15 +199,15 @@
       <h2 class="text-lg font-semibold text-gray-700">Restock History</h2>
     </div>
     <div class="flex flex-col sm:flex-row gap-3 mb-4">
-      <select id="restockFilterIngredient"
+      <select aria-label="Restock Filter Ingredient" id="restockFilterIngredient"
         class="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
         onchange="loadRestockLog()">
         <option value="">All Ingredients</option>
       </select>
-      <input type="date" id="restockFilterFrom"
+      <input aria-label="Restock Filter From" type="date" id="restockFilterFrom"
         class="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
         onchange="loadRestockLog()" />
-      <input type="date" id="restockFilterTo"
+      <input aria-label="Restock Filter To" type="date" id="restockFilterTo"
         class="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
         onchange="loadRestockLog()" />
       <button onclick="loadRestockLog()"
@@ -245,7 +245,7 @@
       <div class="flex flex-col sm:flex-row gap-3 items-start sm:items-end">
         <div class="flex-1">
           <label class="block text-xs font-medium text-gray-500 mb-1">Menu Item</label>
-          <select id="recipeItemSelect"
+          <select aria-label="Menu Item" id="recipeItemSelect"
             class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
             onchange="onRecipeItemChange()">
             <option value="">— Select a menu item —</option>
@@ -253,14 +253,14 @@
         </div>
         <div id="recipeVariantWrapper" class="hidden flex-1">
           <label class="block text-xs font-medium text-gray-500 mb-1">Variant (optional)</label>
-          <select id="recipeVariantSelect"
+          <select aria-label="Variant (optional)" id="recipeVariantSelect"
             class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
             onchange="loadRecipeIngredients()">
             <option value="">All variants (base recipe)</option>
           </select>
         </div>
         <label class="flex items-center gap-2 text-sm text-gray-600 whitespace-nowrap pt-5">
-          <input type="checkbox" id="recipeVariantToggle" onchange="toggleVariantSelector()" class="rounded" />
+          <input aria-label="Recipe Variant Toggle" type="checkbox" id="recipeVariantToggle" onchange="toggleVariantSelector()" class="rounded" />
           Set for specific variant
         </label>
       </div>
@@ -288,13 +288,13 @@
           <tbody id="addRecipeRow" class="hidden">
             <tr class="bg-blue-50">
               <td class="px-4 py-2">
-                <select id="newRecipeIngredient"
+                <select aria-label="New Recipe Ingredient" id="newRecipeIngredient"
                   class="w-full border border-gray-200 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300">
                   <option value="">Select ingredient…</option>
                 </select>
               </td>
               <td class="px-4 py-2 text-right">
-                <input type="number" id="newRecipeQty" min="0" step="0.001" placeholder="0.000"
+                <input aria-label="New Recipe Qty" type="number" id="newRecipeQty" min="0" step="0.001" placeholder="0.000"
                   class="w-24 border border-gray-200 rounded px-2 py-1 text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-300" />
               </td>
               <td class="px-4 py-2 text-gray-400 text-xs" id="newRecipeUnit">—</td>
@@ -325,26 +325,26 @@
   <div id="ingredientModal" class="modal-panel hidden bg-white rounded-2xl shadow-2xl w-full max-w-lg">
     <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100">
       <h2 class="font-semibold text-gray-800" id="ingredientModalTitle">Add Ingredient</h2>
-      <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+      <butto aria-label="Close"n onclick="closeModal()" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
     </div>
     <div class="px-6 py-4 space-y-3 max-h-[70vh] overflow-y-auto">
       <input type="hidden" id="ingredientId" />
       <div>
         <label class="block text-xs font-medium text-gray-600 mb-1">Name <span class="text-red-500">*</span></label>
-        <input type="text" id="ingredientName"
+        <input aria-label="Name" type="text" id="ingredientName"
           class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
       </div>
       <div class="grid grid-cols-2 gap-3">
         <div>
           <label class="block text-xs font-medium text-gray-600 mb-1">Unit <span class="text-red-500">*</span></label>
-          <select id="ingredientUnit"
+          <select aria-label="Unit" id="ingredientUnit"
             class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300">
             <option value="">Select unit…</option>
           </select>
         </div>
         <div>
           <label class="block text-xs font-medium text-gray-600 mb-1">Supplier</label>
-          <select id="ingredientSupplier"
+          <select aria-label="Supplier" id="ingredientSupplier"
             class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300">
             <option value="">None</option>
           </select>
@@ -353,17 +353,17 @@
       <div class="grid grid-cols-3 gap-3">
         <div>
           <label class="block text-xs font-medium text-gray-600 mb-1">Current Stock</label>
-          <input type="number" id="ingredientStock" min="0" step="0.001"
+          <input aria-label="Current Stock" type="number" id="ingredientStock" min="0" step="0.001"
             class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
         </div>
         <div>
           <label class="block text-xs font-medium text-gray-600 mb-1">Par Level</label>
-          <input type="number" id="ingredientPar" min="0" step="0.001"
+          <input aria-label="Par Level" type="number" id="ingredientPar" min="0" step="0.001"
             class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
         </div>
         <div>
           <label class="block text-xs font-medium text-gray-600 mb-1">Cost / Unit (₱)</label>
-          <input type="number" id="ingredientCost" min="0" step="0.01"
+          <input aria-label="Cost / Unit (₱)" type="number" id="ingredientCost" min="0" step="0.01"
             class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
         </div>
       </div>
@@ -382,35 +382,35 @@
   <div id="supplierModal" class="modal-panel hidden bg-white rounded-2xl shadow-2xl w-full max-w-lg">
     <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100">
       <h2 class="font-semibold text-gray-800" id="supplierModalTitle">Add Supplier</h2>
-      <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+      <butto aria-label="Close"n onclick="closeModal()" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
     </div>
     <div class="px-6 py-4 space-y-3">
       <input type="hidden" id="supplierId" />
       <div>
         <label class="block text-xs font-medium text-gray-600 mb-1">Name <span class="text-red-500">*</span></label>
-        <input type="text" id="supplierName"
+        <input aria-label="Name" type="text" id="supplierName"
           class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
       </div>
       <div class="grid grid-cols-2 gap-3">
         <div>
           <label class="block text-xs font-medium text-gray-600 mb-1">Contact Person</label>
-          <input type="text" id="supplierContact"
+          <input aria-label="Contact Person" type="text" id="supplierContact"
             class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
         </div>
         <div>
           <label class="block text-xs font-medium text-gray-600 mb-1">Phone</label>
-          <input type="text" id="supplierPhone"
+          <input aria-label="Phone" type="text" id="supplierPhone"
             class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
         </div>
       </div>
       <div>
         <label class="block text-xs font-medium text-gray-600 mb-1">Address</label>
-        <textarea id="supplierAddress" rows="2"
+        <textarea aria-label="Address" id="supplierAddress" rows="2"
           class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none"></textarea>
       </div>
       <div>
         <label class="block text-xs font-medium text-gray-600 mb-1">Notes</label>
-        <textarea id="supplierNotes" rows="2"
+        <textarea aria-label="Notes" id="supplierNotes" rows="2"
           class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none"></textarea>
       </div>
     </div>
@@ -424,18 +424,18 @@
   <div id="unitModal" class="modal-panel hidden bg-white rounded-2xl shadow-2xl w-full max-w-sm">
     <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100">
       <h2 class="font-semibold text-gray-800" id="unitModalTitle">Add Unit</h2>
-      <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+      <butto aria-label="Close"n onclick="closeModal()" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
     </div>
     <div class="px-6 py-4 space-y-3">
       <input type="hidden" id="unitId" />
       <div>
         <label class="block text-xs font-medium text-gray-600 mb-1">Name <span class="text-red-500">*</span></label>
-        <input type="text" id="unitName"
+        <input aria-label="Name" type="text" id="unitName"
           class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
       </div>
       <div>
         <label class="block text-xs font-medium text-gray-600 mb-1">Abbreviation <span class="text-red-500">*</span></label>
-        <input type="text" id="unitAbbr" maxlength="10"
+        <input aria-label="Abbreviation" type="text" id="unitAbbr" maxlength="10"
           class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
       </div>
     </div>
@@ -449,7 +449,7 @@
   <div id="restockModal" class="modal-panel hidden bg-white rounded-2xl shadow-2xl w-full max-w-md">
     <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100">
       <h2 class="font-semibold text-gray-800">Restock Ingredient</h2>
-      <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+      <butto aria-label="Close"n onclick="closeModal()" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
     </div>
     <div class="px-6 py-4 space-y-3">
       <input type="hidden" id="restockIngredientId" />
@@ -458,17 +458,17 @@
       </div>
       <div>
         <label class="block text-xs font-medium text-gray-600 mb-1">Quantity Added <span class="text-red-500">*</span></label>
-        <input type="number" id="restockQty" min="0" step="0.001"
+        <input aria-label="Quantity Added" type="number" id="restockQty" min="0" step="0.001"
           class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
       </div>
       <div>
         <label class="block text-xs font-medium text-gray-600 mb-1">Cost per Unit (₱)</label>
-        <input type="number" id="restockCost" min="0" step="0.01"
+        <input aria-label="Cost per Unit (₱)" type="number" id="restockCost" min="0" step="0.01"
           class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
       </div>
       <div>
         <label class="block text-xs font-medium text-gray-600 mb-1">Notes</label>
-        <textarea id="restockNotes" rows="2"
+        <textarea aria-label="Notes" id="restockNotes" rows="2"
           class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none"></textarea>
       </div>
     </div>

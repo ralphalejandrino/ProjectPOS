@@ -56,17 +56,17 @@
         <div id="left-sidebar" class="bg-white border-r border-gray-200 overflow-y-auto flex-shrink-0 transition-all duration-200" style="width:256px;">
             <!-- Sidebar Toggle Button -->
             <div class="flex justify-end p-2 border-b border-gray-100">
-                <button id="sidebar-toggle" onclick="toggleSidebar()" class="text-gray-400 hover:text-gray-600 p-1 rounded leading-none" title="Toggle sidebar">
+                <butto aria-label="Toggle sidebar"n id="sidebar-toggle" onclick="toggleSidebar()" class="text-gray-400 hover:text-gray-600 p-1 rounded leading-none" title="Toggle sidebar">
                     <span id="sidebar-toggle-icon">▲</span>
                 </button>
             </div>
             <!-- Sidebar Content -->
             <div id="sidebar-content" class="p-4">
                 <!-- Search -->
-                <input type="text" id="search-input" placeholder="🔍 Search products..."
+                <input aria-label="🔍 Search products..." type="text" id="search-input" placeholder="🔍 Search products..."
                        class="w-full px-3 py-2 border border-gray-300 rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500"
                        oninput="searchProducts()">
-                <input type="text" id="barcode-input" autocomplete="off"
+                <input aria-label="Barcode input" type="text" id="barcode-input" autocomplete="off"
                        style="position:absolute;opacity:0;pointer-events:none;width:1px;height:1px;"
                        aria-hidden="true">
 
@@ -154,7 +154,7 @@
 
             <div class="mb-4">
                 <label class="block text-sm font-medium text-gray-700 mb-2">Cash Received:</label>
-                <input type="number" id="cash-received"
+                <input aria-label="Cash Received" type="number" id="cash-received"
                        class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg text-2xl font-bold text-center focus:outline-none focus:border-blue-500"
                        placeholder="0.00" step="0.01" oninput="calculateChange()">
             </div>
@@ -202,11 +202,11 @@
                         🏷️ Discount
                     </button>
                 </div>
-                <input type="text" id="cash-discount-id"
+                <input aria-label="OSCA / PWD ID Number" type="text" id="cash-discount-id"
                        class="hidden w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-2"
                        placeholder="OSCA / PWD ID Number">
                 <div id="cash-promo-input" class="hidden flex items-center gap-2 mb-2">
-                    <input type="number" id="cash-promo-pct" min="0" max="100" step="0.01"
+                    <input aria-label="Cash promo pct" type="number" id="cash-promo-pct" min="0" max="100" step="0.01"
                            class="w-24 border border-gray-300 rounded-lg px-3 py-2 text-sm"
                            placeholder="0">
                     <span class="text-sm text-gray-600">% discount</span>
@@ -937,9 +937,9 @@
                 <p id="gcash-qr-missing" class="text-red-500 text-sm">No QR uploaded. Go to Settings to upload.</p>
             </div>
             <p class="text-2xl font-black mb-4" style="color:#1973fa"><span id="gcash-total">0.00</span></p>
-            <input type="tel" id="gcash-customer-phone" placeholder="Customer phone number (optional)"
+            <input aria-label="Customer phone" type="tel" id="gcash-customer-phone" placeholder="Customer phone number (optional)"
                 class="w-full border rounded-lg p-2 mb-3 text-center">
-            <input type="text" id="gcash-reference" placeholder="Enter GCash reference number"
+            <input aria-label="GCash reference" type="text" id="gcash-reference" placeholder="Enter GCash reference number"
                 class="w-full border rounded-lg p-2 mb-3 text-center">
 
             <!-- DISCOUNT SECTION -->
@@ -961,11 +961,11 @@
                         🏷️ Discount
                     </button>
                 </div>
-                <input type="text" id="gcash-discount-id"
+                <input aria-label="OSCA / PWD ID Number" type="text" id="gcash-discount-id"
                        class="hidden w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-2"
                        placeholder="OSCA / PWD ID Number">
                 <div id="gcash-promo-input" class="hidden flex items-center gap-2 mb-2">
-                    <input type="number" id="gcash-promo-pct" min="0" max="100" step="0.01"
+                    <input aria-label="Gcash promo pct" type="number" id="gcash-promo-pct" min="0" max="100" step="0.01"
                            class="w-24 border border-gray-300 rounded-lg px-3 py-2 text-sm"
                            placeholder="0">
                     <span class="text-sm text-gray-600">% discount</span>
@@ -1007,9 +1007,9 @@
                 <p id="maya-qr-missing" class="text-red-500 text-sm">No QR uploaded. Go to Settings to upload.</p>
             </div>
             <p class="text-2xl font-black text-emerald-600 mb-4"><span id="maya-total">0.00</span></p>
-            <input type="tel" id="maya-customer-phone" placeholder="Customer phone number (optional)"
+            <input aria-label="Customer phone" type="tel" id="maya-customer-phone" placeholder="Customer phone number (optional)"
                 class="w-full border rounded-lg p-2 mb-3 text-center">
-            <input type="text" id="maya-reference" placeholder="Enter Maya reference number"
+            <input aria-label="Maya reference" type="text" id="maya-reference" placeholder="Enter Maya reference number"
                 class="w-full border rounded-lg p-2 mb-3 text-center">
 
             <!-- DISCOUNT SECTION -->
@@ -1031,11 +1031,11 @@
                         🏷️ Discount
                     </button>
                 </div>
-                <input type="text" id="maya-discount-id"
+                <input aria-label="OSCA / PWD ID Number" type="text" id="maya-discount-id"
                        class="hidden w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-2"
                        placeholder="OSCA / PWD ID Number">
                 <div id="maya-promo-input" class="hidden flex items-center gap-2 mb-2">
-                    <input type="number" id="maya-promo-pct" min="0" max="100" step="0.01"
+                    <input aria-label="Maya promo pct" type="number" id="maya-promo-pct" min="0" max="100" step="0.01"
                            class="w-24 border border-gray-300 rounded-lg px-3 py-2 text-sm"
                            placeholder="0">
                     <span class="text-sm text-gray-600">% discount</span>

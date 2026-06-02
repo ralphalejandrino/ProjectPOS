@@ -20,7 +20,10 @@
 // v79: DEPLOY pre-flight — re-add purge-dropped utilities for FEATURE-039/040 (banner/preview)
 // v80: FLAG-072 (loopback-relaxed quick-login throttle) + FEATURE-043 (on-screen keyboard)
 // v81: FEATURE-044 — per-user page-access toggles (nav + guards + Manage modal)
-const CACHE_NAME = 'tarsierpos-v83'; // canonical cache version
+// v84: FEATURE-031 — accessibility foundation (aria-labels, input labels,
+// img alt, :focus-visible). NOTE: const was already at v83 (ahead of the
+// changelog above); bumped to the real next version, not the plan's stale v69.
+const CACHE_NAME = 'tarsierpos-v84'; // canonical cache version
 const ASSETS = [
   'index.html',
   'login.html',

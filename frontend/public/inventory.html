@@ -38,7 +38,7 @@
         <!-- LEFT SIDEBAR: SEARCH & CATEGORIES (EXACT SAME AS POS) -->
         <div class="w-48 lg:w-64 bg-white border-r border-gray-200 p-4 overflow-y-auto">
             <!-- Search -->
-            <input type="text" id="search-input" placeholder="🔍 Search products..."
+            <input aria-label="🔍 Search products..." type="text" id="search-input" placeholder="🔍 Search products..."
                    class="w-full px-3 py-2 border border-gray-300 rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500"
                    oninput="searchProducts()">
 
@@ -113,7 +113,7 @@
                         <button onclick="openAddProductModal()" class="px-3 py-2 text-sm font-medium bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 transition flex items-center gap-1.5">
                             ➕ Add Product
                         </button>
-                        <input type="file" id="csv-file-input" accept=".csv" class="hidden">
+                        <input aria-label="Csv file input" type="file" id="csv-file-input" accept=".csv" class="hidden">
                         <button onclick="document.getElementById('csv-file-input').click()" class="px-3 py-2 text-sm font-medium bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 transition flex items-center gap-1.5">
                             📥 Import CSV
                         </button>
@@ -159,11 +159,11 @@
                     <div class="grid grid-cols-2 gap-4">
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Product Name *</label>
-                            <input type="text" id="product-name" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <input aria-label="Product Name" type="text" id="product-name" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Category *</label>
-                            <select id="product-category" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <select aria-label="Category" id="product-category" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
                                 <!-- Loaded dynamically -->
                             </select>
                         </div>
@@ -172,33 +172,33 @@
                     <div class="grid grid-cols-2 gap-4">
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">SKU Code</label>
-                            <input type="text" id="product-sku" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <input aria-label="SKU Code" type="text" id="product-sku" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Barcode</label>
-                            <input type="text" id="product-barcode" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <input aria-label="Barcode" type="text" id="product-barcode" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
                         </div>
                     </div>
 
                     <div class="grid grid-cols-2 gap-4">
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Cost Price *</label>
-                            <input type="number" id="product-cost" required step="0.01" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <input aria-label="Cost Price" type="number" id="product-cost" required step="0.01" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Selling Price *</label>
-                            <input type="number" id="product-price" required step="0.01" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <input aria-label="Selling Price" type="number" id="product-price" required step="0.01" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
                         </div>
                     </div>
 
                     <div class="grid grid-cols-2 gap-4">
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Stock Quantity *</label>
-                            <input type="number" id="product-stock" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <input aria-label="Stock Quantity" type="number" id="product-stock" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Expiry Date</label>
-                            <input type="date" id="product-expiry" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <input aria-label="Expiry Date" type="date" id="product-expiry" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
                         </div>
                     </div>
 
@@ -207,19 +207,19 @@
                         Low Stock Threshold
                         <span class="text-xs text-gray-400 font-normal ml-1">(leave 0 to use global)</span>
                       </label>
-                      <input id="product-threshold" type="number" min="0"
+                      <input aria-label="Low Stock Threshold (leave 0 to use global)" id="product-threshold" type="number" min="0"
                              class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                              placeholder="0">
                     </div>
 
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                        <textarea id="product-description" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                        <textarea aria-label="Description" id="product-description" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
                     </div>
 
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Product Image</label>
-                        <input type="file" id="product-image" accept="image/*" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <input aria-label="Product Image" type="file" id="product-image" accept="image/*" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
                     </div>
 
                     <!-- Stock History (FEATURE-007) — manager+ only -->
@@ -283,7 +283,7 @@
 
             <div class="mb-4">
                 <label class="block text-sm font-medium text-gray-700 mb-2">Adjustment Amount:</label>
-                <input type="number" id="adjust-amount" 
+                <input aria-label="Adjustment Amount" type="number" id="adjust-amount" 
                        class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg text-xl font-bold text-center focus:outline-none focus:border-blue-500"
                        placeholder="Enter +/- amount" step="1">
                 <p class="text-xs text-gray-500 mt-1">Use positive (+) to add stock, negative (-) to reduce</p>
@@ -291,7 +291,7 @@
 
             <div class="mb-6">
                 <label class="block text-sm font-medium text-gray-700 mb-2">Reason:</label>
-                <input type="text" id="adjust-reason" 
+                <input aria-label="Reason" type="text" id="adjust-reason" 
                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                        placeholder="e.g., Restock, Damaged, Sold">
             </div>
@@ -474,7 +474,7 @@
                     <tr class="hover:bg-gray-50">
                         <td class="px-4 py-3">
                             ${item.photo 
-                                ? `<img src="${item.photo}" class="w-12 h-12 object-cover rounded" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                                ? `<img src="${item.photo}" alt="${escapeHtml(item.name || '')}" class="w-12 h-12 object-cover rounded" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
                                    <div class="text-2xl" style="display:none">📦</div>`
                                 : '<div class="text-2xl">📦</div>'
                             }
@@ -496,9 +496,9 @@
                         <td class="px-4 py-3 font-medium ${stockClass}">${item.stock}</td>
                         <td class="px-4 py-3">
                             <div class="flex items-center gap-2">
-                                <button onclick="editProduct('${item.id}')" class="py-1 px-2 text-sm rounded bg-blue-50 text-blue-600 hover:bg-blue-100 transition" title="Edit">✏️</button>
-                                <button onclick="adjustStock('${item.id}')" class="py-1 px-2 text-sm rounded bg-green-50 text-green-600 hover:bg-green-100 transition" title="Adjust Stock">📦</button>
-                                <button onclick="deleteProduct('${item.id}', '${item.name.replace(/'/g, "\\'")}')" class="py-1 px-2 text-sm rounded bg-red-50 text-red-600 hover:bg-red-100 transition" title="Delete">🗑️</button>
+                                <butto aria-label="Edit"n onclick="editProduct('${item.id}')" class="py-1 px-2 text-sm rounded bg-blue-50 text-blue-600 hover:bg-blue-100 transition" title="Edit">✏️</button>
+                                <butto aria-label="Adjust Stock"n onclick="adjustStock('${item.id}')" class="py-1 px-2 text-sm rounded bg-green-50 text-green-600 hover:bg-green-100 transition" title="Adjust Stock">📦</button>
+                                <butto aria-label="Delete"n onclick="deleteProduct('${item.id}', '${item.name.replace(/'/g, "\\'")}')" class="py-1 px-2 text-sm rounded bg-red-50 text-red-600 hover:bg-red-100 transition" title="Delete">🗑️</button>
                             </div>
                         </td>
                     </tr>
@@ -754,10 +754,10 @@
                 }
                 container.innerHTML = cats.map(cat => `
                     <div class="flex items-center gap-2 p-2 border border-gray-100 rounded-lg" id="cat-row-${cat.id}">
-                        <input type="text" value="${escapeHtml(cat.emoji || '')}" maxlength="4"
+                        <input aria-label="Category emoji" type="text" value="${escapeHtml(cat.emoji || '')}" maxlength="4"
                             class="w-12 px-1 py-1 border border-gray-200 rounded text-center text-lg"
                             id="cat-emoji-${cat.id}">
-                        <input type="text" value="${escapeHtml(cat.name)}"
+                        <input aria-label="Category name" type="text" value="${escapeHtml(cat.name)}"
                             class="flex-1 px-2 py-1 border border-gray-200 rounded text-sm"
                             id="cat-name-${cat.id}">
                         <div class="flex items-center gap-1">
@@ -882,7 +882,7 @@
                         </div>
                         <button onclick="openEditGroupModal('${g.id}')" class="text-blue-600 hover:text-blue-800 text-sm px-2">✏️ Edit</button>
                         <button onclick="toggleGroupOptions('${g.id}')" class="text-indigo-600 hover:text-indigo-800 text-sm px-2" id="vg-toggle-${g.id}">▼ Options</button>
-                        <button onclick="deleteGroup('${g.id}', '${escapeHtml(g.name).replace(/'/g, "\\'")}')" class="text-red-500 hover:text-red-700 text-sm px-2">🗑️</button>
+                        <button onclick="deleteGroup('${g.id}', '${escapeHtml(g.name).replace(/'/g, "\\'")}')" aria-label="Delete variant group" class="text-red-500 hover:text-red-700 text-sm px-2">🗑️</button>
                     </div>
                     <div id="vg-options-${g.id}" class="hidden border-t border-gray-100 p-4 bg-gray-50">
                         <div id="vg-options-list-${g.id}" class="space-y-2 mb-3">
@@ -893,8 +893,8 @@
                                     <span class="flex-1 text-sm text-gray-700">${escapeHtml(opt.name)}</span>
                                     <span class="text-xs text-gray-500">${parseFloat(opt.price_modifier) !== 0 ? (parseFloat(opt.price_modifier) > 0 ? '+' : '') + formatCurrency(parseFloat(opt.price_modifier)) : 'no charge'}</span>
                                     <span class="text-xs text-gray-400">sort:${opt.sort_order}</span>
-                                    <button onclick="openEditOptionModal('${g.id}','${opt.id}')" class="text-blue-500 hover:text-blue-700 text-xs">✏️</button>
-                                    <button onclick="deleteOption('${g.id}','${opt.id}','${escapeHtml(opt.name).replace(/'/g, "\\'")}')" class="text-red-500 hover:text-red-700 text-xs">🗑️</button>
+                                    <button onclick="openEditOptionModal('${g.id}','${opt.id}')" aria-label="Edit option" class="text-blue-500 hover:text-blue-700 text-xs">✏️</button>
+                                    <button onclick="deleteOption('${g.id}','${opt.id}','${escapeHtml(opt.name).replace(/'/g, "\\'")}')" aria-label="Delete option" class="text-red-500 hover:text-red-700 text-xs">🗑️</button>
                                 </div>`).join('')
                             }
                         </div>
@@ -1198,9 +1198,9 @@
                     const required = ov ? (ov.is_required_override !== null && ov.is_required_override !== undefined ? ov.is_required_override : g.is_required) : g.is_required;
                     return `
                     <div class="flex items-center gap-2 p-2 border border-gray-100 rounded">
-                        <input type="checkbox" class="prod-vg-enabled w-4 h-4 rounded" value="${g.id}" ${enabled ? 'checked' : ''}>
+                        <input aria-label="Enable variant group" type="checkbox" class="prod-vg-enabled w-4 h-4 rounded" value="${g.id}" ${enabled ? 'checked' : ''}>
                         <span class="flex-1 text-sm text-gray-700">${escapeHtml(g.name)}</span>
-                        <select class="prod-vg-required text-xs border border-gray-200 rounded px-1 py-0.5" data-group="${g.id}">
+                        <select aria-label="Required variant override" class="prod-vg-required text-xs border border-gray-200 rounded px-1 py-0.5" data-group="${g.id}">
                             <option value="inherit" ${ov ? '' : 'selected'}>Default</option>
                             <option value="required" ${(ov && ov.is_required_override === true) ? 'selected' : ''}>Required</option>
                             <option value="optional" ${(ov && ov.is_required_override === false) ? 'selected' : ''}>Optional</option>
@@ -1284,14 +1284,14 @@
         <div class="bg-white rounded-xl shadow-xl w-full max-w-2xl">
             <div class="px-6 py-4 border-b flex items-center justify-between">
                 <h3 class="text-lg font-bold text-gray-800">Manage Categories</h3>
-                <button onclick="closeCategoryModal()" class="text-gray-400 hover:text-gray-600 text-xl">✕</button>
+                <butto aria-label="Close"n onclick="closeCategoryModal()" class="text-gray-400 hover:text-gray-600 text-xl">✕</button>
             </div>
             <div class="p-6">
                 <!-- Add new category -->
                 <div class="flex gap-2 mb-4">
-                    <input type="text" id="new-cat-emoji" placeholder="🍕" maxlength="4"
+                    <input aria-label="🍕" type="text" id="new-cat-emoji" placeholder="🍕" maxlength="4"
                         class="w-16 px-2 py-2 border border-gray-300 rounded-lg text-center text-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <input type="text" id="new-cat-name" placeholder="Category name"
+                    <input aria-label="Category name" type="text" id="new-cat-name" placeholder="Category name"
                         class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
                     <button onclick="addCategory()"
                         class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition">Add</button>
@@ -1309,7 +1309,7 @@
         <div class="bg-white rounded-xl shadow-xl w-full max-w-md flex flex-col" style="max-height: 85vh;">
             <div class="px-6 py-4 border-b flex items-center justify-between flex-shrink-0">
                 <h3 class="text-lg font-bold text-gray-800" id="cat-variant-modal-title">Variant Groups for Category</h3>
-                <button onclick="closeCatVariantModal()" class="text-gray-400 hover:text-gray-600 text-xl">✕</button>
+                <butto aria-label="Close"n onclick="closeCatVariantModal()" class="text-gray-400 hover:text-gray-600 text-xl">✕</button>
             </div>
             <div class="flex-1 overflow-y-auto p-6">
                 <p class="text-xs text-gray-500 mb-3">Select which variant groups apply to all products in this category.</p>
@@ -1331,7 +1331,7 @@
                     <button onclick="openAddGroupModal()" class="flex items-center gap-1 px-3 py-1.5 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">
                         <span>+</span> Add Group
                     </button>
-                    <button onclick="closeVariantManager()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-2xl leading-none">&times;</button>
+                    <butto aria-label="Close"n onclick="closeVariantManager()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-2xl leading-none">&times;</button>
                 </div>
             </div>
             <div class="p-6 overflow-y-auto flex-1">
@@ -1347,17 +1347,17 @@
         <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-md flex flex-col" style="max-height: 85vh;">
             <div class="flex items-center justify-between p-5 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
                 <h3 class="text-lg font-semibold text-gray-800 dark:text-white" id="add-group-modal-title">Add Variant Group</h3>
-                <button onclick="closeAddGroupModal()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-2xl leading-none">&times;</button>
+                <butto aria-label="Close"n onclick="closeAddGroupModal()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-2xl leading-none">&times;</button>
             </div>
             <div class="flex-1 overflow-y-auto p-5 space-y-4">
                 <input type="hidden" id="group-edit-id">
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Group Name *</label>
-                    <input type="text" id="group-name" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="e.g. Size, Sugar Level">
+                    <input aria-label="Group Name" type="text" id="group-name" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="e.g. Size, Sugar Level">
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Selection Type</label>
-                    <select id="group-selection-type" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    <select aria-label="Selection Type" id="group-selection-type" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
                         <option value="single">Single (choose one)</option>
                         <option value="multi">Multi (choose multiple)</option>
                     </select>
@@ -1368,7 +1368,7 @@
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Sort Order</label>
-                    <input type="number" id="group-sort-order" value="0" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    <input aria-label="Sort Order" type="number" id="group-sort-order" value="0" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
                 </div>
             </div>
             <div class="flex justify-end gap-3 p-4 border-t border-gray-200 dark:border-gray-700 flex-shrink-0">
@@ -1383,22 +1383,22 @@
         <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-sm flex flex-col" style="max-height: 85vh;">
             <div class="flex items-center justify-between p-5 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
                 <h3 class="text-lg font-semibold text-gray-800 dark:text-white" id="add-option-modal-title">Add Option</h3>
-                <button onclick="closeAddOptionModal()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-2xl leading-none">&times;</button>
+                <butto aria-label="Close"n onclick="closeAddOptionModal()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-2xl leading-none">&times;</button>
             </div>
             <div class="flex-1 overflow-y-auto p-5 space-y-4">
                 <input type="hidden" id="option-edit-group-id">
                 <input type="hidden" id="option-edit-id">
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Option Name *</label>
-                    <input type="text" id="option-name" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="e.g. Large, 25% sugar">
+                    <input aria-label="Option Name" type="text" id="option-name" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="e.g. Large, 25% sugar">
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Price Modifier (₱)</label>
-                    <input type="number" id="option-price" value="0" step="0.01" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    <input aria-label="Price Modifier (₱)" type="number" id="option-price" value="0" step="0.01" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Sort Order</label>
-                    <input type="number" id="option-sort-order" value="0" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    <input aria-label="Sort Order" type="number" id="option-sort-order" value="0" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
                 </div>
             </div>
             <div class="flex justify-end gap-3 p-4 border-t border-gray-200 dark:border-gray-700 flex-shrink-0">
