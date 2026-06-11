@@ -279,7 +279,7 @@
           <thead class="bg-gray-50 border-b border-gray-100 text-gray-500 text-xs uppercase tracking-wide">
             <tr>
               <th class="px-4 py-3 text-left">Ingredient</th>
-              <th class="px-4 py-3 text-right">Quantity</th>
+              <th class="px-4 py-3 text-right">Quantity per Serving</th>
               <th class="px-4 py-3 text-left">Unit</th>
               <th class="px-4 py-3 text-center">Actions</th>
             </tr>
@@ -294,8 +294,13 @@
                 </select>
               </td>
               <td class="px-4 py-2 text-right">
-                <input aria-label="New Recipe Qty" type="number" id="newRecipeQty" min="0" step="0.001" placeholder="0.000"
-                  class="w-24 border border-gray-200 rounded px-2 py-1 text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                <!-- ISSUE-113: unit suffix sits inside the input group and tracks the
+                     selected ingredient so the expected unit is never ambiguous. -->
+                <div class="flex items-center justify-end gap-1">
+                  <input aria-label="Quantity per serving" type="number" id="newRecipeQty" min="0" step="0.001" placeholder="0.000"
+                    class="w-24 border border-gray-200 rounded px-2 py-1 text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                  <span id="newRecipeQtyUnit" class="text-xs text-gray-500">—</span>
+                </div>
               </td>
               <td class="px-4 py-2 text-gray-400 text-xs" id="newRecipeUnit">—</td>
               <td class="px-4 py-2 text-center">
@@ -325,7 +330,7 @@
   <div id="ingredientModal" class="modal-panel hidden bg-white rounded-2xl shadow-2xl w-full max-w-lg">
     <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100">
       <h2 class="font-semibold text-gray-800" id="ingredientModalTitle">Add Ingredient</h2>
-      <butto aria-label="Close"n onclick="closeModal()" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+      <button aria-label="Close" onclick="closeModal()" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
     </div>
     <div class="px-6 py-4 space-y-3 max-h-[70vh] overflow-y-auto">
       <input type="hidden" id="ingredientId" />
@@ -350,19 +355,21 @@
           </select>
         </div>
       </div>
+      <!-- ISSUE-113: stock/par/cost labels carry the selected unit so values are
+           never entered against an ambiguous unit. Spans update on unit change. -->
       <div class="grid grid-cols-3 gap-3">
         <div>
-          <label class="block text-xs font-medium text-gray-600 mb-1">Current Stock</label>
+          <label class="block text-xs font-medium text-gray-600 mb-1">Current Stock <span class="text-gray-400" data-unit-suffix></span></label>
           <input aria-label="Current Stock" type="number" id="ingredientStock" min="0" step="0.001"
             class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
         </div>
         <div>
-          <label class="block text-xs font-medium text-gray-600 mb-1">Par Level</label>
+          <label class="block text-xs font-medium text-gray-600 mb-1">Par Level <span class="text-gray-400" data-unit-suffix></span></label>
           <input aria-label="Par Level" type="number" id="ingredientPar" min="0" step="0.001"
             class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
         </div>
         <div>
-          <label class="block text-xs font-medium text-gray-600 mb-1">Cost / Unit (₱)</label>
+          <label class="block text-xs font-medium text-gray-600 mb-1">Cost (₱) <span class="text-gray-400" data-unit-per-suffix></span></label>
           <input aria-label="Cost / Unit (₱)" type="number" id="ingredientCost" min="0" step="0.01"
             class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
         </div>
@@ -382,7 +389,7 @@
   <div id="supplierModal" class="modal-panel hidden bg-white rounded-2xl shadow-2xl w-full max-w-lg">
     <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100">
       <h2 class="font-semibold text-gray-800" id="supplierModalTitle">Add Supplier</h2>
-      <butto aria-label="Close"n onclick="closeModal()" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+      <button aria-label="Close" onclick="closeModal()" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
     </div>
     <div class="px-6 py-4 space-y-3">
       <input type="hidden" id="supplierId" />
@@ -424,7 +431,7 @@
   <div id="unitModal" class="modal-panel hidden bg-white rounded-2xl shadow-2xl w-full max-w-sm">
     <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100">
       <h2 class="font-semibold text-gray-800" id="unitModalTitle">Add Unit</h2>
-      <butto aria-label="Close"n onclick="closeModal()" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+      <button aria-label="Close" onclick="closeModal()" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
     </div>
     <div class="px-6 py-4 space-y-3">
       <input type="hidden" id="unitId" />
@@ -449,20 +456,22 @@
   <div id="restockModal" class="modal-panel hidden bg-white rounded-2xl shadow-2xl w-full max-w-md">
     <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100">
       <h2 class="font-semibold text-gray-800">Restock Ingredient</h2>
-      <butto aria-label="Close"n onclick="closeModal()" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+      <button aria-label="Close" onclick="closeModal()" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
     </div>
     <div class="px-6 py-4 space-y-3">
       <input type="hidden" id="restockIngredientId" />
       <div class="bg-gray-50 rounded-lg px-3 py-2 text-sm text-gray-600">
         Ingredient: <span class="font-semibold text-gray-800" id="restockIngredientName">—</span>
+        <span class="text-gray-500" id="restockIngredientUnit"></span>
       </div>
+      <!-- ISSUE-113: quantity/cost labels carry the ingredient's unit. -->
       <div>
-        <label class="block text-xs font-medium text-gray-600 mb-1">Quantity Added <span class="text-red-500">*</span></label>
+        <label class="block text-xs font-medium text-gray-600 mb-1">Quantity Added <span class="text-gray-400" id="restockQtyUnitLabel"></span> <span class="text-red-500">*</span></label>
         <input aria-label="Quantity Added" type="number" id="restockQty" min="0" step="0.001"
           class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
       </div>
       <div>
-        <label class="block text-xs font-medium text-gray-600 mb-1">Cost per Unit (₱)</label>
+        <label class="block text-xs font-medium text-gray-600 mb-1">Cost (₱) <span class="text-gray-400" id="restockCostUnitLabel">per unit</span></label>
         <input aria-label="Cost per Unit (₱)" type="number" id="restockCost" min="0" step="0.01"
           class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
       </div>
@@ -812,8 +821,15 @@ function populateNewRecipeIngredientSelect() {
   sel.innerHTML = '<option value="">Select ingredient…</option>' +
     ingredients.map(i => `<option value="${i.id}" data-unit="${esc(i.unit_detail?.abbreviation || '')}">${esc(i.name)}</option>`).join('');
   sel.onchange = () => {
-    const opt = sel.options[sel.selectedIndex];
-    document.getElementById('newRecipeUnit').textContent = opt?.dataset?.unit || '—';
+    const opt  = sel.options[sel.selectedIndex];
+    const unit = opt?.dataset?.unit || '—';
+    // ISSUE-113: keep the unit column, the input suffix, and the input's
+    // accessible label in sync with the selected ingredient's unit.
+    document.getElementById('newRecipeUnit').textContent    = unit;
+    document.getElementById('newRecipeQtyUnit').textContent = unit;
+    const qtyInput = document.getElementById('newRecipeQty');
+    qtyInput.setAttribute('aria-label',
+      unit !== '—' ? `Quantity per serving (${unit})` : 'Quantity per serving');
   };
 }
 
@@ -895,6 +911,8 @@ function cancelAddRecipeRow() {
   document.getElementById('newRecipeIngredient').value = '';
   document.getElementById('newRecipeQty').value = '';
   document.getElementById('newRecipeUnit').textContent = '—';
+  document.getElementById('newRecipeQtyUnit').textContent = '—';
+  document.getElementById('newRecipeQty').setAttribute('aria-label', 'Quantity per serving');
 }
 
 async function saveRecipeIngredient() {
@@ -903,6 +921,12 @@ async function saveRecipeIngredient() {
   const ingId     = document.getElementById('newRecipeIngredient').value;
   const qty       = document.getElementById('newRecipeQty').value;
   if (!ingId || !qty) { window.toast({message: 'Select an ingredient and quantity', severity: 'error'}); return; }
+  // ISSUE-113: quantity must be a positive amount of the ingredient's unit.
+  if (!(parseFloat(qty) > 0)) {
+    const unit = document.getElementById('newRecipeQtyUnit').textContent;
+    window.toast({message: `Quantity per serving must be greater than 0${unit !== '—' ? ' ' + unit : ''}`, severity: 'error'});
+    return;
+  }
 
   const payload = { item: itemId, ingredient: ingId, quantity_used: qty };
   if (variantId) payload.variant = variantId;
@@ -952,7 +976,8 @@ function openIngredientModal(id) {
 
   const unitSel = document.getElementById('ingredientUnit');
   unitSel.innerHTML = '<option value="">Select unit…</option>' +
-    units.filter(u => u.is_active).map(u => `<option value="${u.id}">${esc(u.name)} (${esc(u.abbreviation)})</option>`).join('');
+    units.filter(u => u.is_active).map(u => `<option value="${u.id}" data-abbr="${esc(u.abbreviation)}">${esc(u.name)} (${esc(u.abbreviation)})</option>`).join('');
+  unitSel.onchange = updateIngredientUnitSuffixes;
 
   const supSel = document.getElementById('ingredientSupplier');
   supSel.innerHTML = '<option value="">None</option>' +
@@ -970,7 +995,23 @@ function openIngredientModal(id) {
       document.getElementById('ingredientActive').checked  = ing.is_active !== false;
     }
   }
+  updateIngredientUnitSuffixes();
   showModal('ingredientModal');
+}
+
+// ISSUE-113: reflect the selected unit in the stock/par/cost field labels,
+// e.g. "Current Stock (g)" / "Cost (₱) per g". Inputs are always entered in
+// the ingredient's own unit — no conversion happens anywhere.
+function updateIngredientUnitSuffixes() {
+  const sel  = document.getElementById('ingredientUnit');
+  const abbr = sel.options[sel.selectedIndex]?.dataset?.abbr || '';
+  const modal = document.getElementById('ingredientModal');
+  modal.querySelectorAll('[data-unit-suffix]').forEach(el => {
+    el.textContent = abbr ? `(${abbr})` : '';
+  });
+  modal.querySelectorAll('[data-unit-per-suffix]').forEach(el => {
+    el.textContent = abbr ? `per ${abbr}` : 'per unit';
+  });
 }
 
 async function submitIngredientModal() {
@@ -1119,6 +1160,11 @@ function openRestockModal(id) {
   const ing = ingredients.find(i => i.id === id);
   document.getElementById('restockIngredientId').value       = id;
   document.getElementById('restockIngredientName').textContent = ing ? ing.name : '';
+  // ISSUE-113: surface the ingredient's unit on the header and field labels.
+  const abbr = ing?.unit_detail?.abbreviation || '';
+  document.getElementById('restockIngredientUnit').textContent = abbr ? `— tracked in ${abbr}` : '';
+  document.getElementById('restockQtyUnitLabel').textContent   = abbr ? `(${abbr})` : '';
+  document.getElementById('restockCostUnitLabel').textContent  = abbr ? `per ${abbr}` : 'per unit';
   document.getElementById('restockQty').value   = '';
   document.getElementById('restockCost').value  = '';
   document.getElementById('restockNotes').value = '';

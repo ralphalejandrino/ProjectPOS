@@ -455,6 +455,16 @@ class IngredientRestockLogSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['ingredient', 'recorded_by', 'date']
 
+    def validate_quantity_added(self, value):
+        # ISSUE-113: restock must add stock; the model save() increments
+        # current_stock by this amount unconditionally.
+        if value <= 0:
+            raise serializers.ValidationError(
+                'Restock quantity must be greater than 0 '
+                "(in the ingredient's unit)."
+            )
+        return value
+
 
 class RecipeIngredientSerializer(serializers.ModelSerializer):
     ingredient_detail = IngredientSerializer(source='ingredient', read_only=True)
@@ -462,6 +472,17 @@ class RecipeIngredientSerializer(serializers.ModelSerializer):
     class Meta:
         model = RecipeIngredient
         fields = ['id', 'item', 'variant', 'ingredient', 'ingredient_detail', 'quantity_used']
+
+    def validate_quantity_used(self, value):
+        # ISSUE-113: a zero/negative per-serving quantity silently disables or
+        # inverts depletion. The quantity is always in the ingredient's own
+        # unit (no conversion exists anywhere in the depletion path).
+        if value <= 0:
+            raise serializers.ValidationError(
+                'Quantity per serving must be greater than 0 '
+                "(in the ingredient's unit)."
+            )
+        return value
 
     def validate(self, attrs):
         # FLAG-050: reject a variant recipe that would make the same ingredient
