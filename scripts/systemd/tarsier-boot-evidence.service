@@ -1,0 +1,15 @@
+[Unit]
+Description=TarsierPOS boot-time connectivity evidence dump (FEATURE-045)
+# Installed by scripts/install-watchdog.sh. Captures nmcli/tailscale state and
+# the NetworkManager/tailscaled journals into /var/log/tarsier/connectivity.log
+# once per boot. Wants= nothing: it must run and record even when the network
+# stack failed to come up — that is exactly the evidence we need.
+After=network.target NetworkManager.service tailscaled.service
+
+[Service]
+Type=oneshot
+SyslogIdentifier=tarsier-boot-evidence
+ExecStart=/usr/local/sbin/tarsier-boot-evidence
+
+[Install]
+WantedBy=multi-user.target

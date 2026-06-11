@@ -1,0 +1,19 @@
+# /etc/logrotate.d/tarsier-connectivity
+# FEATURE-045: bound growth of the connectivity watchdog evidence log.
+# Installed by scripts/install-watchdog.sh:
+#   sudo install -m 0644 -o root -g root scripts/logrotate/tarsier-connectivity \
+#        /etc/logrotate.d/tarsier-connectivity
+#
+# copytruncate: the watchdog/boot-evidence scripts append with >> and hold no
+# long-lived fd, but copytruncate keeps the behavior identical to the other
+# tarsierpos logs and is safe either way. 14 days retained per FEATURE-045.
+
+/var/log/tarsier/connectivity.log {
+    daily
+    rotate 14
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+}

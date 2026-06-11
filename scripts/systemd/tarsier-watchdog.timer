@@ -1,0 +1,10 @@
+[Unit]
+Description=Run TarsierPOS connectivity watchdog every 2 minutes (FEATURE-045)
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=2min
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target

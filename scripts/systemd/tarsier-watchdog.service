@@ -1,0 +1,12 @@
+[Unit]
+Description=TarsierPOS connectivity watchdog check (FEATURE-045)
+# Installed by scripts/install-watchdog.sh. Runs as root because the
+# escalation path restarts NetworkManager/tailscaled. The script binary is
+# the root-owned /usr/local/sbin copy, never the user-writable repo path
+# (same model as tarsier-netguard).
+After=network.target
+
+[Service]
+Type=oneshot
+SyslogIdentifier=tarsier-watchdog
+ExecStart=/usr/local/sbin/tarsier-watchdog
