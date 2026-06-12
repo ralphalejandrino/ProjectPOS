@@ -233,12 +233,13 @@
             <!-- COLOR SCHEME -->
             <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
                 <h3 class="text-lg font-semibold text-gray-800 mb-4">🎨 Color Scheme</h3>
-                <div class="flex gap-3 flex-wrap mb-4">
-                    <butto aria-label="Dark Gray"n onclick="applyColor('#a9a9a9')" class="w-10 h-10 rounded-full border-2 border-gray-200 hover:scale-110 transition" style="background:#a9a9a9" title="Dark Gray"></button>
-                    <butto aria-label="Neon Cyan"n onclick="applyColor('#22D3EE')" class="w-10 h-10 rounded-full border-2 border-gray-200 hover:scale-110 transition" style="background:#22D3EE" title="Neon Cyan"></button>
-                    <butto aria-label="Indigo"n onclick="applyColor('#6366F1')" class="w-10 h-10 rounded-full border-2 border-gray-200 hover:scale-110 transition" style="background:#6366F1" title="Indigo"></button>
-                    <butto aria-label="Emerald"n onclick="applyColor('#22C55E')" class="w-10 h-10 rounded-full border-2 border-gray-200 hover:scale-110 transition" style="background:#22C55E" title="Emerald"></button>
-                    <butto aria-label="Soft Orange"n onclick="applyColor('#FB923C')" class="w-10 h-10 rounded-full border-2 border-gray-200 hover:scale-110 transition" style="background:#FB923C" title="Soft Orange"></button>
+                <!-- ISSUE-115: presets resolve from --scheme-* tokens (shared-styles.css) -->
+                <div id="scheme-presets" class="flex gap-3 flex-wrap mb-4">
+                    <button type="button" aria-label="Tarsier Blue" title="Tarsier Blue" data-scheme="tarsier-blue" onclick="applyPreset(this)" class="scheme-swatch w-10 h-10 rounded-full border-2 border-gray-200 hover:scale-110 transition" style="background: var(--scheme-tarsier-blue)"></button>
+                    <button type="button" aria-label="Espresso" title="Espresso" data-scheme="espresso" onclick="applyPreset(this)" class="scheme-swatch w-10 h-10 rounded-full border-2 border-gray-200 hover:scale-110 transition" style="background: var(--scheme-espresso)"></button>
+                    <button type="button" aria-label="Matcha" title="Matcha" data-scheme="matcha" onclick="applyPreset(this)" class="scheme-swatch w-10 h-10 rounded-full border-2 border-gray-200 hover:scale-110 transition" style="background: var(--scheme-matcha)"></button>
+                    <button type="button" aria-label="Terracotta" title="Terracotta" data-scheme="terracotta" onclick="applyPreset(this)" class="scheme-swatch w-10 h-10 rounded-full border-2 border-gray-200 hover:scale-110 transition" style="background: var(--scheme-terracotta)"></button>
+                    <button type="button" aria-label="Berry" title="Berry" data-scheme="berry" onclick="applyPreset(this)" class="scheme-swatch w-10 h-10 rounded-full border-2 border-gray-200 hover:scale-110 transition" style="background: var(--scheme-berry)"></button>
                 </div>
                 <div class="flex gap-2 items-center">
                     <input aria-label="Custom color" type="color" id="custom-color" value="#1d4ed8" class="w-10 h-10 rounded cursor-pointer border border-gray-200">
@@ -924,7 +925,10 @@
                     document.getElementById('logo-preview').classList.remove('hidden');
                     applyLogoToHeader(data.logo);
                 }
-                if (data.color_scheme) applyColorSchemeSync(data.color_scheme);
+                if (data.color_scheme) {
+                    applyColorSchemeSync(data.color_scheme);
+                    markSelectedSwatch(data.color_scheme);   // ISSUE-115
+                }
                 // Payments tab — Order Settings
                 const vatEl = document.getElementById('vat-enabled');
                 const vatRateEl = document.getElementById('vat-rate');
@@ -1663,8 +1667,32 @@
             } catch(e) { window.alertDialog({title: 'Notice', message: 'Logo upload failed'}); }
         }
 
+        // ISSUE-115: resolve a preset's hex from its --scheme-* design token
+        function presetHex(name) {
+            return getComputedStyle(document.documentElement)
+                .getPropertyValue('--scheme-' + name).trim().toLowerCase();
+        }
+
+        // ISSUE-115: ring the swatch matching the active scheme (if any) and
+        // keep the custom-color input in sync with the latest chosen color.
+        function markSelectedSwatch(hex) {
+            if (!hex) return;
+            const target = String(hex).trim().toLowerCase();
+            document.querySelectorAll('#scheme-presets .scheme-swatch').forEach(btn => {
+                btn.classList.toggle('scheme-swatch--selected',
+                    presetHex(btn.dataset.scheme) === target);
+            });
+            const custom = document.getElementById('custom-color');
+            if (custom) custom.value = target;
+        }
+
+        async function applyPreset(btn) {
+            await applyColor(presetHex(btn.dataset.scheme));
+        }
+
         async function applyColor(hex) {
             applyColorSchemeSync(hex);
+            markSelectedSwatch(hex);
             try {
                 await authenticatedFetch(`${API_BASE}/business/update/`, {
                     method: 'PATCH',

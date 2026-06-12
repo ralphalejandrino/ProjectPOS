@@ -159,8 +159,6 @@ async function authenticatedFetch(url, options = {}) {
 
 function applyColorSchemeSync(hex) {
     if (!hex) return;
-    document.documentElement.style.setProperty('--primary-color', hex);
-    document.documentElement.style.setProperty('--primary-hover', hex);
     // Compute a slightly darker shade for hover states
     const darken = (h) => {
         const n = parseInt(h.slice(1), 16);
@@ -170,6 +168,13 @@ function applyColorSchemeSync(hex) {
         return '#' + [r,g,b].map(x => x.toString(16).padStart(2,'0')).join('');
     };
     const dark = darken(hex);
+    // ISSUE-115: drive the design tokens so token-based components
+    // (nav-bar-gradient, dialogs, tab underlines) follow the scheme; the
+    // legacy --primary-* aliases keep older inline references working.
+    document.documentElement.style.setProperty('--color-primary', hex);
+    document.documentElement.style.setProperty('--color-primary-hover', dark);
+    document.documentElement.style.setProperty('--primary-color', hex);
+    document.documentElement.style.setProperty('--primary-hover', dark);
     const light = hex + '18'; // ~10% opacity for bg-blue-50/bg-blue-100
     let styleEl = document.getElementById('biz-color-scheme');
     if (!styleEl) {

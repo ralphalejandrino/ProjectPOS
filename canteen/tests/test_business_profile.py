@@ -128,3 +128,32 @@ class BirIdentityFieldTests(APITestCase):
         self.assertEqual(out['pos_accreditation_number'], 'ACCR-2026-12345')
         self.assertEqual(out['pos_permit_number'], 'PERMIT-AB-678')
         self.assertEqual(out['pos_accreditation_valid_until'], '2027-12-31')
+
+
+class ColorSchemePersistenceTests(APITestCase):
+    """ISSUE-115 — preset/custom color scheme persists server-side.
+
+    The Settings > Appearance swatches PATCH color_scheme to
+    /business/update/; the value must survive reload (fresh GET), not
+    just live in localStorage.
+    """
+
+    def setUp(self):
+        self.manager = User.objects.create_user(
+            username='mgr-color', password='x', role='manager'
+        )
+        BusinessProfile.get_instance()
+        self.client.force_authenticate(self.manager)
+
+    def test_color_scheme_round_trip(self):
+        # Espresso preset, then a custom color — latest write wins.
+        for hex_value in ('#6f4e37', '#0e7490'):
+            resp = self.client.patch(
+                UPDATE_URL, {'color_scheme': hex_value}, format='json'
+            )
+            self.assertEqual(resp.status_code, status.HTTP_200_OK)
+            self.assertEqual(
+                BusinessProfile.get_instance().color_scheme, hex_value
+            )
+            data = self.client.get(GET_URL).json()
+            self.assertEqual(data['color_scheme'], hex_value)

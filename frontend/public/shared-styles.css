@@ -80,6 +80,22 @@
     /* touch targets */
     --touch-min:     44px;   /* WCAG 2.5.5 global minimum */
     --touch-min-pos: 48px;   /* POS hot-path enforced (ISSUE-086) */
+
+    /* ISSUE-115: color-scheme preset palette (Settings > Appearance).
+       Single source of truth for the swatch row — templates reference these
+       vars, never raw hex. Tarsier Blue mirrors --color-primary; the other
+       four are cafe-friendly primaries dark enough for white nav/button text. */
+    --scheme-tarsier-blue: #1d4ed8;
+    --scheme-espresso:     #6f4e37;
+    --scheme-matcha:       #4a7c59;
+    --scheme-terracotta:   #c2410c;
+    --scheme-berry:        #9d174d;
+}
+
+/* ISSUE-115: selected state for the color-scheme preset swatches */
+.scheme-swatch--selected {
+    outline: 3px solid var(--color-ink);
+    outline-offset: 2px;
 }
 
 /* Canonical nav gradient — used by shared header (FEATURE-029) */
