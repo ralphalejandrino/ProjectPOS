@@ -1067,6 +1067,12 @@ class ItemViewSet(viewsets.ModelViewSet):
     """Complete CRUD for Items"""
     queryset = Item.objects.all().select_related('category')
     serializer_class = ItemSerializer
+    # B-INVESTIGATE-INV (Bug A): the global PAGE_SIZE=50 silently truncated
+    # this list once the catalog crossed 50 items — every consumer (POS grid,
+    # inventory table, dashboard low-stock) renders only page 1, so items
+    # past the alphabetical cutoff "disappeared". The catalog is small by
+    # nature; serve it whole.
+    pagination_class = None
 
     def get_queryset(self):
         qs = Item.objects.all().select_related('category').prefetch_related(

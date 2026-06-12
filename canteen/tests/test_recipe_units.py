@@ -69,6 +69,136 @@ class ReportedDepletionScenarioTests(RecipeUnitsBase):
         self.assertEqual(self.powder.current_stock, Decimal('48.0000'))
 
 
+class DepletionAccuracyTests(RecipeUnitsBase):
+    """B-INVESTIGATE-INV — pin every plausible 'inaccurate depletion'
+    mechanism from the PROD field report against the code at HEAD:
+    multi-quantity scaling, exact Decimal math (no float drift), variant
+    recipe priority (replaces, never stacks with, the item recipe for the
+    same ingredient), variant extras, split payment depleting exactly once,
+    and cumulative accuracy across sequential sales."""
+
+    def _recipe(self, qty='12.0000'):
+        return RecipeIngredient.objects.create(
+            item=self.item, ingredient=self.powder,
+            quantity_used=Decimal(qty),
+        )
+
+    def _sell(self, quantity=1, **kwargs):
+        return create_pos_transaction(
+            [{'item_id': self.item.id, 'quantity': quantity, **kwargs.pop('extra', {})}],
+            'cash', cashier=self.cashier, cash_received=Decimal('5000.00'),
+            **kwargs,
+        )
+
+    def test_multi_quantity_sale_scales_depletion_linearly(self):
+        self._recipe('12.0000')
+        self._sell(quantity=4)
+        self.powder.refresh_from_db()
+        self.assertEqual(self.powder.current_stock, Decimal('12.0000'))
+
+    def test_decimal_quantities_deplete_exactly_no_float_drift(self):
+        self.powder.current_stock = Decimal('10.0000')
+        self.powder.save(update_fields=['current_stock'])
+        self._recipe('0.3333')
+        self._sell(quantity=3)
+        self.powder.refresh_from_db()
+        self.assertEqual(self.powder.current_stock, Decimal('9.0001'))
+
+    def test_sequential_sales_deplete_cumulatively(self):
+        self._recipe('12.0000')
+        self._sell(quantity=1)
+        self._sell(quantity=2)
+        self.powder.refresh_from_db()
+        self.assertEqual(self.powder.current_stock, Decimal('24.0000'))
+
+    def test_split_payment_sale_depletes_exactly_once(self):
+        self._recipe('12.0000')
+        self._sell(
+            quantity=1,
+            payment_lines=[
+                {'method': 'cash', 'amount': '60.00'},
+                {'method': 'gcash', 'amount': '60.00'},
+            ],
+        )
+        self.powder.refresh_from_db()
+        self.assertEqual(self.powder.current_stock, Decimal('48.0000'))
+
+    def test_variant_recipe_replaces_item_recipe_for_same_ingredient(self):
+        # Item recipe says 12 g; the selected variant's recipe says 20 g for
+        # the SAME ingredient. Depletion must be 20 g (variant priority),
+        # never 32 g (stacking) — silent stacking would read as "inaccurate".
+        from canteen.models import VariantGroup, VariantOption, ProductVariantGroup
+        self._recipe('12.0000')
+        group = VariantGroup.objects.create(
+            name='Size', selection_type='single', is_required=False
+        )
+        opt = VariantOption.objects.create(
+            group=group, name='Large', price_modifier=Decimal('0.00')
+        )
+        ProductVariantGroup.objects.create(
+            product=self.item, group=group, enabled=True
+        )
+        RecipeIngredient.objects.create(
+            variant=opt, ingredient=self.powder,
+            quantity_used=Decimal('20.0000'),
+        )
+        self._sell(quantity=1, extra={'variant_selections': [
+            {'group_id': group.id, 'option_id': opt.id},
+        ]})
+        self.powder.refresh_from_db()
+        self.assertEqual(self.powder.current_stock, Decimal('40.0000'))
+
+    def test_variant_extra_ingredient_depletes_alongside_item_recipe(self):
+        from canteen.models import VariantGroup, VariantOption, ProductVariantGroup
+        self._recipe('12.0000')
+        syrup = Ingredient.objects.create(
+            name='Caramel Syrup', unit=self.gram,
+            cost_per_unit=Decimal('1.0000'), current_stock=Decimal('100.0000'),
+        )
+        group = VariantGroup.objects.create(
+            name='Add-on', selection_type='multi', is_required=False
+        )
+        opt = VariantOption.objects.create(
+            group=group, name='Extra Caramel', price_modifier=Decimal('10.00')
+        )
+        ProductVariantGroup.objects.create(
+            product=self.item, group=group, enabled=True
+        )
+        RecipeIngredient.objects.create(
+            variant=opt, ingredient=syrup, quantity_used=Decimal('15.0000'),
+        )
+        self._sell(quantity=2, extra={'variant_selections': [
+            {'group_id': group.id, 'option_id': opt.id},
+        ]})
+        self.powder.refresh_from_db()
+        syrup.refresh_from_db()
+        self.assertEqual(self.powder.current_stock, Decimal('36.0000'))
+        self.assertEqual(syrup.current_stock, Decimal('70.0000'))
+
+    def test_void_then_refund_cannot_double_restore(self):
+        # A voided sale restores once; refunding it afterwards is rejected,
+        # so stock can never be restored twice for one sale.
+        from canteen.services import refund_transaction
+        from rest_framework.exceptions import ValidationError as DRFValidationError
+        self._recipe('12.0000')
+        txn = self._sell(quantity=1)
+        self.client.force_authenticate(self.manager)
+        Shift.objects.create(
+            cashier=self.manager, opening_cash=Decimal('0.00'), is_open=True
+        )
+        resp = self.client.post(
+            f'/api/canteen/transactions/{txn.id}/void/', {'reason': 'test'},
+            format='json',
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.powder.refresh_from_db()
+        self.assertEqual(self.powder.current_stock, Decimal('60.0000'))
+        with self.assertRaises(DRFValidationError):
+            refund_transaction(txn.id, performed_by=self.manager)
+        self.powder.refresh_from_db()
+        self.assertEqual(self.powder.current_stock, Decimal('60.0000'))
+
+
 class RecipeQuantityValidationTests(RecipeUnitsBase):
     def _post_recipe(self, qty):
         self.client.force_authenticate(self.manager)
