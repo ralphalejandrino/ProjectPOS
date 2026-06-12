@@ -15,7 +15,8 @@
     { key: 'period',      href: 'period.html',      emoji: '🗓️', label: 'Period Report', roles: ['manager', 'admin'] },
     // ISSUE-116: Insights removed — widgets relocated onto the Dashboard
     // (still gated by the 'insights' page key there).
-    { key: 'remote',      href: 'remote.html',      emoji: '📱', label: 'Remote View', roles: ['admin'] },
+    // ISSUE-117: Remote View removed from the dropdown — remote.html stays
+    // (owner direct-bookmarks it; dedicated PWA replaces it later).
     { key: 'accreditation', href: 'accreditation.html', emoji: '🏛️', label: 'BIR Accreditation', roles: ['admin'] },
     { key: 'settings',    href: 'settings.html',    emoji: '⚙️', label: 'Settings',    roles: ['admin'] },
   ];

@@ -54,6 +54,13 @@ class NavCleanupTests(APITestCase):
         nav = (FRONTEND / 'components' / 'nav.js').read_text()
         self.assertNotIn("href: 'insights.html'", nav)
 
+    def test_remote_view_removed_from_nav_but_page_kept(self):
+        """ISSUE-117: dropdown loses Remote View; remote.html itself stays
+        (owner direct-bookmarks it until the dedicated PWA replaces it)."""
+        nav = (FRONTEND / 'components' / 'nav.js').read_text()
+        self.assertNotIn("href: 'remote.html'", nav)
+        self.assertTrue((FRONTEND / 'remote.html').exists())
+
     def test_dashboard_hosts_relocated_widgets(self):
         """Dashboard contains both relocated widgets, gated on 'insights'."""
         dash = (FRONTEND / 'dashboard.html').read_text()
