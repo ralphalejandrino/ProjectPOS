@@ -52,7 +52,6 @@ const ASSETS = [
   'zreport.html',
   'status.html',
   'period.html',
-  'insights.html',
   'remote.html',
   'accreditation.html',
   'denied.html',

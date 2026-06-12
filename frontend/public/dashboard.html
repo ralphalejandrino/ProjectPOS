@@ -174,6 +174,45 @@
                     </div>
                 </div>
 
+                <!-- ISSUE-116: insights widgets relocated from insights.html.
+                     Hidden unless the user's effective page set includes
+                     'insights' (same FEATURE-044 rule that gated the old page). -->
+                <div id="insights-widgets" class="hidden space-y-8">
+                    <!-- PEAK HOURS -->
+                    <div class="bg-white rounded-lg shadow-lg p-6">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-xl font-bold text-gray-800">💡 Peak Hours</h3>
+                            <span class="text-xs font-medium text-gray-500 uppercase tracking-wide">Last 30 days</span>
+                        </div>
+                        <div id="peak-hours" class="flex flex-col gap-1.5">
+                            <p class="text-gray-400 text-center py-8">Loading…</p>
+                        </div>
+                    </div>
+
+                    <!-- PER-CASHIER SUMMARY -->
+                    <div class="bg-white rounded-lg shadow-lg p-6">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-xl font-bold text-gray-800">🧑‍🍳 Per-Cashier Summary</h3>
+                            <span class="text-xs font-medium text-gray-500 uppercase tracking-wide">This month</span>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm">
+                                <thead class="bg-gray-50 text-gray-600">
+                                    <tr>
+                                        <th class="px-4 py-2 text-left font-medium">Name</th>
+                                        <th class="px-4 py-2 text-right font-medium">Txns</th>
+                                        <th class="px-4 py-2 text-right font-medium">Gross</th>
+                                        <th class="px-4 py-2 text-right font-medium">Voids</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="cashier-body">
+                                    <tr><td colspan="4" class="text-center text-gray-400 py-8">Loading…</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
             </div>
 
         </div>
@@ -216,6 +255,12 @@
             await loadDashboardData(fromStr, toStr);
             loadSiteName();
             loadColorScheme();
+            // ISSUE-116: relocated insights widgets — visible only to users
+            // whose effective page set includes 'insights' (FEATURE-044).
+            if (canAccessPage('insights')) {
+                document.getElementById('insights-widgets').classList.remove('hidden');
+                loadInsights();
+            }
         });
 
         function attachEventListeners() {
@@ -749,6 +794,66 @@
             return str.charAt(0).toUpperCase() + str.slice(1);
         }
 
+        // ISSUE-116: insights widgets relocated from insights.html —
+        // same /reports/insights/ endpoint and render logic (FEATURE-014).
+        async function loadInsights() {
+            try {
+                const res = await authenticatedFetch(`${API_BASE}/reports/insights/`);
+                if (!res.ok) throw new Error('load failed');
+                const data = await res.json();
+                renderPeakHours(data.peak_hours || []);
+                renderCashiers(data.cashiers || []);
+            } catch (e) {
+                document.getElementById('peak-hours').innerHTML =
+                    '<p class="text-red-400 text-center py-8">Failed to load insights.</p>';
+                document.getElementById('cashier-body').innerHTML =
+                    '<tr><td colspan="4" class="text-center text-red-400 py-8">Failed to load.</td></tr>';
+            }
+        }
+
+        function fmtHour(h) {
+            const period = h < 12 ? 'AM' : 'PM';
+            const hr = h % 12 === 0 ? 12 : h % 12;
+            return `${hr} ${period}`;
+        }
+
+        function renderPeakHours(hours) {
+            const host = document.getElementById('peak-hours');
+            const max = hours.reduce((m, x) => Math.max(m, x.count), 0);
+            if (!max) {
+                host.innerHTML = '<p class="text-gray-400 text-center py-8">No transactions in the last 30 days.</p>';
+                return;
+            }
+            // CSS width bars — simplest representation, matches existing pages.
+            host.innerHTML = hours.map(x => {
+                const pct = max ? Math.round((x.count / max) * 100) : 0;
+                return `
+                    <div class="flex items-center gap-3">
+                        <span class="text-xs text-gray-500 w-14 text-right tabular-nums">${fmtHour(x.hour)}</span>
+                        <div class="flex-1 bg-gray-100 rounded h-5 overflow-hidden">
+                            <div class="bg-blue-500 h-5 rounded" style="width: ${pct}%"></div>
+                        </div>
+                        <span class="text-xs text-gray-600 w-8 tabular-nums">${x.count}</span>
+                    </div>`;
+            }).join('');
+        }
+
+        function renderCashiers(cashiers) {
+            const body = document.getElementById('cashier-body');
+            if (!cashiers.length) {
+                body.innerHTML = '<tr><td colspan="4" class="text-center text-gray-400 py-8">No transactions this month.</td></tr>';
+                return;
+            }
+            body.innerHTML = cashiers.map(c => `
+                <tr class="border-b border-gray-50 hover:bg-gray-50">
+                    <td class="px-4 py-2 font-medium text-gray-800">${escapeHtml(c.name)}</td>
+                    <td class="px-4 py-2 text-right">${c.txns}</td>
+                    <td class="px-4 py-2 text-right font-medium">${formatCurrency(parseFloat(c.gross))}</td>
+                    <td class="px-4 py-2 text-right ${c.voids ? 'text-red-600' : 'text-gray-500'}">${c.voids}</td>
+                </tr>
+            `).join('');
+        }
+
         // logout() is provided by config.js (awaits token blacklist, then location.replace)
     </script>
     <!-- VOID MODAL -->
@@ -757,7 +862,7 @@
         <div class="relative bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden transform transition-all">
             <div class="bg-red-600 px-6 py-4 flex items-center justify-between">
                 <h3 id="void-modal-title" class="text-xl font-bold text-white">Void Transaction</h3>
-                <butto aria-label="Close"n onclick="closeVoidModal()" class="text-white hover:text-red-100 transition">✕</button>
+                <button type="button" aria-label="Close" onclick="closeVoidModal()" class="text-white hover:text-red-100 transition">✕</button>
             </div>
             <div class="p-6">
                 <p class="text-gray-600 mb-4">Are you sure you want to void this transaction? This will reverse stock changes and mark the sale as voided.</p>
@@ -785,7 +890,7 @@
         <div class="relative bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden transform transition-all">
             <div class="bg-blue-600 px-6 py-4 flex items-center justify-between">
                 <h3 id="detail-modal-title" class="text-xl font-bold text-white">Transaction Detail</h3>
-                <butto aria-label="Close"n onclick="closeDetailModal()" class="text-white hover:text-blue-100 transition">✕</button>
+                <button type="button" aria-label="Close" onclick="closeDetailModal()" class="text-white hover:text-blue-100 transition">✕</button>
             </div>
             <div id="detail-content" class="p-6">
                 <!-- Content injected by JS -->

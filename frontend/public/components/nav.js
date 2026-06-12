@@ -13,7 +13,8 @@
     { key: 'xreport',     href: 'xreport.html',     emoji: '📈', label: 'X-Report',    roles: ['manager', 'admin'] },
     { key: 'zreport',     href: 'zreport.html',     emoji: '📉', label: 'Z-Report',    roles: ['manager', 'admin'] },
     { key: 'period',      href: 'period.html',      emoji: '🗓️', label: 'Period Report', roles: ['manager', 'admin'] },
-    { key: 'insights',    href: 'insights.html',    emoji: '💡', label: 'Insights',    roles: ['manager', 'admin'] },
+    // ISSUE-116: Insights removed — widgets relocated onto the Dashboard
+    // (still gated by the 'insights' page key there).
     { key: 'remote',      href: 'remote.html',      emoji: '📱', label: 'Remote View', roles: ['admin'] },
     { key: 'accreditation', href: 'accreditation.html', emoji: '🏛️', label: 'BIR Accreditation', roles: ['admin'] },
     { key: 'settings',    href: 'settings.html',    emoji: '⚙️', label: 'Settings',    roles: ['admin'] },
