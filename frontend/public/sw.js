@@ -44,7 +44,7 @@
 // ISSUE-116 (insights widgets onto dashboard, insights.html removed),
 // ISSUE-117 (Remote View out of dropdown), ISSUE-118 (period report →
 // Weekly Performance Report). One bump for the whole batch.
-const CACHE_NAME = 'tarsierpos-v94'; // canonical cache version
+const CACHE_NAME = 'tarsierpos-v95'; // canonical cache version
 const ASSETS = [
   'index.html',
   'login.html',
