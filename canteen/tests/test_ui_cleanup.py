@@ -69,3 +69,36 @@ class NavCleanupTests(APITestCase):
         self.assertIn('id="peak-hours"', dash)
         self.assertIn('id="cashier-body"', dash)
         self.assertIn("canAccessPage('insights')", dash)
+
+
+class DashboardInsightsInitTests(APITestCase):
+    """ISSUE-120 — insights widgets must populate on every page load.
+
+    The init regression: initInsights() sat at the end of the awaited
+    DOMContentLoaded chain, so a stalled upstream fetch starved the widgets,
+    and bfcache restores (where DOMContentLoaded does not refire) showed the
+    page in whatever state it was navigated away in. Static assets are not
+    served by Django, so these assert on the frontend source directly.
+    """
+
+    def test_insights_init_precedes_awaited_chain(self):
+        """initInsights() runs before the first await of the init handler."""
+        dash = (FRONTEND / 'dashboard.html').read_text()
+        init_pos = dash.index('initInsights();')
+        chain_pos = dash.index('await loadDashboardData(')
+        self.assertLess(
+            init_pos, chain_pos,
+            'initInsights() must be called before the awaited dashboard '
+            'data chain so a stalled fetch cannot starve the widgets.',
+        )
+
+    def test_insights_repopulate_on_bfcache_restore(self):
+        """pageshow + e.persisted rewires the widgets after bfcache restore."""
+        dash = (FRONTEND / 'dashboard.html').read_text()
+        self.assertIn("window.addEventListener('pageshow'", dash)
+        self.assertIn('if (e.persisted) initInsights();', dash)
+
+    def test_insights_gate_kept(self):
+        """The FEATURE-044 canAccessPage('insights') gate is intact."""
+        dash = (FRONTEND / 'dashboard.html').read_text()
+        self.assertIn("canAccessPage('insights')", dash)

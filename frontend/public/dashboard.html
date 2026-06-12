@@ -239,6 +239,12 @@
                 if (shortcuts) { shortcuts.classList.remove('hidden'); shortcuts.classList.add('flex'); }
             }
             attachEventListeners();
+            // ISSUE-120: insights init runs BEFORE the first await in this
+            // handler. It previously sat at the very end of the awaited init
+            // chain, so any upstream fetch that stalled (slow box, token
+            // refresh) starved the widgets until a manual reload. The gate +
+            // fetch are self-contained — run them first.
+            initInsights();
             try {
                 const bp = await authenticatedFetch(`${API_BASE}/business/`);
                 const bpData = await bp.json();
@@ -255,12 +261,22 @@
             await loadDashboardData(fromStr, toStr);
             loadSiteName();
             loadColorScheme();
-            // ISSUE-116: relocated insights widgets — visible only to users
-            // whose effective page set includes 'insights' (FEATURE-044).
-            if (canAccessPage('insights')) {
-                document.getElementById('insights-widgets').classList.remove('hidden');
-                loadInsights();
-            }
+        });
+
+        // ISSUE-116: relocated insights widgets — visible only to users
+        // whose effective page set includes 'insights' (FEATURE-044).
+        // ISSUE-120: extracted so it can run before the awaited init chain
+        // (DOMContentLoaded above) and again on bfcache restores (pageshow
+        // below — DOMContentLoaded does NOT refire when the browser restores
+        // the page from the back/forward cache, which left the widgets in
+        // whatever state they were navigated away in).
+        function initInsights() {
+            if (!canAccessPage('insights')) return;
+            document.getElementById('insights-widgets').classList.remove('hidden');
+            loadInsights();
+        }
+        window.addEventListener('pageshow', (e) => {
+            if (e.persisted) initInsights();
         });
 
         function attachEventListeners() {

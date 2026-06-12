@@ -44,7 +44,12 @@
 // ISSUE-116 (insights widgets onto dashboard, insights.html removed),
 // ISSUE-117 (Remote View out of dropdown), ISSUE-118 (period report →
 // Weekly Performance Report). One bump for the whole batch.
-const CACHE_NAME = 'tarsierpos-v95'; // canonical cache version
+// v95: ISSUE-119 — repair remaining corrupted <butto tags (inventory
+// row/modal buttons, sidebar toggle).
+// v96: B-FIX-DASH — ISSUE-120 (dashboard insights widgets populate on every
+// page load: init moved ahead of the awaited chain + pageshow repopulation
+// on bfcache restores). One bump for the batch.
+const CACHE_NAME = 'tarsierpos-v96'; // canonical cache version
 const ASSETS = [
   'index.html',
   'login.html',
