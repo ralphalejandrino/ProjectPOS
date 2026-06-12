@@ -40,7 +40,11 @@
 // admin page + admin nav link).
 // v93: ISSUE-113 — unit labels on recipe builder / ingredient / restock
 // inputs (ingredients.html).
-const CACHE_NAME = 'tarsierpos-v93'; // canonical cache version
+// v94: B-UI-CLEANUP — ISSUE-115 (color presets fixed, token palette),
+// ISSUE-116 (insights widgets onto dashboard, insights.html removed),
+// ISSUE-117 (Remote View out of dropdown), ISSUE-118 (period report →
+// Weekly Performance Report). One bump for the whole batch.
+const CACHE_NAME = 'tarsierpos-v94'; // canonical cache version
 const ASSETS = [
   'index.html',
   'login.html',

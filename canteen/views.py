@@ -1857,18 +1857,255 @@ def _money(value):
     return str(_Dec(str(value)).quantize(_MONEY_Q, rounding=_RHU))
 
 
+def _aggregate_zreports(d_from, d_to):
+    """FEATURE-013 Z aggregation, shared by the legacy from/to mode and the
+    ISSUE-118 weekly mode.
+
+    Filter parity with the original period report: every finalized ZReport
+    whose business_date falls in [d_from, d_to] counts — there is NO
+    is_official filter (pre-accreditation/UNOFFICIAL Z's are included, as
+    they always were). Seed exclusion happens at Z finalize time (FLAG-047),
+    so totals never include is_seed transactions.
+    """
+    reports = (
+        ZReport.objects
+        .filter(business_date__gte=d_from, business_date__lte=d_to)
+        .select_related('shift', 'shift__cashier')
+        .order_by('business_date', 'z_counter')
+    )
+
+    totals = {
+        'gross': _Dec('0'), 'discount': _Dec('0'), 'vat': _Dec('0'),
+        'net': _Dec('0'), 'cash': _Dec('0'), 'card': _Dec('0'),
+        'gcash': _Dec('0'), 'maya': _Dec('0'),
+    }
+    txn_count = void_count = 0
+    daily = []
+    for z in reports:
+        pb = z.payment_breakdown or {}
+        totals['gross'] += z.gross_sales
+        totals['discount'] += z.discount_total
+        totals['vat'] += z.output_vat
+        totals['net'] += z.net_sales
+        for method in ('cash', 'card', 'gcash', 'maya'):
+            totals[method] += _Dec(str(pb.get(method) or 0))
+        txn_count += z.transaction_count
+        void_count += z.voided_count
+        daily.append({
+            'date': z.business_date.strftime('%Y-%m-%d'),
+            'z_counter': z.z_counter,
+            'shift_id': z.shift_id,
+            'cashier': z.shift.cashier.username if (z.shift and z.shift.cashier) else '—',
+            'gross': _money(z.gross_sales),
+            'net': _money(z.net_sales),
+            'transaction_count': z.transaction_count,
+            'void_count': z.voided_count,
+        })
+    return totals, txn_count, void_count, daily
+
+
+def _live_today_snapshot(today):
+    """ISSUE-118: live (X-style) numbers for the current PHT day — seed-free
+    transactions belonging to still-open shifts, i.e. sales not yet frozen
+    into a ZReport. Mirrors the xreport filters (status='completed' for
+    sales, voids counted separately, refunds excluded by status)."""
+    live_qs = PosTransaction.objects.filter(
+        shift__is_open=True, is_seed=False, created_at__date=today,
+    )
+    completed = live_qs.filter(void=False, status='completed')
+    agg = completed.aggregate(
+        gross=Sum('total_amount'),
+        discount=Sum('discount_amount'),
+        vat=Sum('vat_amount'),
+        cnt=Count('id'),
+    )
+    gross = _Dec(str(agg['gross'] or 0))
+    snapshot = {
+        'gross': gross,
+        'discount': _Dec(str(agg['discount'] or 0)),
+        'vat': _Dec(str(agg['vat'] or 0)),
+        # X-report parity: net_sales == gross for the live portion.
+        'net': gross,
+        'transaction_count': agg['cnt'] or 0,
+        'void_count': live_qs.filter(void=True).count(),
+        'cash': _Dec('0'), 'card': _Dec('0'),
+        'gcash': _Dec('0'), 'maya': _Dec('0'),
+    }
+    from .models import PaymentLine
+    pl_rows = (
+        PaymentLine.objects.filter(transaction__in=completed)
+        .values('method')
+        .annotate(total=Sum('amount'))
+    )
+    for r in pl_rows:
+        if r['method'] in ('cash', 'card', 'gcash', 'maya'):
+            snapshot[r['method']] = _Dec(str(r['total'] or 0))
+    return snapshot
+
+
+def _weekly_top_items(d_from, d_to):
+    """ISSUE-118: top items for the week, by quantity. Same filters as the
+    dashboard top_items query (void=False, is_seed=False) over the
+    PHT-date range; covers finalized and live transactions alike."""
+    rows = (
+        PosTransactionItem.objects.filter(
+            pos_transaction__created_at__date__gte=d_from,
+            pos_transaction__created_at__date__lte=d_to,
+            pos_transaction__void=False,
+            pos_transaction__is_seed=False,  # FLAG-047
+        )
+        .values('item__name')
+        .annotate(total_quantity=Sum('quantity'), total_revenue=Sum('subtotal'))
+        .order_by('-total_quantity')[:5]
+    )
+    return [
+        {
+            'name': r['item__name'],
+            'quantity': r['total_quantity'],
+            'revenue': _money(r['total_revenue']),
+        }
+        for r in rows
+    ]
+
+
+def _weekly_report(week_param):
+    """ISSUE-118: Weekly Performance Report payload.
+
+    The week is Mon–Sun in PHT, derived from any date inside it. Finalized
+    ZReports provide completed days; the current PHT day adds live open-shift
+    (X-style) data when the week is in progress. Days are labelled final/live
+    so the two sources are never silently mixed.
+    """
+    try:
+        anchor = datetime.strptime(week_param, '%Y-%m-%d').date()
+    except (TypeError, ValueError):
+        return Response(
+            {'error': 'week must be YYYY-MM-DD.'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    week_start = anchor - timedelta(days=anchor.weekday())   # Monday
+    week_end = week_start + timedelta(days=6)                # Sunday
+    today = timezone.localdate()
+    live_day = today if week_start <= today <= week_end else None
+
+    totals, txn_count, void_count, daily = _aggregate_zreports(week_start, week_end)
+
+    # Bucket the per-shift Z rows into per-day rows.
+    by_day = {}
+    for row in daily:
+        d = by_day.setdefault(row['date'], {
+            'gross': _Dec('0'), 'net': _Dec('0'),
+            'transaction_count': 0, 'void_count': 0, 'z_count': 0,
+        })
+        d['gross'] += _Dec(row['gross'])
+        d['net'] += _Dec(row['net'])
+        d['transaction_count'] += row['transaction_count']
+        d['void_count'] += row['void_count']
+        d['z_count'] += 1
+
+    live = _live_today_snapshot(today) if live_day else None
+    if live:
+        for key in ('gross', 'discount', 'vat', 'net', 'cash', 'card', 'gcash', 'maya'):
+            totals[key] += live[key]
+        txn_count += live['transaction_count']
+        void_count += live['void_count']
+
+    days = []
+    for i in range(7):
+        d = week_start + timedelta(days=i)
+        key = d.strftime('%Y-%m-%d')
+        bucket = by_day.get(key)
+        gross = bucket['gross'] if bucket else _Dec('0')
+        net = bucket['net'] if bucket else _Dec('0')
+        d_txns = bucket['transaction_count'] if bucket else 0
+        d_voids = bucket['void_count'] if bucket else 0
+        if d == live_day:
+            status_label = 'live'
+            gross += live['gross']
+            net += live['net']
+            d_txns += live['transaction_count']
+            d_voids += live['void_count']
+        elif d > today:
+            status_label = 'upcoming'
+        else:
+            status_label = 'final'
+        days.append({
+            'date': key,
+            'day_name': d.strftime('%a'),
+            'status': status_label,
+            # A live day can also hold already-finalized Z's (closed shifts).
+            'finalized_shifts': bucket['z_count'] if bucket else 0,
+            'gross': _money(gross),
+            'net': _money(net),
+            'transaction_count': d_txns,
+            'void_count': d_voids,
+        })
+
+    # Week-over-week delta vs the previous Mon–Sun (fully in the past, so
+    # Z-only by construction). Omitted (null) when the prior week is empty.
+    prev_start = week_start - timedelta(days=7)
+    prev_end = week_start - timedelta(days=1)
+    prev_totals, prev_txns, _pv, prev_daily = _aggregate_zreports(prev_start, prev_end)
+    previous_week = None
+    if prev_daily:
+        delta = totals['gross'] - prev_totals['gross']
+        pct = None
+        if prev_totals['gross']:
+            pct = float(
+                (delta / prev_totals['gross'] * 100).quantize(_MONEY_Q, rounding=_RHU)
+            )
+        previous_week = {
+            'week_start': prev_start.strftime('%Y-%m-%d'),
+            'week_end': prev_end.strftime('%Y-%m-%d'),
+            'gross_total': _money(prev_totals['gross']),
+            'transaction_count': prev_txns,
+            'delta': _money(delta),
+            'delta_pct': pct,
+        }
+
+    return Response({
+        'week_start': week_start.strftime('%Y-%m-%d'),
+        'week_end': week_end.strftime('%Y-%m-%d'),
+        'live_date': live_day.strftime('%Y-%m-%d') if live_day else None,
+        'days': days,
+        'summary': {
+            'gross_total': _money(totals['gross']),
+            'discount_total': _money(totals['discount']),
+            'vat_amount': _money(totals['vat']),
+            'net_total': _money(totals['net']),
+            'cash_total': _money(totals['cash']),
+            'card_total': _money(totals['card']),
+            'gcash_total': _money(totals['gcash']),
+            'maya_total': _money(totals['maya']),
+            'transaction_count': txn_count,
+            'void_count': void_count,
+        },
+        'top_items': _weekly_top_items(week_start, week_end),
+        'previous_week': previous_week,
+    })
+
+
 @api_view(['GET'])
 @permission_classes([IsManagerOrAbove])
 def period_report(request):
-    """FEATURE-013: multi-day / period report.
+    """FEATURE-013 / ISSUE-118: period report, now weekly-first.
 
-    Aggregates across the immutable ZReports whose business_date (PHT-localdate
-    of the shift's opened_at) falls within [from, to]. ZReport columns are built
-    seed-free at finalize time (FLAG-047), so period totals never include
-    is_seed transactions. Returns a summary plus one daily row per ZReport/shift
-    for drill-down. 400 when from > to; an empty (not 404) result when the range
+    ?week=YYYY-MM-DD (any date inside the week) → Weekly Performance Report:
+    Mon–Sun PHT, finalized ZReports + live open-shift data for today, payment
+    mix, top items, and week-over-week delta (see _weekly_report).
+
+    ?from=&to= keeps the original FEATURE-013 contract: aggregates across the
+    immutable ZReports whose business_date (PHT-localdate of the shift's
+    opened_at) falls within [from, to]. ZReport columns are built seed-free at
+    finalize time (FLAG-047), so period totals never include is_seed
+    transactions. Returns a summary plus one daily row per ZReport/shift for
+    drill-down. 400 when from > to; an empty (not 404) result when the range
     holds no ZReports.
     """
+    week = request.query_params.get('week')
+    if week is not None:
+        return _weekly_report(week)
+
     frm = request.query_params.get('from')
     to = request.query_params.get('to')
     try:
@@ -1885,56 +2122,20 @@ def period_report(request):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    reports = (
-        ZReport.objects
-        .filter(business_date__gte=d_from, business_date__lte=d_to)
-        .select_related('shift', 'shift__cashier')
-        .order_by('business_date', 'z_counter')
-    )
-
-    gross = discount = vat = net = _Dec('0')
-    cash = card = gcash = maya = _Dec('0')
-    txn_count = void_count = 0
-    daily = []
-    for z in reports:
-        pb = z.payment_breakdown or {}
-        z_cash = _Dec(str(pb.get('cash') or 0))
-        z_card = _Dec(str(pb.get('card') or 0))
-        z_gcash = _Dec(str(pb.get('gcash') or 0))
-        z_maya = _Dec(str(pb.get('maya') or 0))
-        gross += z.gross_sales
-        discount += z.discount_total
-        vat += z.output_vat
-        net += z.net_sales
-        cash += z_cash
-        card += z_card
-        gcash += z_gcash
-        maya += z_maya
-        txn_count += z.transaction_count
-        void_count += z.voided_count
-        daily.append({
-            'date': z.business_date.strftime('%Y-%m-%d'),
-            'z_counter': z.z_counter,
-            'shift_id': z.shift_id,
-            'cashier': z.shift.cashier.username if (z.shift and z.shift.cashier) else '—',
-            'gross': _money(z.gross_sales),
-            'net': _money(z.net_sales),
-            'transaction_count': z.transaction_count,
-            'void_count': z.voided_count,
-        })
+    totals, txn_count, void_count, daily = _aggregate_zreports(d_from, d_to)
 
     return Response({
         'from': d_from.strftime('%Y-%m-%d'),
         'to': d_to.strftime('%Y-%m-%d'),
         'summary': {
-            'gross_total': _money(gross),
-            'discount_total': _money(discount),
-            'vat_amount': _money(vat),
-            'net_total': _money(net),
-            'cash_total': _money(cash),
-            'card_total': _money(card),
-            'gcash_total': _money(gcash),
-            'maya_total': _money(maya),
+            'gross_total': _money(totals['gross']),
+            'discount_total': _money(totals['discount']),
+            'vat_amount': _money(totals['vat']),
+            'net_total': _money(totals['net']),
+            'cash_total': _money(totals['cash']),
+            'card_total': _money(totals['card']),
+            'gcash_total': _money(totals['gcash']),
+            'maya_total': _money(totals['maya']),
             'transaction_count': txn_count,
             'void_count': void_count,
         },

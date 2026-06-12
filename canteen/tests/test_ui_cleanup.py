@@ -50,7 +50,9 @@ class NavCleanupTests(APITestCase):
     def test_insights_page_removed(self):
         """insights.html is deleted and no longer precached or linked."""
         self.assertFalse((FRONTEND / 'insights.html').exists())
-        self.assertNotIn('insights.html', (FRONTEND / 'sw.js').read_text())
+        # Quoted form = the ASSETS precache entry (the SW changelog comment
+        # legitimately mentions the file's removal).
+        self.assertNotIn("'insights.html'", (FRONTEND / 'sw.js').read_text())
         nav = (FRONTEND / 'components' / 'nav.js').read_text()
         self.assertNotIn("href: 'insights.html'", nav)
 

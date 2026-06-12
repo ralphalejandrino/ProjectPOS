@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Period Report — TarsierPOS</title>
+    <title>Weekly Performance — TarsierPOS</title>
     <script>if(localStorage.getItem('darkMode')==='true')document.documentElement.classList.add('dark');</script>
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/png" href="assets/tarsier-icon.png">
@@ -17,7 +17,7 @@
 </head>
 <body class="bg-gray-50" data-page="period" style="visibility:hidden">
     <script>
-        // FEATURE-013: manager/admin-only multi-day report.
+        // FEATURE-013 / ISSUE-118: manager/admin-only weekly report.
         (function () {
             if (!guardPage('period')) return;
             document.body.style.visibility = '';
@@ -33,25 +33,23 @@
 
         <!-- PAGE HEADER -->
         <div class="mb-6">
-            <h2 class="text-3xl font-bold text-gray-800">🗓️ Period Report</h2>
-            <p class="text-gray-600">Sales totals across a date range, drawn from finalized Z-Reports.</p>
+            <h2 class="text-3xl font-bold text-gray-800">🗓️ Weekly Performance Report</h2>
+            <p class="text-gray-600">Mon–Sun week: finalized Z-Reports for completed days, plus live (X) data for today.</p>
         </div>
 
-        <!-- DATE RANGE PICKER -->
+        <!-- WEEK NAVIGATION -->
         <div class="bg-white rounded-lg shadow p-4 mb-6">
-            <div class="flex flex-wrap items-end gap-4">
-                <div>
-                    <label for="from-date" class="block text-sm font-medium text-gray-700 mb-1">From</label>
-                    <input type="date" id="from-date" class="border border-gray-300 rounded-lg px-3 py-2 text-gray-800">
-                </div>
-                <div>
-                    <label for="to-date" class="block text-sm font-medium text-gray-700 mb-1">To</label>
-                    <input type="date" id="to-date" class="border border-gray-300 rounded-lg px-3 py-2 text-gray-800">
-                </div>
-                <button id="load-btn" onclick="loadPeriod()"
+            <div class="flex flex-wrap items-center gap-4">
+                <button id="prev-week-btn" onclick="shiftWeek(-7)"
                     class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg font-medium transition">
-                    Load
+                    ← Prev Week
                 </button>
+                <span id="week-label" class="text-lg font-semibold text-gray-800">—</span>
+                <button id="next-week-btn" onclick="shiftWeek(7)"
+                    class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg font-medium transition">
+                    Next Week →
+                </button>
+                <span id="wow-delta" class="hidden text-sm font-medium"></span>
             </div>
             <p id="range-error" class="hidden text-red-600 text-sm mt-2"></p>
         </div>
@@ -59,15 +57,15 @@
         <!-- SUMMARY CARDS -->
         <div id="summary-row" class="hidden grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
             <div class="bg-white rounded-lg shadow-lg p-6 border-l-4 border-blue-500">
-                <p class="text-sm text-gray-600 mb-1">Total Gross</p>
+                <p class="text-sm text-gray-600 mb-1">Week Gross</p>
                 <p id="sum-gross" class="text-3xl font-bold text-blue-600">—</p>
             </div>
             <div class="bg-white rounded-lg shadow-lg p-6 border-l-4 border-emerald-500">
-                <p class="text-sm text-gray-600 mb-1">Total Net</p>
+                <p class="text-sm text-gray-600 mb-1">Week Net</p>
                 <p id="sum-net" class="text-3xl font-bold text-emerald-600">—</p>
             </div>
             <div class="bg-white rounded-lg shadow-lg p-6 border-l-4 border-amber-500">
-                <p class="text-sm text-gray-600 mb-1">Total VAT</p>
+                <p class="text-sm text-gray-600 mb-1">Week VAT</p>
                 <p id="sum-vat" class="text-3xl font-bold text-amber-600">—</p>
             </div>
             <div class="bg-white rounded-lg shadow-lg p-6 border-l-4 border-purple-500">
@@ -76,17 +74,18 @@
             </div>
         </div>
 
-        <!-- DAILY BREAKDOWN -->
-        <div id="daily-card" class="hidden bg-white rounded-lg shadow-lg overflow-hidden">
-            <div class="px-6 py-4 border-b border-gray-100">
-                <h3 class="text-lg font-semibold text-gray-700">Daily Breakdown</h3>
+        <!-- PER-DAY BREAKDOWN -->
+        <div id="daily-card" class="hidden bg-white rounded-lg shadow-lg overflow-hidden mb-6">
+            <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+                <h3 class="text-lg font-semibold text-gray-700">Per-Day Breakdown</h3>
+                <span class="text-xs font-medium text-gray-500 uppercase tracking-wide">Final = Z-Report · Live = open shift (X)</span>
             </div>
             <div class="overflow-x-auto">
                 <table class="w-full text-sm">
                     <thead class="bg-gray-50 text-gray-600">
                         <tr>
-                            <th class="px-6 py-3 text-left font-medium">Date</th>
-                            <th class="px-6 py-3 text-left font-medium">Shift</th>
+                            <th class="px-6 py-3 text-left font-medium">Day</th>
+                            <th class="px-6 py-3 text-left font-medium">Status</th>
                             <th class="px-6 py-3 text-right font-medium">Gross</th>
                             <th class="px-6 py-3 text-right font-medium">Net</th>
                             <th class="px-6 py-3 text-right font-medium">Txns</th>
@@ -97,8 +96,20 @@
             </div>
         </div>
 
+        <!-- PAYMENT MIX + TOP ITEMS -->
+        <div id="detail-row" class="hidden grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h3 class="text-lg font-semibold text-gray-700 mb-4">💳 Payment Method Mix</h3>
+                <div id="payment-mix" class="space-y-3"></div>
+            </div>
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h3 class="text-lg font-semibold text-gray-700 mb-4">🏆 Top Items This Week</h3>
+                <div id="top-items" class="space-y-3"></div>
+            </div>
+        </div>
+
         <div id="empty-state" class="hidden text-center text-gray-400 py-16">
-            No Z-Reports in this date range.
+            No sales recorded this week.
         </div>
 
     </div>
@@ -107,57 +118,58 @@
     <script>
         loadSiteName();
 
-        // Default the range to the current month-to-date.
-        (function initDates() {
-            const now = new Date();
-            const pad = n => String(n).padStart(2, '0');
-            const fmt = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-            const first = new Date(now.getFullYear(), now.getMonth(), 1);
-            document.getElementById('from-date').value = fmt(first);
-            document.getElementById('to-date').value = fmt(now);
-        })();
+        // ISSUE-118: anchorDate is any date inside the displayed week — the
+        // server snaps it to Mon–Sun in PHT. Start at today.
+        let anchorDate = new Date();
+        let currentWeekStart = null;
 
-        async function loadPeriod() {
-            const from = document.getElementById('from-date').value;
-            const to = document.getElementById('to-date').value;
+        const pad = n => String(n).padStart(2, '0');
+        const fmtISO = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+        function shiftWeek(deltaDays) {
+            anchorDate.setDate(anchorDate.getDate() + deltaDays);
+            loadWeek();
+        }
+
+        async function loadWeek() {
             const errEl = document.getElementById('range-error');
             errEl.classList.add('hidden');
-            if (!from || !to) {
-                errEl.textContent = 'Please pick both a From and To date.';
-                errEl.classList.remove('hidden');
-                return;
-            }
-            if (from > to) {
-                errEl.textContent = 'From date must not be after To date.';
-                errEl.classList.remove('hidden');
-                return;
-            }
-
-            const btn = document.getElementById('load-btn');
-            btn.disabled = true;
-            btn.textContent = 'Loading…';
+            const prevBtn = document.getElementById('prev-week-btn');
+            const nextBtn = document.getElementById('next-week-btn');
+            prevBtn.disabled = nextBtn.disabled = true;
             try {
                 const res = await authenticatedFetch(
-                    `${API_BASE}/reports/period/?from=${from}&to=${to}`
+                    `${API_BASE}/reports/period/?week=${fmtISO(anchorDate)}`
                 );
                 if (!res.ok) {
                     const data = await res.json().catch(() => ({}));
-                    errEl.textContent = data.error || 'Failed to load period report.';
+                    errEl.textContent = data.error || 'Failed to load weekly report.';
                     errEl.classList.remove('hidden');
                     return;
                 }
-                const data = await res.json();
-                renderPeriod(data);
+                renderWeek(await res.json());
             } catch (e) {
-                errEl.textContent = 'Network error loading period report.';
+                errEl.textContent = 'Network error loading weekly report.';
                 errEl.classList.remove('hidden');
             } finally {
-                btn.disabled = false;
-                btn.textContent = 'Load';
+                prevBtn.disabled = false;
+                // Don't navigate past the current week.
+                const nextMonday = currentWeekStart ? new Date(currentWeekStart) : null;
+                if (nextMonday) nextMonday.setDate(nextMonday.getDate() + 7);
+                nextBtn.disabled = !!(nextMonday && nextMonday > new Date());
             }
         }
 
-        function renderPeriod(data) {
+        function fmtDayLabel(iso) {
+            const d = new Date(iso + 'T00:00:00');
+            return d.toLocaleDateString('en-PH', { month: 'short', day: 'numeric' });
+        }
+
+        function renderWeek(data) {
+            currentWeekStart = data.week_start;
+            document.getElementById('week-label').textContent =
+                `${fmtDayLabel(data.week_start)} – ${fmtDayLabel(data.week_end)}`;
+
             const s = data.summary;
             document.getElementById('sum-gross').textContent = formatCurrency(parseFloat(s.gross_total));
             document.getElementById('sum-net').textContent = formatCurrency(parseFloat(s.net_total));
@@ -165,30 +177,84 @@
             document.getElementById('sum-txns').textContent = s.transaction_count;
             document.getElementById('summary-row').classList.remove('hidden');
 
-            const body = document.getElementById('daily-body');
-            const dailyCard = document.getElementById('daily-card');
-            const empty = document.getElementById('empty-state');
-            if (!data.daily.length) {
-                body.innerHTML = '';
-                dailyCard.classList.add('hidden');
-                empty.classList.remove('hidden');
-                return;
+            // Week-over-week delta — omitted when no prior week exists.
+            const wow = document.getElementById('wow-delta');
+            if (data.previous_week) {
+                const delta = parseFloat(data.previous_week.delta);
+                const pct = data.previous_week.delta_pct;
+                const up = delta >= 0;
+                wow.textContent = `${up ? '▲' : '▼'} ${formatCurrency(Math.abs(delta))}` +
+                    (pct === null ? '' : ` (${up ? '+' : ''}${pct}%)`) + ' vs prev week';
+                wow.className = `text-sm font-medium ${up ? 'text-green-600' : 'text-red-600'}`;
+            } else {
+                wow.textContent = '';
+                wow.className = 'hidden text-sm font-medium';
             }
-            empty.classList.add('hidden');
-            dailyCard.classList.remove('hidden');
-            body.innerHTML = data.daily.map(r => `
+
+            // Per-day breakdown — always all 7 rows, labelled by source.
+            const statusBadge = st => ({
+                final:    '<span class="px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded">Final (Z)</span>',
+                live:     '<span class="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded">Live (X)</span>',
+                upcoming: '<span class="px-2 py-1 text-xs font-medium bg-gray-100 text-gray-500 rounded">—</span>',
+            }[st] || '');
+            document.getElementById('daily-body').innerHTML = data.days.map(d => `
                 <tr class="border-b border-gray-50 hover:bg-gray-50">
-                    <td class="px-6 py-3 text-gray-800">${escapeHtml(r.date)}</td>
-                    <td class="px-6 py-3 text-gray-600">#${r.shift_id ?? '—'} · ${escapeHtml(r.cashier)}</td>
-                    <td class="px-6 py-3 text-right font-medium">${formatCurrency(parseFloat(r.gross))}</td>
-                    <td class="px-6 py-3 text-right">${formatCurrency(parseFloat(r.net))}</td>
-                    <td class="px-6 py-3 text-right">${r.transaction_count}</td>
+                    <td class="px-6 py-3 text-gray-800">${escapeHtml(d.day_name)} ${fmtDayLabel(d.date)}</td>
+                    <td class="px-6 py-3">${statusBadge(d.status)}</td>
+                    <td class="px-6 py-3 text-right font-medium">${formatCurrency(parseFloat(d.gross))}</td>
+                    <td class="px-6 py-3 text-right">${formatCurrency(parseFloat(d.net))}</td>
+                    <td class="px-6 py-3 text-right">${d.transaction_count}</td>
                 </tr>
             `).join('');
+            document.getElementById('daily-card').classList.remove('hidden');
+
+            // Payment mix.
+            const methods = [
+                ['💵 Cash', s.cash_total], ['📱 GCash', s.gcash_total],
+                ['💳 Maya', s.maya_total], ['💳 Card', s.card_total],
+            ];
+            const mixTotal = methods.reduce((sum, [, v]) => sum + parseFloat(v), 0);
+            document.getElementById('payment-mix').innerHTML = mixTotal
+                ? methods.map(([label, v]) => {
+                    const amt = parseFloat(v);
+                    const pct = mixTotal ? (amt / mixTotal * 100).toFixed(1) : '0.0';
+                    return `
+                        <div class="space-y-1">
+                            <div class="flex items-center justify-between">
+                                <span class="text-sm font-medium text-gray-700">${label}</span>
+                                <span class="text-sm font-bold text-gray-900">${formatCurrency(amt)}</span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-2">
+                                <div class="bg-blue-600 h-2 rounded-full" style="width: ${pct}%"></div>
+                            </div>
+                            <p class="text-xs text-gray-500">${pct}% of week sales</p>
+                        </div>`;
+                }).join('')
+                : '<p class="text-gray-400 text-center py-4">No payments this week.</p>';
+
+            // Top items.
+            document.getElementById('top-items').innerHTML = (data.top_items || []).length
+                ? data.top_items.map((item, i) => `
+                    <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div class="flex items-center space-x-3">
+                            <span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-gray-100 text-gray-700 text-xs font-bold">${i + 1}</span>
+                            <div>
+                                <p class="font-medium text-gray-900">${escapeHtml(item.name)}</p>
+                                <p class="text-sm text-gray-600">${item.quantity} sold • ${formatCurrency(parseFloat(item.revenue))}</p>
+                            </div>
+                        </div>
+                    </div>`).join('')
+                : '<p class="text-gray-400 text-center py-4">No items sold this week.</p>';
+            document.getElementById('detail-row').classList.remove('hidden');
+
+            // Zero-transaction week still renders all cards; the empty-state
+            // note appears alongside as an extra hint.
+            document.getElementById('empty-state').classList.toggle(
+                'hidden', s.transaction_count > 0
+            );
         }
 
-        // Auto-load the default month-to-date range on first paint.
-        loadPeriod();
+        loadWeek();
     </script>
 </body>
 </html>

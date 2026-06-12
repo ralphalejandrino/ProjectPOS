@@ -12,7 +12,7 @@
     { key: 'dashboard',   href: 'dashboard.html',   emoji: '📊', label: 'Dashboard',   roles: ['manager', 'admin'] },
     { key: 'xreport',     href: 'xreport.html',     emoji: '📈', label: 'X-Report',    roles: ['manager', 'admin'] },
     { key: 'zreport',     href: 'zreport.html',     emoji: '📉', label: 'Z-Report',    roles: ['manager', 'admin'] },
-    { key: 'period',      href: 'period.html',      emoji: '🗓️', label: 'Period Report', roles: ['manager', 'admin'] },
+    { key: 'period',      href: 'period.html',      emoji: '🗓️', label: 'Weekly Report', roles: ['manager', 'admin'] },
     // ISSUE-116: Insights removed — widgets relocated onto the Dashboard
     // (still gated by the 'insights' page key there).
     // ISSUE-117: Remote View removed from the dropdown — remote.html stays
