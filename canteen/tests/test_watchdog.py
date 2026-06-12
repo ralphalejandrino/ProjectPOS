@@ -73,6 +73,7 @@ if [ "$1" = "-t" ]; then
   echo "HomeWiFi"
   exit 0
 fi
+if [ "$1" = "connection" ] && [ -f "{ctl}/nm_fail" ]; then exit 4; fi
 exit 0
 ''')
         self.systemctl = self._stub('systemctl', f'''
@@ -84,13 +85,15 @@ echo "journal line for $2"
 ''')
 
     def run_watchdog(self, gw_fail=False, ts_state=None, dry_run=False,
-                     tailscale_missing=False):
-        for flag in ('gw_fail', 'no_route', 'ts_state'):
+                     tailscale_missing=False, nm_fail=False):
+        for flag in ('gw_fail', 'no_route', 'ts_state', 'nm_fail'):
             p = os.path.join(self.ctl, flag)
             if os.path.exists(p):
                 os.remove(p)
         if gw_fail:
             open(os.path.join(self.ctl, 'gw_fail'), 'w').close()
+        if nm_fail:
+            open(os.path.join(self.ctl, 'nm_fail'), 'w').close()
         if ts_state is not None:
             with open(os.path.join(self.ctl, 'ts_state'), 'w') as f:
                 f.write(ts_state)
@@ -118,32 +121,48 @@ echo "journal line for $2"
 
 
 class WatchdogCheckTests(WatchdogHarness):
-    def test_healthy_cycle_is_quiet_and_resets_counter(self):
+    def test_healthy_cycle_writes_heartbeat_and_resets_counter(self):
         r = self.run_watchdog()
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertEqual(self.failcount, '0')
-        self.assertNotIn('CHECK FAILED', self.read(self.log))
+        log = self.read(self.log)
+        self.assertNotIn('CHECK FAILED', log)
         self.assertEqual(self.read(self.actions), '')
+        # One heartbeat line per run: "<ts> ... OK gw=<ip> ts=<state> fails=0"
+        self.assertIn('OK gw=192.168.1.1 ts=Running fails=0', log)
+        self.assertRegex(
+            log, r'\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}[+-]\d{4} \[watchdog\] '
+                 r'OK gw=192\.168\.1\.1 ts=Running fails=0')
+
+    def test_heartbeat_written_every_healthy_run(self):
+        self.run_watchdog()
+        self.run_watchdog()
+        self.run_watchdog()
+        log = self.read(self.log)
+        self.assertEqual(log.count('OK gw=192.168.1.1 ts=Running fails=0'), 3)
 
     def test_failures_below_threshold_take_no_action(self):
         self.run_watchdog(gw_fail=True)
         self.run_watchdog(gw_fail=True)
         self.assertEqual(self.failcount, '2')
         log = self.read(self.log)
-        self.assertIn('CHECK FAILED (1 consecutive)', log)
-        self.assertIn('CHECK FAILED (2 consecutive)', log)
+        # Failed checks name the failed probe and the new consecutive count.
+        self.assertIn('CHECK FAILED (1 consecutive) probes=[gateway]', log)
+        self.assertIn('CHECK FAILED (2 consecutive) probes=[gateway]', log)
         self.assertEqual(self.read(self.actions), '')
 
     def test_recovery_resets_counter_and_logs(self):
         self.run_watchdog(gw_fail=True)
         self.run_watchdog()
         self.assertEqual(self.failcount, '0')
-        self.assertIn('RECOVERED after 1 failed check(s)', self.read(self.log))
+        self.assertIn('RECOVERED after 1 fails', self.read(self.log))
 
     def test_tailscale_failure_alone_counts_as_failure(self):
         self.run_watchdog(ts_state='Stopped')
         self.assertEqual(self.failcount, '1')
-        self.assertIn('BackendState=Stopped', self.read(self.log))
+        log = self.read(self.log)
+        self.assertIn('BackendState=Stopped', log)
+        self.assertIn('probes=[tailscale]', log)
 
     def test_missing_tailscale_is_skipped_not_failed(self):
         r = self.run_watchdog(tailscale_missing=True)
@@ -168,14 +187,43 @@ class WatchdogEscalationTests(WatchdogHarness):
         self.assertIn('STATE at escalation: failcount=3', log)
         self.assertNotIn('reboot', log.lower())
 
-    def test_dry_run_logs_but_executes_nothing(self):
+    def test_escalation_logs_action_and_exit_status(self):
         for _ in range(3):
-            self.run_watchdog(gw_fail=True, dry_run=True)
+            self.run_watchdog(gw_fail=True)
         log = self.read(self.log)
-        self.assertIn('DRY-RUN: would', log)
+        self.assertIn("ACTION: nmcli connection up 'HomeWiFi' (escalation 1/3)", log)
+        self.assertIn("ACTION OK (rc=0): nmcli connection up 'HomeWiFi'", log)
+
+    def test_failed_escalation_action_logs_exit_status(self):
+        for _ in range(3):
+            self.run_watchdog(gw_fail=True, nm_fail=True)
+        self.assertIn('ACTION FAILED (rc=4):', self.read(self.log))
+
+    def test_dry_run_prints_decision_path_and_executes_nothing(self):
+        outs = [self.run_watchdog(gw_fail=True, dry_run=True).stdout
+                for _ in range(3)]
+        # stdout must carry the full decision path, every run.
+        for out in outs:
+            self.assertTrue(out.strip(), 'dry-run stdout was empty')
+            self.assertIn('DRY-RUN: check gateway:', out)
+            self.assertIn('DRY-RUN: check tailscale:', out)
+            self.assertIn('failcount', out)
+        self.assertIn('failcount 0 -> 1', outs[0])
+        self.assertIn('below threshold -> no escalation', outs[0])
+        self.assertIn('failcount 2 -> 3', outs[2])
+        self.assertIn('escalation rung 1/3 selected', outs[2])
+        self.assertIn("DRY-RUN: would run: nmcli connection up 'HomeWiFi'", outs[2])
+        # The decision path is mirrored to the log, and nothing executed.
+        self.assertIn('DRY-RUN: would run', self.read(self.log))
         actions = self.read(self.actions)
         self.assertNotIn('connection up', actions)
         self.assertNotIn('restart', actions)
+
+    def test_dry_run_healthy_prints_heartbeat_path(self):
+        out = self.run_watchdog(dry_run=True).stdout
+        self.assertIn('DRY-RUN: check gateway:', out)
+        self.assertIn('PASS', out)
+        self.assertIn('heartbeat written', out)
 
     def test_recovery_after_escalation_resets_escalation_ladder(self):
         for _ in range(3):

@@ -19,10 +19,13 @@
 #                 3. systemctl restart tailscaled
 #               NEVER reboots the box.
 #
-# Every check result and every action is logged with a timestamp to
-# /var/log/tarsier/connectivity.log (logrotate: scripts/logrotate/
-# tarsier-connectivity, 14 days). Healthy cycles are NOT logged — the log is
-# an evidence trail of outages, recoveries, and actions, not a heartbeat.
+# Every run appends exactly one status line to /var/log/tarsier/
+# connectivity.log (logrotate: scripts/logrotate/tarsier-connectivity,
+# 14 days): a heartbeat "OK gw=<ip> ts=<state> fails=0" on healthy cycles
+# (so an empty/stale log means the watchdog itself is dead, not that the
+# network is healthy), or a "CHECK FAILED" line naming the failed probe(s)
+# and the consecutive count. Escalation actions log the command AND its exit
+# status; recovery logs "RECOVERED after N fails".
 #
 # Dev-box safe: if tailscale or nmcli is not installed the corresponding
 # check/action is skipped (logged), never failed. State lives in /run so a
@@ -36,7 +39,9 @@
 # Test/dry-run hooks (never set in production):
 #   TARSIER_WD_STATE_DIR   override /run/tarsier-watchdog
 #   TARSIER_WD_LOG         override /var/log/tarsier/connectivity.log
-#   TARSIER_WD_DRY_RUN=1   log intended actions, execute nothing
+#   TARSIER_WD_DRY_RUN=1   print the full decision path (checks, failcount
+#                          progression, which escalation rung would fire) to
+#                          stdout and the log, executing no actions
 #   NMCLI / TAILSCALE / SYSTEMCTL / PING / IP   binary overrides for stubs
 # =============================================================================
 set -euo pipefail
@@ -57,40 +62,46 @@ mkdir -p "$STATE_DIR" "$(dirname "$LOG_FILE")"
 
 ts()  { date '+%Y-%m-%d %H:%M:%S%z'; }
 log() { echo "$(ts) [watchdog] $*" >>"$LOG_FILE" 2>/dev/null || true; }
+# dry-run decision trace: stdout (so an operator running the script by hand
+# sees the full path) AND the log.
+dr()  { [ "$DRY_RUN" = "1" ] || return 0; echo "DRY-RUN: $*"; log "DRY-RUN: $*"; }
 
 run_action() {  # run_action <description> <cmd...>
   local desc="$1"; shift
   if [ "$DRY_RUN" = "1" ]; then
-    log "DRY-RUN: would $desc"
+    dr "would run: $desc"
     return 0
   fi
   log "ACTION: $desc"
-  if "$@" >>"$LOG_FILE" 2>&1; then
-    log "ACTION OK: $desc"
+  local rc=0
+  "$@" >>"$LOG_FILE" 2>&1 || rc=$?
+  if [ "$rc" -eq 0 ]; then
+    log "ACTION OK (rc=0): $desc"
   else
-    log "ACTION FAILED (rc=$?): $desc"
+    log "ACTION FAILED (rc=$rc): $desc"
   fi
 }
 
 # --- check 1: default gateway ping -------------------------------------------
 gateway_ok() {
-  local gw
-  gw="$($IP route show default 2>/dev/null | awk '/^default/ {print $3; exit}')"
-  if [ -z "$gw" ]; then
+  GW_IP="$($IP route show default 2>/dev/null | awk '/^default/ {print $3; exit}')"
+  if [ -z "$GW_IP" ]; then
+    GW_IP="none"
     GW_DETAIL="no default route"
     return 1
   fi
-  if "$PING" -c 1 -W 2 "$gw" >/dev/null 2>&1; then
-    GW_DETAIL="gateway $gw reachable"
+  if "$PING" -c 1 -W 2 "$GW_IP" >/dev/null 2>&1; then
+    GW_DETAIL="gateway $GW_IP reachable"
     return 0
   fi
-  GW_DETAIL="gateway $gw unreachable"
+  GW_DETAIL="gateway $GW_IP unreachable"
   return 1
 }
 
 # --- check 2: tailscale backend running ---------------------------------------
 tailscale_ok() {
   if ! command -v "$TAILSCALE" >/dev/null 2>&1; then
+    TS_STATE="skipped"
     TS_DETAIL="tailscale not installed — check skipped"
     return 0
   fi
@@ -98,11 +109,12 @@ tailscale_ok() {
   state="$("$TAILSCALE" status --json 2>/dev/null \
            | grep -o '"BackendState":[[:space:]]*"[^"]*"' \
            | head -1 | sed 's/.*"\([^"]*\)"$/\1/')"
-  if [ "$state" = "Running" ]; then
+  TS_STATE="${state:-unknown}"
+  if [ "$TS_STATE" = "Running" ]; then
     TS_DETAIL="tailscale BackendState=Running"
     return 0
   fi
-  TS_DETAIL="tailscale BackendState=${state:-unknown}"
+  TS_DETAIL="tailscale BackendState=$TS_STATE"
   return 1
 }
 
@@ -139,10 +151,13 @@ escalate() {  # escalate <step 0|1|2>
 }
 
 # --- main ----------------------------------------------------------------------
-GW_DETAIL=""; TS_DETAIL=""
+GW_IP="none"; GW_DETAIL=""; TS_STATE="unknown"; TS_DETAIL=""
 gw_pass=0; ts_pass=0
 gateway_ok && gw_pass=1
 tailscale_ok && ts_pass=1
+
+dr "check gateway:   $GW_DETAIL -> $([ "$gw_pass" = 1 ] && echo PASS || echo FAIL)"
+dr "check tailscale: $TS_DETAIL -> $([ "$ts_pass" = 1 ] && echo PASS || echo FAIL)"
 
 failcount=0
 [ -f "$FAIL_FILE" ] && failcount="$(cat "$FAIL_FILE" 2>/dev/null || echo 0)"
@@ -150,21 +165,35 @@ case "$failcount" in (*[!0-9]*|'') failcount=0;; esac
 
 if [ "$gw_pass" = "1" ] && [ "$ts_pass" = "1" ]; then
   if [ "$failcount" -gt 0 ]; then
-    log "RECOVERED after $failcount failed check(s): $GW_DETAIL; $TS_DETAIL"
+    log "RECOVERED after $failcount fails: $GW_DETAIL; $TS_DETAIL"
+    dr "recovered after $failcount fails -> failcount reset to 0"
   fi
   echo 0 > "$FAIL_FILE"
+  # Heartbeat: one line per healthy run, so an empty/stale log unambiguously
+  # means the watchdog is dead — not that the network is fine. Growth is
+  # bounded by logrotate (14 days, ~30 short lines/hour).
+  log "OK gw=$GW_IP ts=$TS_STATE fails=0"
+  dr "heartbeat written; failcount 0"
   exit 0
 fi
 
+failed_probes=""
+[ "$gw_pass" = "1" ] || failed_probes="gateway"
+[ "$ts_pass" = "1" ] || failed_probes="${failed_probes:+$failed_probes,}tailscale"
+
+prev=$failcount
 failcount=$((failcount + 1))
 echo "$failcount" > "$FAIL_FILE"
-log "CHECK FAILED ($failcount consecutive): $GW_DETAIL; $TS_DETAIL"
+log "CHECK FAILED ($failcount consecutive) probes=[$failed_probes]: $GW_DETAIL; $TS_DETAIL"
+dr "failcount $prev -> $failcount (threshold $FAIL_THRESHOLD, failed probes: $failed_probes)"
 
 if [ "$failcount" -lt "$FAIL_THRESHOLD" ]; then
+  dr "below threshold -> no escalation this cycle"
   exit 0
 fi
 
 step=$(( (failcount - FAIL_THRESHOLD) % 3 ))
 log "STATE at escalation: failcount=$failcount gateway_ok=$gw_pass tailscale_ok=$ts_pass"
+dr "escalation rung $((step + 1))/3 selected"
 escalate "$step"
 exit 0
