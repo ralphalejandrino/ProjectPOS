@@ -17,7 +17,7 @@
 </head>
 <body class="bg-gray-50" data-page="period" style="visibility:hidden">
     <script>
-        // FEATURE-013 / ISSUE-118: manager/admin-only weekly report.
+        // FEATURE-013 / ISSUE-118 / ISSUE-121: manager/admin-only weekly report.
         (function () {
             if (!guardPage('period')) return;
             document.body.style.visibility = '';
@@ -41,37 +41,53 @@
         <div class="bg-white rounded-lg shadow p-4 mb-6">
             <div class="flex flex-wrap items-center gap-4">
                 <button id="prev-week-btn" onclick="shiftWeek(-7)"
-                    class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg font-medium transition">
+                    class="touch-target-pos bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg font-medium transition">
                     ← Prev Week
                 </button>
                 <span id="week-label" class="text-lg font-semibold text-gray-800">—</span>
                 <button id="next-week-btn" onclick="shiftWeek(7)"
-                    class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg font-medium transition">
+                    class="touch-target-pos bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg font-medium transition">
                     Next Week →
                 </button>
-                <span id="wow-delta" class="hidden text-sm font-medium"></span>
+                <button id="current-week-btn" onclick="goToCurrentWeek()"
+                    class="touch-target-pos bg-gray-100 hover:bg-gray-200 text-gray-700 px-5 py-2 rounded-lg font-medium transition">
+                    Current Week (to date)
+                </button>
+                <span id="live-week-badge" class="hidden px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded">Current week — to date, includes Live (X)</span>
             </div>
             <p id="range-error" class="hidden text-red-600 text-sm mt-2"></p>
         </div>
 
-        <!-- SUMMARY CARDS -->
+        <!-- HEADLINE CARDS (ISSUE-121: gross / net / txns / avg ticket, each with WoW) -->
         <div id="summary-row" class="hidden grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
             <div class="bg-white rounded-lg shadow-lg p-6 border-l-4 border-blue-500">
                 <p class="text-sm text-gray-600 mb-1">Week Gross</p>
                 <p id="sum-gross" class="text-3xl font-bold text-blue-600">—</p>
+                <p id="wow-gross" class="text-xs mt-1 text-gray-500">—</p>
             </div>
             <div class="bg-white rounded-lg shadow-lg p-6 border-l-4 border-emerald-500">
                 <p class="text-sm text-gray-600 mb-1">Week Net</p>
                 <p id="sum-net" class="text-3xl font-bold text-emerald-600">—</p>
-            </div>
-            <div class="bg-white rounded-lg shadow-lg p-6 border-l-4 border-amber-500">
-                <p class="text-sm text-gray-600 mb-1">Week VAT</p>
-                <p id="sum-vat" class="text-3xl font-bold text-amber-600">—</p>
+                <p id="wow-net" class="text-xs mt-1 text-gray-500">—</p>
             </div>
             <div class="bg-white rounded-lg shadow-lg p-6 border-l-4 border-purple-500">
                 <p class="text-sm text-gray-600 mb-1">Transactions</p>
                 <p id="sum-txns" class="text-3xl font-bold text-purple-600">—</p>
+                <p id="wow-txns" class="text-xs mt-1 text-gray-500">—</p>
             </div>
+            <div class="bg-white rounded-lg shadow-lg p-6 border-l-4 border-amber-500">
+                <p class="text-sm text-gray-600 mb-1">Avg Ticket</p>
+                <p id="sum-avg" class="text-3xl font-bold text-amber-600">—</p>
+                <p id="wow-avg" class="text-xs mt-1 text-gray-500">—</p>
+            </div>
+        </div>
+
+        <!-- DAILY REVENUE CHART (ISSUE-121: CSS-width bars, same pattern as the
+             dashboard peak-hours widget — no external chart library) -->
+        <div id="chart-card" class="hidden bg-white rounded-lg shadow-lg p-6 mb-6">
+            <h3 class="text-lg font-semibold text-gray-700 mb-4">📊 Daily Revenue (Mon–Sun)</h3>
+            <div id="daily-chart" class="flex flex-col gap-1.5"></div>
+            <p id="busiest-callout" class="text-sm text-gray-600 mt-4">—</p>
         </div>
 
         <!-- PER-DAY BREAKDOWN -->
@@ -96,15 +112,75 @@
             </div>
         </div>
 
-        <!-- PAYMENT MIX + TOP ITEMS -->
-        <div id="detail-row" class="hidden grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-            <div class="bg-white rounded-lg shadow-lg p-6">
-                <h3 class="text-lg font-semibold text-gray-700 mb-4">💳 Payment Method Mix</h3>
+        <!-- PAYMENT MIX: chart + table (ISSUE-121) -->
+        <div id="payment-card" class="hidden bg-white rounded-lg shadow-lg p-6 mb-6">
+            <h3 class="text-lg font-semibold text-gray-700 mb-4">💳 Payment Method Mix</h3>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div id="payment-mix" class="space-y-3"></div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead class="bg-gray-50 text-gray-600">
+                            <tr>
+                                <th class="px-4 py-2 text-left font-medium">Method</th>
+                                <th class="px-4 py-2 text-right font-medium">Amount</th>
+                                <th class="px-4 py-2 text-right font-medium">Share</th>
+                            </tr>
+                        </thead>
+                        <tbody id="payment-table-body"></tbody>
+                    </table>
+                </div>
             </div>
+        </div>
+
+        <!-- TOP ITEMS + WORST SELLERS -->
+        <div id="items-row" class="hidden grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
             <div class="bg-white rounded-lg shadow-lg p-6">
                 <h3 class="text-lg font-semibold text-gray-700 mb-4">🏆 Top Items This Week</h3>
                 <div id="top-items" class="space-y-3"></div>
+            </div>
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h3 class="text-lg font-semibold text-gray-700 mb-4">📉 Worst Sellers (active items)</h3>
+                <p class="text-xs text-gray-500 mb-3">Bottom 5 active items by units sold this week — candidates for menu pruning.</p>
+                <div id="worst-sellers" class="space-y-3"></div>
+            </div>
+        </div>
+
+        <!-- PER-CASHIER SUMMARY (reuses the FEATURE-014 insights aggregation) -->
+        <div id="cashier-card" class="hidden bg-white rounded-lg shadow-lg overflow-hidden mb-6">
+            <div class="px-6 py-4 border-b border-gray-100">
+                <h3 class="text-lg font-semibold text-gray-700">🧑‍💼 Cashier Summary (this week)</h3>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead class="bg-gray-50 text-gray-600">
+                        <tr>
+                            <th class="px-4 py-2 text-left font-medium">Cashier</th>
+                            <th class="px-4 py-2 text-right font-medium">Txns</th>
+                            <th class="px-4 py-2 text-right font-medium">Gross</th>
+                            <th class="px-4 py-2 text-right font-medium">Voids</th>
+                        </tr>
+                    </thead>
+                    <tbody id="cashier-body"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- INVENTORY NOTICES (ISSUE-121: never hidden — empty states say so) -->
+        <div id="notices-card" class="hidden bg-white rounded-lg shadow-lg p-6 mb-6">
+            <h3 class="text-lg font-semibold text-gray-700 mb-4">📦 Inventory Notices</h3>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div>
+                    <h4 class="text-sm font-medium text-gray-700 mb-2">⚠️ Low Stock</h4>
+                    <div id="notice-low-stock" class="space-y-1"></div>
+                </div>
+                <div>
+                    <h4 class="text-sm font-medium text-gray-700 mb-2">⏳ Expiring Within 14 Days</h4>
+                    <div id="notice-expiring" class="space-y-1"></div>
+                </div>
+                <div>
+                    <h4 class="text-sm font-medium text-gray-700 mb-2">🚫 Out of Stock (active items)</h4>
+                    <div id="notice-out-of-stock" class="space-y-1"></div>
+                </div>
             </div>
         </div>
 
@@ -118,9 +194,22 @@
     <script>
         loadSiteName();
 
-        // ISSUE-118: anchorDate is any date inside the displayed week — the
-        // server snaps it to Mon–Sun in PHT. Start at today.
-        let anchorDate = new Date();
+        // ISSUE-121: the report defaults to the most recent COMPLETED
+        // Mon–Sun week (PHT) — the current week is reachable only via the
+        // explicitly labeled "Current Week (to date)" control / Next Week.
+        // THE default lives here and only here: to flip the default to
+        // current week-to-date, return `new Date()` instead.
+        function defaultAnchorDate() {
+            const d = new Date();
+            // Back up to last week's Sunday: this week's Monday minus 1 day.
+            const dow = (d.getDay() + 6) % 7;   // 0 = Monday
+            d.setDate(d.getDate() - dow - 1);
+            return d;
+        }
+
+        // anchorDate is any date inside the displayed week — the server
+        // snaps it to Mon–Sun in PHT.
+        let anchorDate = defaultAnchorDate();
         let currentWeekStart = null;
 
         const pad = n => String(n).padStart(2, '0');
@@ -128,6 +217,11 @@
 
         function shiftWeek(deltaDays) {
             anchorDate.setDate(anchorDate.getDate() + deltaDays);
+            loadWeek();
+        }
+
+        function goToCurrentWeek() {
+            anchorDate = new Date();
             loadWeek();
         }
 
@@ -165,31 +259,79 @@
             return d.toLocaleDateString('en-PH', { month: 'short', day: 'numeric' });
         }
 
+        function fmtHour(h) {
+            const period = h < 12 ? 'AM' : 'PM';
+            const hr = h % 12 === 0 ? 12 : h % 12;
+            return `${hr} ${period}`;
+        }
+
+        // ISSUE-121: one WoW line per headline card, null-safe — '—' when
+        // there is no prior week or the prior metric is zero/unavailable.
+        function renderWowLine(id, current, previous) {
+            const el = document.getElementById(id);
+            if (previous === null || previous === undefined) {
+                el.textContent = 'no prior week';
+                el.className = 'text-xs mt-1 text-gray-500';
+                return;
+            }
+            const prev = parseFloat(previous);
+            const cur = parseFloat(current);
+            const delta = cur - prev;
+            const up = delta >= 0;
+            const pct = prev !== 0 ? ` (${up ? '+' : ''}${(delta / prev * 100).toFixed(1)}%)` : '';
+            el.textContent = `${up ? '▲' : '▼'} ${Math.abs(delta).toFixed(2)}${pct} vs prev week`;
+            el.className = `text-xs mt-1 ${up ? 'text-green-600' : 'text-red-600'}`;
+        }
+
         function renderWeek(data) {
             currentWeekStart = data.week_start;
+            const isLiveWeek = !!data.live_date;
             document.getElementById('week-label').textContent =
-                `${fmtDayLabel(data.week_start)} – ${fmtDayLabel(data.week_end)}`;
+                `${fmtDayLabel(data.week_start)} – ${fmtDayLabel(data.week_end)}` +
+                (isLiveWeek ? ' (to date)' : '');
+            document.getElementById('live-week-badge').classList.toggle('hidden', !isLiveWeek);
 
             const s = data.summary;
+            const prev = data.previous_week;
             document.getElementById('sum-gross').textContent = formatCurrency(parseFloat(s.gross_total));
             document.getElementById('sum-net').textContent = formatCurrency(parseFloat(s.net_total));
-            document.getElementById('sum-vat').textContent = formatCurrency(parseFloat(s.vat_amount));
             document.getElementById('sum-txns').textContent = s.transaction_count;
+            document.getElementById('sum-avg').textContent =
+                s.avg_ticket === null ? '—' : formatCurrency(parseFloat(s.avg_ticket));
+            renderWowLine('wow-gross', s.gross_total, prev ? prev.gross_total : null);
+            renderWowLine('wow-net', s.net_total, prev ? prev.net_total : null);
+            renderWowLine('wow-txns', s.transaction_count, prev ? prev.transaction_count : null);
+            renderWowLine('wow-avg', s.avg_ticket, prev ? prev.avg_ticket : null);
             document.getElementById('summary-row').classList.remove('hidden');
 
-            // Week-over-week delta — omitted when no prior week exists.
-            const wow = document.getElementById('wow-delta');
-            if (data.previous_week) {
-                const delta = parseFloat(data.previous_week.delta);
-                const pct = data.previous_week.delta_pct;
-                const up = delta >= 0;
-                wow.textContent = `${up ? '▲' : '▼'} ${formatCurrency(Math.abs(delta))}` +
-                    (pct === null ? '' : ` (${up ? '+' : ''}${pct}%)`) + ' vs prev week';
-                wow.className = `text-sm font-medium ${up ? 'text-green-600' : 'text-red-600'}`;
-            } else {
-                wow.textContent = '';
-                wow.className = 'hidden text-sm font-medium';
+            // Daily revenue chart — CSS-width bars (dashboard widget pattern).
+            const maxGross = data.days.reduce((m, d) => Math.max(m, parseFloat(d.gross)), 0);
+            document.getElementById('daily-chart').innerHTML = data.days.map(d => {
+                const amt = parseFloat(d.gross);
+                const pct = maxGross ? Math.round((amt / maxGross) * 100) : 0;
+                return `
+                    <div class="flex items-center gap-3">
+                        <span class="text-xs text-gray-500 w-14 text-right tabular-nums">${escapeHtml(d.day_name)} ${fmtDayLabel(d.date)}</span>
+                        <div class="flex-1 bg-gray-100 rounded h-5 overflow-hidden">
+                            <div class="bg-blue-500 h-5 rounded" style="width: ${pct}%"></div>
+                        </div>
+                        <span class="text-xs text-gray-600 tabular-nums">${formatCurrency(amt)}</span>
+                    </div>`;
+            }).join('');
+
+            // Busiest day (top gross day) + busiest hour callout.
+            const busiestDay = data.days.reduce(
+                (best, d) => (parseFloat(d.gross) > parseFloat(best.gross) ? d : best), data.days[0]);
+            const parts = [];
+            if (busiestDay && parseFloat(busiestDay.gross) > 0) {
+                parts.push(`Busiest day: ${busiestDay.day_name} ${fmtDayLabel(busiestDay.date)} (${formatCurrency(parseFloat(busiestDay.gross))})`);
             }
+            if (data.busiest_hour) {
+                parts.push(`Busiest hour: ${fmtHour(data.busiest_hour.hour)} (${data.busiest_hour.count} txns)`);
+            }
+            document.getElementById('busiest-callout').textContent =
+                parts.length ? `🔥 ${parts.join(' · ')}` : 'No sales this week.';
+            document.getElementById('chart-card').classList.remove('hidden');
 
             // Per-day breakdown — always all 7 rows, labelled by source.
             const statusBadge = st => ({
@@ -208,7 +350,7 @@
             `).join('');
             document.getElementById('daily-card').classList.remove('hidden');
 
-            // Payment mix.
+            // Payment mix — bars (chart) + table.
             const methods = [
                 ['💵 Cash', s.cash_total], ['📱 GCash', s.gcash_total],
                 ['💳 Maya', s.maya_total], ['💳 Card', s.card_total],
@@ -227,10 +369,20 @@
                             <div class="w-full bg-gray-200 rounded-full h-2">
                                 <div class="bg-blue-600 h-2 rounded-full" style="width: ${pct}%"></div>
                             </div>
-                            <p class="text-xs text-gray-500">${pct}% of week sales</p>
                         </div>`;
                 }).join('')
                 : '<p class="text-gray-400 text-center py-4">No payments this week.</p>';
+            document.getElementById('payment-table-body').innerHTML = methods.map(([label, v]) => {
+                const amt = parseFloat(v);
+                const pct = mixTotal ? (amt / mixTotal * 100).toFixed(1) : '0.0';
+                return `
+                    <tr class="border-b border-gray-50">
+                        <td class="px-4 py-2 text-gray-800">${label}</td>
+                        <td class="px-4 py-2 text-right font-medium">${formatCurrency(amt)}</td>
+                        <td class="px-4 py-2 text-right text-gray-600">${pct}%</td>
+                    </tr>`;
+            }).join('');
+            document.getElementById('payment-card').classList.remove('hidden');
 
             // Top items.
             document.getElementById('top-items').innerHTML = (data.top_items || []).length
@@ -245,7 +397,52 @@
                         </div>
                     </div>`).join('')
                 : '<p class="text-gray-400 text-center py-4">No items sold this week.</p>';
-            document.getElementById('detail-row').classList.remove('hidden');
+
+            // Worst sellers — bottom 5 active items (menu-pruning signal).
+            document.getElementById('worst-sellers').innerHTML = (data.worst_sellers || []).length
+                ? data.worst_sellers.map(item => `
+                    <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <p class="font-medium text-gray-900">${escapeHtml(item.name)}</p>
+                        <p class="text-sm ${item.quantity === 0 ? 'text-red-600 font-medium' : 'text-gray-600'}">
+                            ${item.quantity === 0 ? 'no sales' : `${item.quantity} sold • ${formatCurrency(parseFloat(item.revenue))}`}
+                        </p>
+                    </div>`).join('')
+                : '<p class="text-gray-400 text-center py-4">No active items.</p>';
+            document.getElementById('items-row').classList.remove('hidden');
+
+            // Per-cashier summary (same shape as the dashboard widget).
+            document.getElementById('cashier-body').innerHTML = (data.cashiers || []).length
+                ? data.cashiers.map(c => `
+                    <tr class="border-b border-gray-50 hover:bg-gray-50">
+                        <td class="px-4 py-2 font-medium text-gray-800">${escapeHtml(c.name)}</td>
+                        <td class="px-4 py-2 text-right">${c.txns}</td>
+                        <td class="px-4 py-2 text-right font-medium">${formatCurrency(parseFloat(c.gross))}</td>
+                        <td class="px-4 py-2 text-right ${c.voids ? 'text-red-600' : 'text-gray-500'}">${c.voids}</td>
+                    </tr>`).join('')
+                : '<tr><td colspan="4" class="text-center text-gray-400 py-8">No transactions this week.</td></tr>';
+            document.getElementById('cashier-card').classList.remove('hidden');
+
+            // Inventory notices — section always visible; empty lists say so.
+            const itemLink = name =>
+                `<a href="inventory.html?q=${encodeURIComponent(name)}" class="font-medium text-blue-600 hover:underline">${escapeHtml(name)}</a>`;
+            const noNotices = '<p class="text-sm text-gray-400">No notices.</p>';
+            const n = data.inventory_notices || {};
+            document.getElementById('notice-low-stock').innerHTML = (n.low_stock || []).length
+                ? n.low_stock.map(i =>
+                    `<p class="text-sm text-gray-600">${itemLink(i.name)} — ${i.stock} left (alert at ${i.threshold})</p>`).join('')
+                : noNotices;
+            document.getElementById('notice-expiring').innerHTML = (n.expiring_soon || []).length
+                ? n.expiring_soon.map(i =>
+                    `<p class="text-sm text-gray-600">${itemLink(i.name)} — ${
+                        i.days_left < 0 ? `expired ${fmtDayLabel(i.expiry_date)}`
+                        : i.days_left === 0 ? 'expires today'
+                        : `expires ${fmtDayLabel(i.expiry_date)} (${i.days_left}d)`}</p>`).join('')
+                : noNotices;
+            document.getElementById('notice-out-of-stock').innerHTML = (n.out_of_stock || []).length
+                ? n.out_of_stock.map(i =>
+                    `<p class="text-sm text-gray-600">${itemLink(i.name)}</p>`).join('')
+                : noNotices;
+            document.getElementById('notices-card').classList.remove('hidden');
 
             // Zero-transaction week still renders all cards; the empty-state
             // note appears alongside as an extra hint.

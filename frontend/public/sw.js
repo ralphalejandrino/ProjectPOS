@@ -49,7 +49,11 @@
 // v96: B-FIX-DASH — ISSUE-120 (dashboard insights widgets populate on every
 // page load: init moved ahead of the awaited chain + pageshow repopulation
 // on bfcache restores). One bump for the batch.
-const CACHE_NAME = 'tarsierpos-v96'; // canonical cache version
+// v97: B-REPORT — ISSUE-121 (Weekly Performance Report rework: defaults to
+// last completed Mon–Sun week, headline cards with per-metric WoW, daily
+// revenue bars + busiest day/hour, payment mix chart+table, worst sellers,
+// weekly cashier summary, inventory notices; inventory.html ?q= deep-link).
+const CACHE_NAME = 'tarsierpos-v97'; // canonical cache version
 const ASSETS = [
   'index.html',
   'login.html',

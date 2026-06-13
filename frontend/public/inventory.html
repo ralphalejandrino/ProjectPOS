@@ -332,6 +332,13 @@
             await loadAnalytics();   // ← first (sets globalLowStockThreshold before render)
             await loadProducts();    // ← second
             attachEventListeners();
+            // ISSUE-121: weekly-report inventory notices deep-link here with
+            // ?q=<item name> — prefill the search so the item is in view.
+            const q = new URLSearchParams(location.search).get('q');
+            if (q) {
+                document.getElementById('search-input').value = q;
+                searchProducts();
+            }
             loadSiteName();
             loadColorScheme();
         });

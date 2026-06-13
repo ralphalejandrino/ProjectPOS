@@ -35,7 +35,7 @@ from .serializers import (
     ZReportSerializer,
 )
 from django.db.models import Sum, Count, F, FloatField, Q
-from django.db.models.functions import TruncDate
+from django.db.models.functions import TruncDate, Coalesce
 from datetime import datetime, timedelta, date, timezone as dt_tz
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.pagination import PageNumberPagination
@@ -1974,6 +1974,130 @@ def _weekly_top_items(d_from, d_to):
     ]
 
 
+def _weekly_worst_sellers(d_from, d_to):
+    """ISSUE-121: bottom 5 active items by quantity sold in the window —
+    zero and near-zero sellers, the owner's menu-pruning signal. Items with
+    no sales at all rank first (quantity 0). Same sale filters as
+    _weekly_top_items (void=False, is_seed=False)."""
+    sale_filter = Q(
+        postransactionitem__pos_transaction__created_at__date__gte=d_from,
+        postransactionitem__pos_transaction__created_at__date__lte=d_to,
+        postransactionitem__pos_transaction__void=False,
+        postransactionitem__pos_transaction__is_seed=False,  # FLAG-047
+    )
+    rows = (
+        Item.objects.filter(is_active=True)
+        .annotate(
+            total_quantity=Coalesce(
+                Sum('postransactionitem__quantity', filter=sale_filter), 0
+            ),
+            total_revenue=Sum('postransactionitem__subtotal', filter=sale_filter),
+        )
+        .order_by('total_quantity', 'name')[:5]
+    )
+    return [
+        {
+            'name': r.name,
+            'quantity': r.total_quantity,
+            'revenue': _money(r.total_revenue),
+        }
+        for r in rows
+    ]
+
+
+def _weekly_busiest_hour(d_from, d_to):
+    """ISSUE-121: busiest PHT hour of the week — completed, non-seed
+    transaction count bucketed by local hour (same bucketing as the
+    FEATURE-014 insights peak_hours, scoped to the week). None when the
+    week has no transactions."""
+    created_times = (
+        PosTransaction.objects
+        .filter(
+            created_at__date__gte=d_from, created_at__date__lte=d_to,
+            status='completed', void=False, is_seed=False,
+        )
+        .values_list('created_at', flat=True)
+    )
+    hour_counts = [0] * 24
+    for created in created_times:
+        hour_counts[timezone.localtime(created).hour] += 1
+    busiest = max(range(24), key=lambda h: hour_counts[h])
+    if not hour_counts[busiest]:
+        return None
+    return {'hour': busiest, 'count': hour_counts[busiest]}
+
+
+def _cashier_summary(d_from, d_to):
+    """Per-cashier txn count, gross, and void count over a PHT date range,
+    seed-free. Shared by FEATURE-014 insights (current month) and the
+    ISSUE-121 weekly report (Mon–Sun week)."""
+    rows = (
+        PosTransaction.objects
+        .filter(
+            created_at__date__gte=d_from, created_at__date__lte=d_to,
+            is_seed=False,
+        )
+        .values('cashier__username')
+        .annotate(
+            txns=Count('id', filter=Q(void=False, status='completed')),
+            gross=Sum('total_amount', filter=Q(void=False, status='completed')),
+            voids=Count('id', filter=Q(void=True)),
+        )
+        .order_by('-gross')
+    )
+    return [
+        {
+            'name': r['cashier__username'] or '—',
+            'txns': r['txns'],
+            'gross': _money(r['gross']),
+            'voids': r['voids'],
+        }
+        for r in rows
+    ]
+
+
+def _inventory_notices(today):
+    """ISSUE-121: current-state inventory notices for the weekly report.
+    Active items only. Out-of-stock items are listed once (not repeated in
+    low-stock); expiring covers expiry_date within 14 days, including
+    already-expired stock (negative days_left)."""
+    active = Item.objects.filter(is_active=True)
+    horizon = today + timedelta(days=14)
+
+    low_stock = [
+        {'id': i.id, 'name': i.name, 'stock': i.stock,
+         'threshold': i.low_stock_threshold}
+        for i in active.filter(
+            stock__gt=0, stock__lte=F('low_stock_threshold')
+        ).order_by('stock', 'name')
+    ]
+    expiring = [
+        {'id': i.id, 'name': i.name, 'stock': i.stock,
+         'expiry_date': i.expiry_date.strftime('%Y-%m-%d'),
+         'days_left': (i.expiry_date - today).days}
+        for i in active.filter(
+            expiry_date__isnull=False, expiry_date__lte=horizon
+        ).order_by('expiry_date', 'name')
+    ]
+    out_of_stock = [
+        {'id': i.id, 'name': i.name}
+        for i in active.filter(stock=0).order_by('name')
+    ]
+    return {
+        'low_stock': low_stock,
+        'expiring_soon': expiring,
+        'out_of_stock': out_of_stock,
+    }
+
+
+def _avg_ticket(gross, txn_count):
+    """Average ticket as a money string; None when there are no
+    transactions (null-safe for the WoW delta on an empty week)."""
+    if not txn_count:
+        return None
+    return _money(_Dec(str(gross if not hasattr(gross, 'amount') else gross.amount)) / txn_count)
+
+
 def _weekly_report(week_param):
     """ISSUE-118: Weekly Performance Report payload.
 
@@ -2064,7 +2188,10 @@ def _weekly_report(week_param):
             'week_start': prev_start.strftime('%Y-%m-%d'),
             'week_end': prev_end.strftime('%Y-%m-%d'),
             'gross_total': _money(prev_totals['gross']),
+            # ISSUE-121: per-metric WoW baselines (net / txns / avg ticket).
+            'net_total': _money(prev_totals['net']),
             'transaction_count': prev_txns,
+            'avg_ticket': _avg_ticket(prev_totals['gross'], prev_txns),
             'delta': _money(delta),
             'delta_pct': pct,
         }
@@ -2085,8 +2212,14 @@ def _weekly_report(week_param):
             'maya_total': _money(totals['maya']),
             'transaction_count': txn_count,
             'void_count': void_count,
+            'avg_ticket': _avg_ticket(totals['gross'], txn_count),
         },
         'top_items': _weekly_top_items(week_start, week_end),
+        # ISSUE-121: owner-facing additions.
+        'worst_sellers': _weekly_worst_sellers(week_start, week_end),
+        'busiest_hour': _weekly_busiest_hour(week_start, week_end),
+        'cashiers': _cashier_summary(week_start, week_end),
+        'inventory_notices': _inventory_notices(today),
         'previous_week': previous_week,
     })
 
@@ -2176,28 +2309,10 @@ def insights_report(request):
         hour_counts[timezone.localtime(created).hour] += 1
     peak_hours = [{'hour': h, 'count': hour_counts[h]} for h in range(24)]
 
-    # Per-cashier summary — current month, seed-free.
+    # Per-cashier summary — current month, seed-free (shared with the
+    # ISSUE-121 weekly report, which scopes it to a Mon–Sun week).
     month_start = today.replace(day=1)
-    rows = (
-        PosTransaction.objects
-        .filter(created_at__date__gte=month_start, is_seed=False)
-        .values('cashier__username')
-        .annotate(
-            txns=Count('id', filter=Q(void=False, status='completed')),
-            gross=Sum('total_amount', filter=Q(void=False, status='completed')),
-            voids=Count('id', filter=Q(void=True)),
-        )
-        .order_by('-gross')
-    )
-    cashiers = [
-        {
-            'name': r['cashier__username'] or '—',
-            'txns': r['txns'],
-            'gross': _money(r['gross']),
-            'voids': r['voids'],
-        }
-        for r in rows
-    ]
+    cashiers = _cashier_summary(month_start, today)
 
     return Response({'peak_hours': peak_hours, 'cashiers': cashiers})
 

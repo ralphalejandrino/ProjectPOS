@@ -236,3 +236,197 @@ class WeeklyReportTests(APITestCase):
         self.client.force_authenticate(self.cashier)
         resp = self.client.get(self._url('2026-06-10'))
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_week_window_crosses_year_boundary(self):
+        """A week spanning Dec→Jan snaps to one Mon–Sun window across the
+        year boundary (PHT). 2025-12-31 is a Wednesday → Mon 2025-12-29 to
+        Sun 2026-01-04."""
+        resp = self.client.get(self._url('2025-12-31'))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data['week_start'], '2025-12-29')
+        self.assertEqual(resp.data['week_end'], '2026-01-04')
+        self.assertEqual(len(resp.data['days']), 7)
+
+
+class ISSUE121WeeklyReportTests(APITestCase):
+    """ISSUE-121 — owner-facing weekly report additions: per-metric WoW
+    (incl. avg ticket, null-safe), worst sellers, busiest hour, weekly
+    cashier summary, and current-state inventory notices.
+
+    These four sections (worst sellers / busiest hour / cashiers / notices)
+    query PosTransaction and Item directly rather than ZReports, so they are
+    exercised on the in-progress current week.
+    """
+
+    def setUp(self):
+        self.bp = BusinessProfile.objects.create(
+            business_name='Test Canteen', currency='PHP',
+            vat_enabled=False, track_inventory=True, printer_mode='disabled',
+        )
+        self.cashier = User.objects.create_user(
+            username='cashier', password='x', role='cashier'
+        )
+        self.cashier2 = User.objects.create_user(
+            username='cashier2', password='x', role='cashier'
+        )
+        self.manager = User.objects.create_user(
+            username='manager', password='x', role='manager'
+        )
+        self.coffee = Item.objects.create(
+            name='Brewed Coffee', price=Decimal('50.00'), stock=1000
+        )
+        self.client.force_authenticate(self.manager)
+
+    def _open_shift(self, cashier=None):
+        return Shift.objects.create(
+            cashier=cashier or self.cashier,
+            opening_cash=Decimal('0.00'), is_open=True,
+        )
+
+    def _sell(self, item, qty, cashier=None):
+        return create_pos_transaction(
+            [{'item_id': item.id, 'quantity': qty}],
+            'cash', cashier=cashier or self.cashier,
+            cash_received=Decimal('1000.00'),
+        )
+
+    def _this_week(self):
+        from django.utils import timezone
+        return f"/api/canteen/reports/period/?week={timezone.localdate():%Y-%m-%d}"
+
+    # --- Worst sellers ---------------------------------------------------
+
+    def test_worst_sellers_rank_zero_sales_first(self):
+        """Bottom 5 active items by units sold; never-sold items rank first."""
+        slow = Item.objects.create(name='Almond Croissant',
+                                   price=Decimal('80.00'), stock=50)
+        never = Item.objects.create(name='Kale Smoothie',
+                                    price=Decimal('120.00'), stock=50)
+        self._open_shift()
+        self._sell(self.coffee, 5)   # popular
+        self._sell(slow, 1)          # near-zero
+
+        resp = self.client.get(self._this_week())
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        worst = resp.data['worst_sellers']
+        self.assertEqual([w['name'] for w in worst],
+                         ['Kale Smoothie', 'Almond Croissant', 'Brewed Coffee'])
+        self.assertEqual(worst[0]['quantity'], 0)
+        self.assertEqual(worst[1]['quantity'], 1)
+
+    def test_worst_sellers_excludes_inactive_items(self):
+        Item.objects.create(name='Retired Muffin', price=Decimal('40.00'),
+                            stock=0, is_active=False)
+        self._open_shift()
+        self._sell(self.coffee, 2)
+        resp = self.client.get(self._this_week())
+        names = [w['name'] for w in resp.data['worst_sellers']]
+        self.assertNotIn('Retired Muffin', names)
+
+    # --- Busiest hour ----------------------------------------------------
+
+    def test_busiest_hour_reports_peak_local_hour(self):
+        from django.utils import timezone
+        self._open_shift()
+        t1 = self._sell(self.coffee, 1)
+        t2 = self._sell(self.coffee, 1)
+        t3 = self._sell(self.coffee, 1)
+        now = timezone.localtime()
+        # Two txns at 14:00 PHT, one at 09:00 PHT, all within the current week.
+        nine = now.replace(hour=9, minute=0, second=0, microsecond=0)
+        two = now.replace(hour=14, minute=0, second=0, microsecond=0)
+        PosTransaction.objects.filter(pk__in=[t1.pk, t2.pk]).update(created_at=two)
+        PosTransaction.objects.filter(pk=t3.pk).update(created_at=nine)
+
+        resp = self.client.get(self._this_week())
+        self.assertEqual(resp.data['busiest_hour'], {'hour': 14, 'count': 2})
+
+    def test_busiest_hour_null_on_empty_week(self):
+        resp = self.client.get(self._this_week())
+        self.assertIsNone(resp.data['busiest_hour'])
+
+    # --- Weekly cashier summary -----------------------------------------
+
+    def test_cashier_summary_per_cashier_with_voids(self):
+        self._open_shift(self.cashier)
+        self._open_shift(self.cashier2)
+        self._sell(self.coffee, 2, cashier=self.cashier)    # gross 100
+        self._sell(self.coffee, 1, cashier=self.cashier2)   # gross 50
+        voided = self._sell(self.coffee, 1, cashier=self.cashier2)
+        PosTransaction.objects.filter(pk=voided.pk).update(void=True)
+
+        resp = self.client.get(self._this_week())
+        cashiers = {c['name']: c for c in resp.data['cashiers']}
+        self.assertEqual(Decimal(cashiers['cashier']['gross']), Decimal('100.00'))
+        self.assertEqual(cashiers['cashier']['txns'], 1)
+        self.assertEqual(cashiers['cashier']['voids'], 0)
+        self.assertEqual(Decimal(cashiers['cashier2']['gross']), Decimal('50.00'))
+        self.assertEqual(cashiers['cashier2']['txns'], 1)
+        self.assertEqual(cashiers['cashier2']['voids'], 1)
+
+    # --- Inventory notices ----------------------------------------------
+
+    def test_inventory_notices_thresholds(self):
+        from django.utils import timezone
+        from datetime import timedelta
+        today = timezone.localdate()
+        # Healthy item — appears in no notice bucket.
+        Item.objects.filter(pk=self.coffee.pk).update(
+            stock=500, low_stock_threshold=10)
+        low = Item.objects.create(name='Sugar Sachets', price=Decimal('1.00'),
+                                  stock=5, low_stock_threshold=20)
+        out = Item.objects.create(name='Oat Milk', price=Decimal('90.00'),
+                                  stock=0, low_stock_threshold=5)
+        expiring = Item.objects.create(
+            name='Fresh Cream', price=Decimal('60.00'), stock=8,
+            low_stock_threshold=2, expiry_date=today + timedelta(days=5))
+        expired = Item.objects.create(
+            name='Day-old Pastry', price=Decimal('30.00'), stock=3,
+            low_stock_threshold=1, expiry_date=today - timedelta(days=1))
+        # Beyond the 14-day horizon — excluded.
+        Item.objects.create(
+            name='Canned Goods', price=Decimal('25.00'), stock=40,
+            low_stock_threshold=5, expiry_date=today + timedelta(days=60))
+
+        resp = self.client.get(self._this_week())
+        notices = resp.data['inventory_notices']
+
+        low_names = [i['name'] for i in notices['low_stock']]
+        self.assertIn('Sugar Sachets', low_names)
+        self.assertNotIn('Oat Milk', low_names)        # out-of-stock listed once
+        self.assertNotIn('Brewed Coffee', low_names)   # healthy
+
+        self.assertEqual([i['name'] for i in notices['out_of_stock']], ['Oat Milk'])
+
+        expiry_names = [i['name'] for i in notices['expiring_soon']]
+        self.assertIn('Fresh Cream', expiry_names)
+        self.assertIn('Day-old Pastry', expiry_names)  # already expired included
+        self.assertNotIn('Canned Goods', expiry_names)
+        day_old = next(i for i in notices['expiring_soon']
+                       if i['name'] == 'Day-old Pastry')
+        self.assertEqual(day_old['days_left'], -1)
+
+    def test_inventory_notices_empty_states_present(self):
+        """Section is never hidden: each bucket is an (empty) list, not absent."""
+        Item.objects.filter(pk=self.coffee.pk).update(
+            stock=500, low_stock_threshold=10)
+        resp = self.client.get(self._this_week())
+        notices = resp.data['inventory_notices']
+        self.assertEqual(notices['low_stock'], [])
+        self.assertEqual(notices['expiring_soon'], [])
+        self.assertEqual(notices['out_of_stock'], [])
+
+    # --- Per-metric WoW (avg ticket null-safety) ------------------------
+
+    def test_avg_ticket_present_and_wow_nullsafe_without_prior_week(self):
+        self._open_shift()
+        self._sell(self.coffee, 2)   # one txn, gross 100 → avg 100
+        resp = self.client.get(self._this_week())
+        self.assertEqual(Decimal(resp.data['summary']['avg_ticket']),
+                         Decimal('100.00'))
+        # No prior week planted → WoW baseline omitted, never a crash.
+        self.assertIsNone(resp.data['previous_week'])
+
+    def test_avg_ticket_null_on_empty_week(self):
+        resp = self.client.get(self._this_week())
+        self.assertIsNone(resp.data['summary']['avg_ticket'])
