@@ -1078,6 +1078,9 @@ class ItemViewSet(viewsets.ModelViewSet):
         qs = Item.objects.all().select_related('category').prefetch_related(
             'variant_group_overrides__group__options',
             'category__variant_groups__group__options',
+            # FEATURE-046: direct recipe lines + their ingredient stock, so the
+            # serializer's makeable/makeable_status compute with no per-item query.
+            'recipe_ingredients__ingredient',
         )
         sku = self.request.query_params.get('sku')
         search = self.request.query_params.get('search')

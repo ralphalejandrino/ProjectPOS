@@ -53,7 +53,10 @@
 // last completed Mon–Sun week, headline cards with per-metric WoW, daily
 // revenue bars + busiest day/hour, payment mix chart+table, worst sellers,
 // weekly cashier summary, inventory notices; inventory.html ?q= deep-link).
-const CACHE_NAME = 'tarsierpos-v97'; // canonical cache version
+// v98: FEATURE-046 — ingredient-derived "makeable" stock (read-time, zero
+// migration): inventory "On hand (counted)" vs "Can make now" columns and the
+// dashboard low-stock widget showing what recipe items can make now.
+const CACHE_NAME = 'tarsierpos-v98'; // canonical cache version
 const ASSETS = [
   'index.html',
   'login.html',

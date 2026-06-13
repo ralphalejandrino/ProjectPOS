@@ -763,23 +763,35 @@
                 const raw = await response.json();
                 const items = raw.results !== undefined ? raw.results : raw;
                 
+                // FEATURE-046: alert TRIGGER stays on stored stock (alert
+                // semantics unchanged — moving them onto derived stock is a
+                // separate future ticket). Only the DISPLAYED number changes:
+                // a recipe item shows what it can make now; a pure good shows
+                // its hand-count. Uniform "Low" label on every row.
                 const lowStock = items.filter(i => i.stock < lowStockThreshold).slice(0, 5);
                 const container = document.getElementById('low-stock-alerts');
-                
+
                 if (lowStock.length === 0) {
                     container.innerHTML = '<p class="text-green-600 text-center py-4">✅ All items well stocked!</p>';
                     return;
                 }
-                
-                container.innerHTML = lowStock.map(item => `
+
+                container.innerHTML = lowStock.map(item => {
+                    const recipe = item.makeable_status === 'ok';
+                    const shown = recipe ? item.makeable : item.stock;
+                    const caption = recipe ? 'can make now' : 'on hand';
+                    return `
                     <div class="flex items-center justify-between p-2 bg-red-50 border border-red-200 rounded">
                         <div class="flex-1">
-                            <p class="text-sm font-medium text-gray-900">${escapeHtml(item.name)}</p>
+                            <p class="text-sm font-medium text-gray-900">${escapeHtml(item.name)} <span class="ml-1 text-xs font-medium text-red-700">Low</span></p>
                             <p class="text-xs text-gray-600">${escapeHtml(item.category_name || 'General')}</p>
                         </div>
-                        <span class="text-lg font-bold text-red-600">${item.stock}</span>
-                    </div>
-                `).join('');
+                        <div class="text-right">
+                            <span class="text-lg font-bold text-red-600">${shown}</span>
+                            <p class="text-xs text-gray-500">${caption}</p>
+                        </div>
+                    </div>`;
+                }).join('');
 
             } catch (error) {
                 console.error('Error loading low stock:', error);

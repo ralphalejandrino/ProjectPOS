@@ -42,6 +42,55 @@ def _move_ingredient(ingredient_pk, signed_delta, action, transaction, performed
     )
 
 
+# FEATURE-046: read-time "makeable" stock — how many units of a recipe item
+# could be produced from current ingredient inventory. This is a pure read-side
+# overlay alongside the stored Item.stock counter (the owner's hand-count that
+# gates and is decremented by every sale at services.create_pos_transaction).
+# It NEVER gates a sale and is never persisted — zero migration.
+def compute_makeable(recipe_lines):
+    """Return (makeable, status) for an iterable of direct item-level
+    RecipeIngredient lines.
+
+    makeable = min over lines of floor(ingredient.current_stock / quantity_used),
+    clamped at 0 (an oversold ingredient with negative stock — ISSUE-069 — means
+    "can make 0 now", never a negative count).
+
+    status:
+      'no_recipe'         no lines → makeable None; a pure stocked good, the
+                          stored Item.stock counter is the only truth.
+      'incomplete_recipe' any line has quantity_used None or <= 0 → makeable
+                          None. A 0-quantity line must not raise ZeroDivisionError
+                          and must not be silently skipped — it flags the whole
+                          item incomplete (recipe data-entry error).
+      'ok'                every line valid → numeric makeable (scarcest binds).
+    """
+    lines = list(recipe_lines)
+    if not lines:
+        return None, 'no_recipe'
+    makeable = None
+    for line in lines:
+        q = line.quantity_used
+        if q is None or q <= 0:
+            return None, 'incomplete_recipe'
+        batches = int(line.ingredient.current_stock // q)  # Decimal floor
+        makeable = batches if makeable is None else min(makeable, batches)
+    return max(makeable, 0), 'ok'
+
+
+def item_makeable(item):
+    """compute_makeable over an Item's DIRECT recipe lines only (item-FK).
+
+    Variant-only items (recipe attached via their variants, no direct lines)
+    have no resolvable recipe at the no-variant-selected surface, and the stored
+    Item.stock counter tracks them identically to a pure good — so they classify
+    as 'no_recipe' here. We never resolve/guess a variant for this surface.
+
+    Relies on the ``recipe_ingredients__ingredient`` prefetch (ItemViewSet) — no
+    per-item query when prefetched.
+    """
+    return compute_makeable(item.recipe_ingredients.all())
+
+
 def _deplete_ingredients(item, variant_option_ids, quantity,
                          transaction=None, performed_by=None):
     """

@@ -809,6 +809,9 @@ body.osk-open { padding-bottom: 19rem; }
 /* --- ISSUE-121: inventory-notice item links (weekly report) --- */
 .hover\:underline:hover { text-decoration-line: underline; }
 
+/* --- FEATURE-046: faint "Can make now" dash for pure goods (no recipe) --- */
+.text-gray-300 { --tw-text-opacity: 1; color: rgb(209 213 219 / var(--tw-text-opacity)); }
+
 /* --- Print: drop tinted background to save ink (zreport unofficial banner) --- */
 @media print {
   .no-print-bg { background: transparent !important; }

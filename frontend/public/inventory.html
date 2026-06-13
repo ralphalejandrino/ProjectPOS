@@ -121,6 +121,7 @@
                 </div>
 
                 <div class="bg-white rounded-lg shadow overflow-hidden">
+                  <div class="overflow-x-auto">
                     <table class="w-full">
                         <thead class="bg-gray-50 border-b border-gray-200">
                             <tr>
@@ -131,7 +132,9 @@
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cost</th>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Price</th>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Margin</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Stock</th>
+                                <!-- FEATURE-046: stored hand-count vs ingredient-derived availability -->
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">On hand (counted)</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Can make now</th>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
                             </tr>
                         </thead>
@@ -139,6 +142,7 @@
                             <!-- Loaded dynamically -->
                         </tbody>
                     </table>
+                  </div>
                 </div>
             </div>
             </div><!-- /products-section -->
@@ -465,13 +469,26 @@
             const tbody = document.getElementById('products-table-body');
             
             if (products.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="9" class="px-6 py-8 text-center text-gray-500">No products found</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="10" class="px-6 py-8 text-center text-gray-500">No products found</td></tr>';
                 return;
             }
-            
+
             tbody.innerHTML = products.map(item => {
                 const stockClass = item.stock < (item.low_stock_threshold ?? globalLowStockThreshold) ? 'text-red-600' : item.stock < 20 ? 'text-orange-600' : 'text-green-600';
                 const marginClass = item.profit_margin == null ? 'text-gray-400' : item.profit_margin > 30 ? 'text-green-600' : item.profit_margin > 15 ? 'text-blue-600' : 'text-orange-600';
+                // FEATURE-046: "Can make now" — ingredient-derived availability.
+                // ok → number (0 = red); incomplete_recipe → em-dash + tooltip;
+                // no_recipe (pure good) → plain neutral dash, no makeable concept.
+                let makeableCell;
+                if (item.makeable_status === 'ok') {
+                    const mk = item.makeable;
+                    const mkClass = mk === 0 ? 'text-red-600' : mk < 5 ? 'text-orange-600' : 'text-green-600';
+                    makeableCell = `<span class="font-medium ${mkClass}">${mk}</span>`;
+                } else if (item.makeable_status === 'incomplete_recipe') {
+                    makeableCell = '<span class="text-gray-400" title="Recipe needs quantities set">—</span>';
+                } else {
+                    makeableCell = '<span class="text-gray-300">—</span>';
+                }
                 
                 // Determine if low stock (pilot-003: stock <= 5 = yellow badge)
                 const isLowStock = item.stock < (item.low_stock_threshold || globalLowStockThreshold);
@@ -501,6 +518,7 @@
                         <td class="px-4 py-3 font-medium">${formatCurrency(parseFloat(item.price))}</td>
                         <td class="px-4 py-3 font-medium ${marginClass}">${item.profit_margin != null ? item.profit_margin.toFixed(1) + '%' : 'N/A'}</td>
                         <td class="px-4 py-3 font-medium ${stockClass}">${item.stock}</td>
+                        <td class="px-4 py-3">${makeableCell}</td>
                         <td class="px-4 py-3">
                             <div class="flex items-center gap-2">
                                 <button aria-label="Edit" onclick="editProduct('${item.id}')" class="py-1 px-2 text-sm rounded bg-blue-50 text-blue-600 hover:bg-blue-100 transition" title="Edit">✏️</button>

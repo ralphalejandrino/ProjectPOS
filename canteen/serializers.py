@@ -98,6 +98,22 @@ class ItemSerializer(serializers.ModelSerializer):
     is_low_stock = serializers.ReadOnlyField()
     photo = serializers.SerializerMethodField()
     effective_variant_groups = serializers.SerializerMethodField()
+    # FEATURE-046: read-time ingredient-derived "makeable" stock. Computed
+    # fields only — never a model field, never persisted (writes go through
+    # ItemCreate/UpdateSerializer, which omit them, so a round-trip cannot
+    # store them).
+    makeable = serializers.SerializerMethodField()
+    makeable_status = serializers.SerializerMethodField()
+
+    def _makeable(self, obj):
+        from .services import item_makeable
+        return item_makeable(obj)
+
+    def get_makeable(self, obj):
+        return self._makeable(obj)[0]
+
+    def get_makeable_status(self, obj):
+        return self._makeable(obj)[1]
 
     def get_photo(self, obj):
         request = self.context.get('request')
@@ -133,7 +149,7 @@ class ItemSerializer(serializers.ModelSerializer):
             'stock', 'low_stock_threshold', 'bar_code', 'bar_code_image',
             'photo', 'description', 'sku', 'expiry_date', 'is_active',
             'profit_margin', 'profit_per_unit', 'is_low_stock',
-            'effective_variant_groups',
+            'effective_variant_groups', 'makeable', 'makeable_status',
             'created_at', 'updated_at'
         ]
 
