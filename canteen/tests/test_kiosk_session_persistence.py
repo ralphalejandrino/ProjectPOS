@@ -30,11 +30,13 @@ class KioskSessionPersistenceTests(APITestCase):
 
     def test_refresh_window_is_long_enough_for_unattended_kiosk(self):
         # A kiosk can sit idle over a weekend/holiday closure; the prior 1-day
-        # window was the regression. Require a window measured in months so an
-        # unattended till does not silently log itself out.
+        # window was the regression. The prod till is used daily, so a 30-day
+        # window never reaches its idle ceiling; pin that as the floor so the
+        # kiosk does not silently log itself out. (Not larger: a year-long
+        # window would over-expose FEATURE-047 remote web access — see settings.)
         self.assertGreaterEqual(
             settings.SIMPLE_JWT['REFRESH_TOKEN_LIFETIME'],
-            timedelta(days=90),
+            timedelta(days=30),
             'REFRESH_TOKEN_LIFETIME too short — kiosk will log out when idle.',
         )
         # Access token stays short — silent refresh keeps it transparent.

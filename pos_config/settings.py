@@ -204,23 +204,19 @@ SIMPLE_JWT = {
     # silently refreshes on a 401 and retries, so a 15-min access token is
     # transparent to the user while keeping bearer-token exposure small.
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=15),
-    # BUG-002: this kiosk POS is meant to stay logged in until a manual logout.
-    # The cashier session lifetime is bounded entirely by the refresh token, and
-    # the silent refresh above renews the access token on every use. With
-    # ROTATE_REFRESH_TOKENS each refresh issues a *fresh* full-length window, so
-    # any day the till is used the clock resets — the previous 1-day window meant
-    # the kiosk logged itself out after an overnight/closed-day idle. A long
-    # window makes the session effectively indefinite while keeping access short.
+    # BUG-002: the kiosk POS auto-logged-out when left unattended. The session
+    # lifetime is bounded by the refresh token, and the silent refresh above
+    # renews the access token on every use; with ROTATE_REFRESH_TOKENS each
+    # refresh issues a fresh full-length window. A 30-day window fixes it: the
+    # prod cashier box is used daily, so its token refreshes constantly and never
+    # reaches a 30-day idle ceiling.
     #
-    # TRADEOFF: SimpleJWT lifetimes are global and rotation regenerates the
-    # refresh token's exp from this setting, so a per-role (cashier-only) window
-    # set at token-issue time would be reset on the first silent refresh. This
-    # therefore also lengthens the refresh-token lifetime for manager/admin web
-    # logins. Acceptable here: the POS API is LAN/loopback-scoped (FLAG-039),
-    # access tokens remain 15 min, and rotation + blacklist-after-rotation stay
-    # on. If manager/admin web ever needs a shorter session, scope it with a
-    # custom TokenRefreshView that preserves a per-role lifetime across rotation.
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=365),
+    # 365d was rejected: SimpleJWT lifetimes are global, so it would also apply
+    # to the client's future phone access (FEATURE-047 remote view), where a
+    # year-long refresh token over the internet is an unacceptable exposure if a
+    # device is lost. Per-role separation (long-lived kiosk vs short-lived remote
+    # web) is deferred to FEATURE-047, where the remote web user actually exists.
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=30),
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,
     'AUTH_HEADER_TYPES': ('Bearer',),
