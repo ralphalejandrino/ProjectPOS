@@ -281,6 +281,7 @@
               <th class="px-4 py-3 text-left">Ingredient</th>
               <th class="px-4 py-3 text-right">Quantity per Serving</th>
               <th class="px-4 py-3 text-left">Unit</th>
+              <th class="px-4 py-3 text-center">Mode</th>
               <th class="px-4 py-3 text-center">Actions</th>
             </tr>
           </thead>
@@ -303,6 +304,16 @@
                 </div>
               </td>
               <td class="px-4 py-2 text-gray-400 text-xs" id="newRecipeUnit">—</td>
+              <td class="px-4 py-2 text-center">
+                <!-- BUG-003: 'replace' substitutes the base ingredient; 'add'
+                     depletes alongside it (additive add-ons/sizes). Only
+                     meaningful for variant lines; harmless default for item. -->
+                <select aria-label="Depletion mode" id="newRecipeMode"
+                  class="border border-gray-200 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300">
+                  <option value="replace">Replace</option>
+                  <option value="add">Add</option>
+                </select>
+              </td>
               <td class="px-4 py-2 text-center">
                 <button onclick="saveRecipeIngredient()"
                   class="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-xs mr-1 transition">Save</button>
@@ -861,7 +872,7 @@ async function loadRecipeIngredients() {
   if (!itemId) return;
 
   const tbody = document.getElementById('recipeTableBody');
-  tbody.innerHTML = `<tr><td colspan="4" class="text-center py-6"><div class="flex justify-center"><div class="spinner"></div></div></td></tr>`;
+  tbody.innerHTML = `<tr><td colspan="5" class="text-center py-6"><div class="flex justify-center"><div class="spinner"></div></div></td></tr>`;
 
   try {
     // BUG-001: list by the SAME scope the write path uses (saveRecipeIngredient).
@@ -875,7 +886,7 @@ async function loadRecipeIngredients() {
     const list = Array.isArray(data) ? data : (data?.results || []);
 
     if (!list.length) {
-      tbody.innerHTML = `<tr><td colspan="4" class="text-center py-6 text-gray-400">No ingredients in this recipe yet.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="5" class="text-center py-6 text-gray-400">No ingredients in this recipe yet.</td></tr>`;
       return;
     }
     tbody.innerHTML = list.map(r => {
@@ -886,6 +897,7 @@ async function loadRecipeIngredients() {
           <td class="px-4 py-3 font-medium text-gray-800">${esc(ing.name || '—')}</td>
           <td class="px-4 py-3 text-right font-mono">${parseFloat(r.quantity_used || 0).toFixed(3)}</td>
           <td class="px-4 py-3 text-gray-500">${esc(unit)}</td>
+          <td class="px-4 py-3 text-center">${r.depletion_mode === 'add' ? 'Add' : 'Replace'}</td>
           <td class="px-4 py-3 text-center">
             <button onclick="deleteRecipeIngredient(${r.id})"
               class="bg-red-100 hover:bg-red-200 text-red-700 px-2 py-1 rounded text-xs transition">Delete</button>
@@ -893,7 +905,7 @@ async function loadRecipeIngredients() {
         </tr>`;
     }).join('');
   } catch (e) {
-    tbody.innerHTML = `<tr><td colspan="4" class="text-center py-6 text-red-400">Failed to load</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="5" class="text-center py-6 text-red-400">Failed to load</td></tr>`;
   }
 }
 
@@ -915,6 +927,7 @@ function cancelAddRecipeRow() {
   document.getElementById('addRecipeRow').classList.add('hidden');
   document.getElementById('newRecipeIngredient').value = '';
   document.getElementById('newRecipeQty').value = '';
+  document.getElementById('newRecipeMode').value = 'replace';
   document.getElementById('newRecipeUnit').textContent = '—';
   document.getElementById('newRecipeQtyUnit').textContent = '—';
   document.getElementById('newRecipeQty').setAttribute('aria-label', 'Quantity per serving');
@@ -937,9 +950,12 @@ async function saveRecipeIngredient() {
   // model enforces an XOR). The menu-item dropdown is only context for picking
   // the variant — it must not be sent as `item` in the variant case. Send the
   // chosen scope and explicitly null the other side.
+  // BUG-003: depletion_mode controls whether a variant line replaces or adds to
+  // the base ingredient. Default 'replace' preserves substitution behaviour.
+  const mode = document.getElementById('newRecipeMode').value || 'replace';
   const payload = variantId
-    ? { item: null, variant: variantId, ingredient: ingId, quantity_used: qty }
-    : { item: itemId, variant: null, ingredient: ingId, quantity_used: qty };
+    ? { item: null, variant: variantId, ingredient: ingId, quantity_used: qty, depletion_mode: mode }
+    : { item: itemId, variant: null, ingredient: ingId, quantity_used: qty, depletion_mode: mode };
 
   try {
     await apiFetch('/recipe-ingredients/', {

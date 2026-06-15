@@ -1247,6 +1247,16 @@ class RecipeIngredient(models.Model):
     variant = models.ForeignKey('VariantOption', null=True, blank=True, on_delete=models.CASCADE, related_name='recipe_ingredients')
     ingredient = models.ForeignKey(Ingredient, on_delete=models.CASCADE, related_name='recipes')
     quantity_used = models.DecimalField(max_digits=10, decimal_places=4)
+    # BUG-003: how a variant line interacts with the item-level line for the same
+    # ingredient. 'replace' (default) suppresses the base line — substitution,
+    # e.g. Oat milk replaces Regular milk. 'add' depletes alongside the base —
+    # additive add-ons/sizes, e.g. Extra Shot or Large adds to the base shot.
+    # Default 'replace' preserves the historical behaviour for all existing rows.
+    depletion_mode = models.CharField(
+        max_length=7,
+        choices=[('replace', 'Replace'), ('add', 'Add')],
+        default='replace',
+    )
 
     class Meta:
         constraints = [

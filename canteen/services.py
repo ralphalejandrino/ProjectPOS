@@ -115,7 +115,12 @@ def _deplete_ingredients(item, variant_option_ids, quantity,
                 recipe.ingredient.pk, -(recipe.quantity_used * quantity),
                 'sale', transaction, performed_by,
             )
-            depleted_ingredient_ids.add(recipe.ingredient.pk)
+            # BUG-003: only a 'replace' line suppresses the item-level line for
+            # this ingredient (substitution). An 'add' line depletes its own
+            # amount but leaves the base line to deplete and sum (additive
+            # add-ons/sizes).
+            if recipe.depletion_mode == 'replace':
+                depleted_ingredient_ids.add(recipe.ingredient.pk)
 
     # Item-level recipes for ingredients not covered by variants
     item_recipes = RecipeIngredient.objects.filter(
@@ -170,7 +175,12 @@ def _restore_ingredients(item, transaction_item, quantity,
                 recipe.ingredient.pk, (recipe.quantity_used * quantity),
                 action, transaction, performed_by,
             )
-            restored_ingredient_ids.add(recipe.ingredient.pk)
+            # BUG-003: mirror the sale path exactly — only a 'replace' line
+            # suppressed the base on sale, so only it suppresses the base
+            # restore here. An 'add' line restored its own amount alongside the
+            # base, keeping void/restore symmetric with depletion.
+            if recipe.depletion_mode == 'replace':
+                restored_ingredient_ids.add(recipe.ingredient.pk)
 
     # Item-level restore
     item_recipes = RecipeIngredient.objects.filter(

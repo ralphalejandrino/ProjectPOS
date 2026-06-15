@@ -487,7 +487,7 @@ class RecipeIngredientSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = RecipeIngredient
-        fields = ['id', 'item', 'variant', 'ingredient', 'ingredient_detail', 'quantity_used']
+        fields = ['id', 'item', 'variant', 'ingredient', 'ingredient_detail', 'quantity_used', 'depletion_mode']
 
     def validate_quantity_used(self, value):
         # ISSUE-113: a zero/negative per-serving quantity silently disables or
