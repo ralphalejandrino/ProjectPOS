@@ -928,8 +928,13 @@ async function saveRecipeIngredient() {
     return;
   }
 
-  const payload = { item: itemId, ingredient: ingId, quantity_used: qty };
-  if (variantId) payload.variant = variantId;
+  // BUG-001: a recipe row is scoped to EXACTLY one of item or variant (the
+  // model enforces an XOR). The menu-item dropdown is only context for picking
+  // the variant — it must not be sent as `item` in the variant case. Send the
+  // chosen scope and explicitly null the other side.
+  const payload = variantId
+    ? { item: null, variant: variantId, ingredient: ingId, quantity_used: qty }
+    : { item: itemId, variant: null, ingredient: ingId, quantity_used: qty };
 
   try {
     await apiFetch('/recipe-ingredients/', {
