@@ -56,7 +56,7 @@
 // v98: FEATURE-046 — ingredient-derived "makeable" stock (read-time, zero
 // migration): inventory "On hand (counted)" vs "Can make now" columns and the
 // dashboard low-stock widget showing what recipe items can make now.
-const CACHE_NAME = 'tarsierpos-v99'; // canonical cache version
+const CACHE_NAME = 'tarsierpos-v100'; // canonical cache version
 const ASSETS = [
   'index.html',
   'login.html',

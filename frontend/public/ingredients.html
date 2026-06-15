@@ -864,8 +864,13 @@ async function loadRecipeIngredients() {
   tbody.innerHTML = `<tr><td colspan="4" class="text-center py-6"><div class="flex justify-center"><div class="spinner"></div></div></td></tr>`;
 
   try {
-    let url = `/recipe-ingredients/?item=${itemId}`;
-    if (variantId) url += `&variant=${variantId}`;
+    // BUG-001: list by the SAME scope the write path uses (saveRecipeIngredient).
+    // A variant is saved with item:null + variant set, so an item-scoped GET
+    // never finds it. When a variant is selected, list by variant; otherwise
+    // list item-level lines. Read and write scopes must always match.
+    const url = variantId
+      ? `/recipe-ingredients/?variant=${variantId}`
+      : `/recipe-ingredients/?item=${itemId}`;
     const data = await apiFetch(url);
     const list = Array.isArray(data) ? data : (data?.results || []);
 

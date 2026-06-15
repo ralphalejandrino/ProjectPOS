@@ -95,3 +95,40 @@ class RecipeScopeXorTests(APITestCase):
         row = RecipeIngredient.objects.get()
         self.assertEqual(row.item_id, self.item.id)
         self.assertIsNone(row.variant)
+
+    # ── Read-side scope contract (BUG-001 list fix) ──────────────────────
+    # The recipe editor lists lines by the SAME scope it writes them with:
+    # ?variant=<id> when a variant is selected, ?item=<id> otherwise. These
+    # lock the backend filter the frontend now relies on, so an item-scoped
+    # GET never silently hides variant-scoped lines (or vice versa).
+
+    def test_list_by_variant_returns_only_that_variants_lines(self):
+        item_line = RecipeIngredient.objects.create(
+            item=self.item, ingredient=self.ing, quantity_used=Decimal('10.0'),
+        )
+        variant_line = RecipeIngredient.objects.create(
+            variant=self.opt_size, ingredient=self.ing, quantity_used=Decimal('20.0'),
+        )
+        resp = self.client.get(
+            f'/api/canteen/recipe-ingredients/?variant={self.opt_size.id}'
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.data)
+        rows = resp.data['results'] if isinstance(resp.data, dict) else resp.data
+        ids = {r['id'] for r in rows}
+        self.assertEqual(ids, {variant_line.id})
+        self.assertNotIn(item_line.id, ids)
+
+    def test_list_by_item_returns_only_item_level_lines(self):
+        item_line = RecipeIngredient.objects.create(
+            item=self.item, ingredient=self.ing, quantity_used=Decimal('10.0'),
+        )
+        RecipeIngredient.objects.create(
+            variant=self.opt_size, ingredient=self.ing, quantity_used=Decimal('20.0'),
+        )
+        resp = self.client.get(
+            f'/api/canteen/recipe-ingredients/?item={self.item.id}'
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.data)
+        rows = resp.data['results'] if isinstance(resp.data, dict) else resp.data
+        ids = {r['id'] for r in rows}
+        self.assertEqual(ids, {item_line.id})
