@@ -200,8 +200,27 @@ REST_FRAMEWORK = {
 
 # SimpleJWT Settings
 SIMPLE_JWT = {
+    # Access tokens stay short-lived: the frontend (config.js authenticatedFetch)
+    # silently refreshes on a 401 and retries, so a 15-min access token is
+    # transparent to the user while keeping bearer-token exposure small.
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=15),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
+    # BUG-002: this kiosk POS is meant to stay logged in until a manual logout.
+    # The cashier session lifetime is bounded entirely by the refresh token, and
+    # the silent refresh above renews the access token on every use. With
+    # ROTATE_REFRESH_TOKENS each refresh issues a *fresh* full-length window, so
+    # any day the till is used the clock resets — the previous 1-day window meant
+    # the kiosk logged itself out after an overnight/closed-day idle. A long
+    # window makes the session effectively indefinite while keeping access short.
+    #
+    # TRADEOFF: SimpleJWT lifetimes are global and rotation regenerates the
+    # refresh token's exp from this setting, so a per-role (cashier-only) window
+    # set at token-issue time would be reset on the first silent refresh. This
+    # therefore also lengthens the refresh-token lifetime for manager/admin web
+    # logins. Acceptable here: the POS API is LAN/loopback-scoped (FLAG-039),
+    # access tokens remain 15 min, and rotation + blacklist-after-rotation stay
+    # on. If manager/admin web ever needs a shorter session, scope it with a
+    # custom TokenRefreshView that preserves a per-role lifetime across rotation.
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=365),
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,
     'AUTH_HEADER_TYPES': ('Bearer',),
