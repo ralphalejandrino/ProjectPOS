@@ -6,22 +6,60 @@ from .utils.currency import format_currency
 from .receipt_layout import build_receipt_rows, receipt_cols
 import logging
 
-# ISSUE-095: USB printer device auto-detect
+# ISSUE-095 / BUG-004: USB printer device auto-detect.
+# The kernel assigns the printer's device node at enumeration time and it is
+# NOT stable across restarts — a USB re-enumeration can bump the printer from
+# lp0 to lp2. So detection GLOBS for whatever lp* node is actually present
+# rather than trusting a fixed list (the old list missed lp2 and printing died).
+# The box has exactly one printer, so "the lp node that exists" is unambiguous.
+# The fixed candidates remain only as a last-resort fallback.
+_USB_DEVICE_GLOBS = ['/dev/usb/lp*', '/dev/lp*']
 _USB_DEVICE_CANDIDATES = ['/dev/usb/lp1', '/dev/usb/lp0', '/dev/lp0', '/dev/lp1']
 _cached_usb_path = None
 
+def _usable_printer_device(p):
+    """True when p is a present, writable device node."""
+    import os
+    return os.path.exists(p) and os.access(p, os.W_OK)
+
+def _detect_usb_device_paths():
+    """All present lp* device nodes, deterministically (sorted) ordered.
+
+    /dev/usb/lp* first, then /dev/lp* — within each glob the paths are sorted
+    so the choice is stable when more than one node is present.
+    """
+    import glob
+    paths = []
+    for pattern in _USB_DEVICE_GLOBS:
+        paths.extend(sorted(glob.glob(pattern)))
+    return paths
+
 def _get_usb_device_path():
-    """First openable USB printer device path, cached; None if none work."""
+    """First usable USB printer device path, cached; None if none work.
+
+    BUG-004: genuinely detect by globbing the real /dev/usb/lp* + /dev/lp*
+    nodes first (the printer can land on lp2 after a re-enumeration, which the
+    old fixed candidate list missed), then fall back to the known fixed
+    candidates in case the glob finds nothing but a known path exists.
+    """
     global _cached_usb_path
     if _cached_usb_path is not None:
         return _cached_usb_path
-    import os
-    for p in _USB_DEVICE_CANDIDATES:
-        if os.path.exists(p) and os.access(p, os.W_OK):
+    # 1. Real detection: whatever lp* node is actually present.
+    for p in _detect_usb_device_paths():
+        if _usable_printer_device(p):
             logging.getLogger(__name__).info("Receipt printer USB device detected at: %s", p)
             _cached_usb_path = p
             return p
-    logging.getLogger(__name__).warning("No USB printer device found. Tried: %s", _USB_DEVICE_CANDIDATES)
+    # 2. Secondary fallback: known fixed paths (glob found nothing usable).
+    for p in _USB_DEVICE_CANDIDATES:
+        if _usable_printer_device(p):
+            logging.getLogger(__name__).info("Receipt printer USB device detected at: %s", p)
+            _cached_usb_path = p
+            return p
+    logging.getLogger(__name__).warning(
+        "No USB printer device found. Globbed: %s; tried candidates: %s",
+        _USB_DEVICE_GLOBS, _USB_DEVICE_CANDIDATES)
     return None
 logger = logging.getLogger(__name__)
 

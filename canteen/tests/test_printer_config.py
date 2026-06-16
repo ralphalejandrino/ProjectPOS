@@ -8,6 +8,7 @@ data step that infers printer_mode from the legacy printer_ip.
 import importlib
 from unittest import mock
 
+from django.test import SimpleTestCase
 from rest_framework.test import APITestCase
 
 from canteen.models import BusinessProfile
@@ -80,6 +81,64 @@ class ColumnCalibrationTests(APITestCase):
             _profile(printer_font='A')), 'a')
         self.assertEqual(receipt_service._escpos_font(
             _profile(printer_font='B')), 'b')
+
+
+class UsbDeviceAutoDetectTests(SimpleTestCase):
+    """BUG-004 — _get_usb_device_path globs the real lp* nodes.
+
+    The kernel re-enumerates USB on restart and can bump the printer past
+    lp0/lp1 (it landed on lp2 on pos-01), so detection must discover
+    whatever node is present rather than guess a fixed list. The filesystem is
+    fully mocked — these never touch real /dev nodes — and the module-level
+    path cache is cleared around each test so one case can't leak into another.
+    """
+
+    def setUp(self):
+        receipt_service._cached_usb_path = None
+
+    def tearDown(self):
+        receipt_service._cached_usb_path = None
+
+    def test_detects_lp2_when_only_lp2_present(self):
+        """The real-world failure: only /dev/usb/lp2 exists → it is returned.
+
+        The old fixed list ([lp1, lp0, lp0, lp1]) never checked lp2, so every
+        receipt + reprint silently failed.
+        """
+        def fake_glob(pattern):
+            return ['/dev/usb/lp2'] if pattern == '/dev/usb/lp*' else []
+
+        with mock.patch('glob.glob', side_effect=fake_glob), \
+             mock.patch('os.path.exists', return_value=True), \
+             mock.patch('os.access', return_value=True):
+            self.assertEqual(receipt_service._get_usb_device_path(),
+                             '/dev/usb/lp2')
+
+    def test_multiple_devices_returns_deterministic_sorted_choice(self):
+        """Several nodes present → the sorted-first one wins, every time."""
+        def fake_glob(pattern):
+            if pattern == '/dev/usb/lp*':
+                # Deliberately unsorted to prove the helper sorts.
+                return ['/dev/usb/lp2', '/dev/usb/lp0', '/dev/usb/lp1']
+            return ['/dev/lp0']
+
+        with mock.patch('glob.glob', side_effect=fake_glob), \
+             mock.patch('os.path.exists', return_value=True), \
+             mock.patch('os.access', return_value=True):
+            # /dev/usb/lp* is globbed before /dev/lp*, and sorted within it,
+            # so /dev/usb/lp0 is the deterministic choice.
+            self.assertEqual(receipt_service._get_usb_device_path(),
+                             '/dev/usb/lp0')
+
+    def test_returns_none_and_warns_when_nothing_present(self):
+        """No lp* node anywhere (glob empty, candidates absent) → None + warn."""
+        with mock.patch('glob.glob', return_value=[]), \
+             mock.patch('os.path.exists', return_value=False), \
+             mock.patch('os.access', return_value=False), \
+             self.assertLogs('canteen.receipt_service', level='WARNING') as cm:
+            self.assertIsNone(receipt_service._get_usb_device_path())
+        self.assertTrue(
+            any('No USB printer device found' in line for line in cm.output))
 
 
 class _StubApps:
