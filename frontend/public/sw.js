@@ -59,7 +59,9 @@
 // v104: BUG-005 — proactive + single-flight token refresh in config.js so an
 // idle kiosk's 15-min access token never lapses and the wake-up call burst
 // can't race the rotation/blacklist into a logout.
-const CACHE_NAME = 'tarsierpos-v104'; // canonical cache version
+// v105: FLAG-079 — on-screen keyboard caps-lock latch (three-state shift:
+// off/shift/caps) so all-caps no longer needs re-tapping ⇧ per letter.
+const CACHE_NAME = 'tarsierpos-v105'; // canonical cache version
 const ASSETS = [
   'index.html',
   'login.html',

@@ -704,6 +704,13 @@ body {
   border-color: var(--color-primary);
   color: var(--color-primary-hover);
 }
+/* FLAG-079: caps-lock latch — solid fill so it reads distinctly from the
+   one-shot shift's lighter active state. */
+.osk-key--caps {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #fff;
+}
 .osk-key--muted { opacity: 0.4; cursor: not-allowed; }
 
 /* Numeric calculator pad */

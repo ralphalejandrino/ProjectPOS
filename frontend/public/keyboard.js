@@ -174,8 +174,20 @@
   // ── DOM build ───────────────────────────────────────────────────────
   var root = null;        // .osk container
   var target = null;      // currently-focused field
-  var shift = false;      // caps for letters layer
+  // FLAG-079: three-state shift for the letters layer.
+  //   'off'   — lowercase.
+  //   'shift' — one-shot: next letter uppercase, then auto-revert to 'off'.
+  //   'caps'  — latched caps-lock: all letters uppercase until tapped off.
+  // Tapping ⇧ cycles off → shift → caps → off.
+  var shiftState = 'off'; // 'off' | 'shift' | 'caps'
   var mode = 'letters';   // 'letters' | 'symbols' | 'pad'
+
+  // Next shift state in the off → shift → caps → off cycle.
+  function nextShiftState(s) {
+    return s === 'off' ? 'shift' : (s === 'shift' ? 'caps' : 'off');
+  }
+  // Letters are uppercase in both the one-shot and latched states.
+  function shiftUpper() { return shiftState === 'shift' || shiftState === 'caps'; }
 
   function makeKey(label, cls, onTap, ariaLabel) {
     var b = document.createElement('button');
@@ -242,18 +254,24 @@
 
       // Shift sits at the start of the last character row in letters mode.
       if (mode === 'letters' && idx === rows.length - 1) {
-        var sk = makeKey('⇧', 'osk-key--mod' + (shift ? ' osk-key--active' : ''), function () {
-          shift = !shift; render();
+        // Active for both shift and caps; caps gets an extra class so the latch
+        // reads distinctly from the one-shot shift.
+        var modCls = 'osk-key--mod';
+        if (shiftState === 'shift') modCls += ' osk-key--active';
+        else if (shiftState === 'caps') modCls += ' osk-key--active osk-key--caps';
+        var sk = makeKey('⇧', modCls, function () {
+          shiftState = nextShiftState(shiftState); render();
         }, 'Shift');
         row.appendChild(sk);
       }
 
       chars.forEach(function (ch) {
-        var label = (mode === 'letters' && shift) ? ch.toUpperCase() : ch;
+        var label = (mode === 'letters' && shiftUpper()) ? ch.toUpperCase() : ch;
         row.appendChild(makeKey(label, '', (function (out) {
           return function () {
             insertText(target, out);
-            if (mode === 'letters' && shift) { shift = false; render(); }
+            // One-shot shift reverts after a keypress; caps-lock stays latched.
+            if (mode === 'letters' && shiftState === 'shift') { shiftState = 'off'; render(); }
           };
         })(label)));
       });
@@ -269,7 +287,7 @@
     var bar = document.createElement('div');
     bar.className = 'osk-row osk-bar';
     bar.appendChild(makeKey(mode === 'symbols' ? 'ABC' : '?123', 'osk-key--mod', function () {
-      mode = mode === 'symbols' ? 'letters' : 'symbols'; shift = false; render();
+      mode = mode === 'symbols' ? 'letters' : 'symbols'; shiftState = 'off'; render();
     }, 'Toggle letters and symbols'));
     bar.appendChild(makeKey('space', 'osk-key--space', function () { insertText(target, ' '); }, 'Space'));
     bar.appendChild(makeKey('return', 'osk-key--accent osk-key--wide', function () { submitOrAdvance(target); }, 'Enter'));
@@ -282,7 +300,7 @@
     target = el;
     delete el._oskBuf;   // re-sync numeric shadow buffer from the field's value
     mode = wantsNumeric(el) ? 'pad' : 'letters';
-    shift = false;
+    shiftState = 'off';
     render();
     root.hidden = false;
     document.body.classList.add('osk-open');
