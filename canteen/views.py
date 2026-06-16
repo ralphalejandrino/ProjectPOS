@@ -1107,7 +1107,32 @@ class ItemViewSet(viewsets.ModelViewSet):
         if self.action in ('update', 'partial_update'):
             return ItemUpdateSerializer
         return ItemSerializer  # list, retrieve → read serializer with photo fallback
-    
+
+    def destroy(self, request, *args, **kwargs):
+        """BUG-006: soft-delete (archive) items that have sales history.
+
+        PosTransactionItem references Item with on_delete=PROTECT — past
+        transactions and Z-reports must never be corrupted by hard-deleting a
+        sold item. Previously the resulting ProtectedError was uncaught and
+        surfaced as a raw HTTP 500. Now: try the hard delete (items that were
+        never sold still delete cleanly → 204); if the DB protects it, flip
+        is_active=False instead (drops it from the POS menu, keeps the record)
+        and return 200 so the frontend can tell the user it was archived.
+        """
+        from django.db.models.deletion import ProtectedError
+        item = self.get_object()
+        try:
+            item.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except ProtectedError:
+            item.is_active = False
+            item.save(update_fields=['is_active'])
+            return Response(
+                {'detail': 'Item has sales history — archived (removed from '
+                           'menu, kept in your records) instead of deleted.'},
+                status=status.HTTP_200_OK,
+            )
+
     @action(detail=False, methods=['get'], permission_classes=[IsManagerOrAbove])
     def analytics(self, request):
         """Get inventory analytics"""

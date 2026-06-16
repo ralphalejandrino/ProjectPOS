@@ -132,7 +132,10 @@ async function loadProducts() {
     try {
         const response = await authenticatedFetch(`${API_BASE}/items/`);
         const data = await response.json();
-        allProducts = data.results !== undefined ? data.results : data;
+        const rows = data.results !== undefined ? data.results : data;
+        // BUG-006: archived items (is_active=false, soft-deleted because they
+        // have sales history) must not appear in the POS menu/order grid.
+        allProducts = rows.filter(p => p.is_active !== false);
         displayProducts(allProducts);
     } catch (error) {
         const grid = document.getElementById('products-grid');

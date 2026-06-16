@@ -422,8 +422,15 @@
                 (p.sku && p.sku.toLowerCase().includes(query)) ||
                 (p.bar_code && p.bar_code.toLowerCase().includes(query))
             );
-            
+
             renderProductsTable(filtered);
+        }
+
+        // Render the table honoring the active category + search box. searchProducts
+        // already combines both, so reloads (BUG-007) route through it to preserve
+        // the current filter instead of snapping back to "All Products".
+        function applyCurrentFilters() {
+            searchProducts();
         }
 
         async function loadProducts() {
@@ -436,7 +443,11 @@
                 }
                 const raw = await response.json();
                 allProducts = raw.results !== undefined ? raw.results : raw;
-                renderProductsTable(allProducts);
+                // BUG-007: re-apply the active category filter (and any search)
+                // after a post-action reload instead of resetting to "All
+                // Products", so deleting/editing several items from one category
+                // keeps the user in that filtered view.
+                applyCurrentFilters();
                 renderLowStockAlerts();
             } catch (error) {
                 document.getElementById('products-table-body').innerHTML =
@@ -738,9 +749,19 @@
                     method: 'DELETE'
                 });
                 if (response.ok) {
+                    // BUG-006: a hard delete returns 204; an item with sales
+                    // history is archived instead and returns 200 with {detail}.
+                    let archivedDetail = null;
+                    if (response.status !== 204) {
+                        try { archivedDetail = (await response.json()).detail || null; } catch (e) {}
+                    }
                     await loadProducts();
                     await loadAnalytics();
-                    window.alertDialog({title: 'Product Deleted', message: `"${name}" has been removed from inventory.`, icon: '✅'});
+                    if (archivedDetail) {
+                        window.alertDialog({title: 'Item Archived', message: archivedDetail, icon: '📦'});
+                    } else {
+                        window.alertDialog({title: 'Product Deleted', message: `"${name}" has been removed from inventory.`, icon: '✅'});
+                    }
                 } else {
                     window.alertDialog({title: 'Error', message: 'Failed to delete product. Please try again.', icon: '❌'});
                 }
