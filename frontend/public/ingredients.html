@@ -918,8 +918,22 @@ function toggleVariantSelector() {
   }
 }
 
-function showAddRecipeRow() {
+async function showAddRecipeRow() {
+  // BUG-011: the recipe ingredient dropdown (#newRecipeIngredient) is built
+  // from the module-level `ingredients` array, which is loaded only once at
+  // page load. Ingredients created later in the same session save to the DB
+  // but never appeared in this dropdown until a full page reload. Re-fetch the
+  // shared array when the add-row opens so new ingredients show up. We reuse
+  // refreshIngredients() (the same apiFetch('/ingredients/') + array assignment
+  // the rest of the page uses), so the ingredients list, stats, and restock
+  // filter that also read `ingredients` benefit from the refreshed data too.
+  // Safe to reassign mid-session: no ingredient edit is in progress at this
+  // point (the add-recipe-row lives on the recipes tab). Await before
+  // populating so the dropdown is never built from a half-loaded array; if the
+  // fetch fails, refreshIngredients() toasts and leaves the prior list intact.
   document.getElementById('addRecipeRow').classList.remove('hidden');
+  await refreshIngredients();
+  populateNewRecipeIngredientSelect();
   document.getElementById('newRecipeQty').focus();
 }
 
