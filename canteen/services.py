@@ -12,7 +12,7 @@ from .models import (
     RecipeIngredient, Ingredient, IngredientLog, PaymentLine,
 )
 import threading
-from .receipt_service import print_receipt, kick_cash_drawer
+from .receipt_service import kick_cash_drawer
 
 
 def _move_ingredient(ingredient_pk, signed_delta, action, transaction, performed_by):
@@ -769,8 +769,16 @@ def create_pos_transaction(items_data, payment_method, cashier=None, **kwargs):
             for method, amount in payment_lines
         ])
 
-        # Fire-and-forget print + cashbox kick — never blocks the sale
-        threading.Thread(target=print_receipt, args=(transaction,), daemon=True).start()
+        # BUG-009: the receipt print is NO LONGER triggered here. This thread
+        # was started INSIDE the atomic block (before commit), so its separate
+        # DB connection raced the uncommitted transaction — under SQLite it
+        # could read a locked/empty row and silently fail (daemon-thread
+        # exceptions are swallowed), making auto-print intermittent. The print
+        # is now triggered by the frontend AFTER the sale POST returns (post
+        # commit), routed through authenticatedFetch's single-flight refresh so
+        # a token rotation retries instead of dropping, with a visible failure
+        # toast. receipt_service / the print mechanism itself is untouched.
+        # The cashbox kick has no such data dependency, so it stays here.
         threading.Thread(target=kick_cash_drawer, daemon=True).start()
         return transaction
 

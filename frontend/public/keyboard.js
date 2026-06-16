@@ -297,6 +297,13 @@
 
   // ── Show / hide ─────────────────────────────────────────────────────
   function show(el) {
+    // BUG-010: idempotent for the already-active field. A redundant focusin on
+    // the field that's already the target (fired by modal focus management,
+    // scrollIntoView, or a stray re-render) must NOT wipe the numeric shadow
+    // buffer or re-init — doing so loses in-progress input (type=number
+    // sanitizes a transient "12." to "" on assignment, so a buffer reset mid
+    // entry clears the field) and steals focus, forcing a re-tap per digit.
+    if (el === target && root && !root.hidden) return;
     target = el;
     delete el._oskBuf;   // re-sync numeric shadow buffer from the field's value
     mode = wantsNumeric(el) ? 'pad' : 'letters';

@@ -623,8 +623,9 @@
                 if (response.ok) {
                     closeCashModal();
                     showCustomSuccess('Cash Payment Complete!', data);
-                    // BLOCKER-1: backend services.py:343 already fires
-                    // print_receipt on transaction create; no frontend retrigger.
+                    // BUG-009: trigger the receipt print here (post-commit, via
+                    // authenticatedFetch single-flight) for EVERY sale.
+                    autoPrintReceipt(data.id);
                     window.clearCartState();
                     updateCart();
                 } else {
@@ -718,7 +719,7 @@
                 if (response.ok) {
                     closeGCashModal();
                     showCustomSuccess('GCash Payment Complete!', data);
-                    // BLOCKER-1: backend already auto-prints on create.
+                    autoPrintReceipt(data.id);  // BUG-009
                     window.clearCartState();
                     updateCart();
                 } else {
@@ -790,7 +791,7 @@
                 if (response.ok) {
                     closeMayaModal();
                     showCustomSuccess('Maya Payment Complete!', data);
-                    // BLOCKER-1: backend already auto-prints on create.
+                    autoPrintReceipt(data.id);  // BUG-009
                     window.clearCartState();
                     updateCart();
                 } else {
@@ -996,20 +997,32 @@
         }, 3000);
     }
 
-    // Auto-print to thermal printer — shows warning toast on failure.
-    // BLOCKER-1: NOT called from cash/GCash/Maya complete handlers — the
-    // backend (canteen/services.py:343) already fires print_receipt on
-    // transaction create. Calling this from those handlers double-prints.
+    // Auto-print to thermal printer after EVERY completed sale.
+    // BUG-009: this is now the SOLE auto-print trigger (the backend's
+    // fire-and-forget thread was removed — it raced the uncommitted txn and
+    // silently dropped prints). Routed through authenticatedFetch so a 401
+    // during token rotation refreshes-and-retries instead of dropping the
+    // print, and a print FAILURE is always surfaced via toast — never a
+    // silent no-print.
     async function autoPrintReceipt(txId) {
         if (!txId) return;
         try {
             const resp = await authenticatedFetch(`${API_BASE}/transactions/${txId}/print_receipt/`,
                 { method: 'POST' });
-            const data = await resp.json();
-            if (data.print_status && !data.print_status.success) {
-                window.toast({message: data.print_status.message, severity: 'warning'});
+            let data = null;
+            try { data = await resp.json(); } catch (_) { /* non-JSON body */ }
+            if (!resp.ok || (data && data.print_status && !data.print_status.success)) {
+                const msg = (data && data.print_status && data.print_status.message)
+                    || 'Receipt did not print. Tap “Print Receipt” to retry.';
+                window.toast({message: msg, severity: 'warning'});
             }
-        } catch(e) { /* network error — printer may not be reachable */ }
+        } catch (e) {
+            // Network error — the print never reached the server.
+            window.toast({
+                message: 'Receipt did not print (printer unreachable). Tap “Print Receipt” to retry.',
+                severity: 'warning',
+            });
+        }
     }
 
     window.autoPrintReceipt = autoPrintReceipt;

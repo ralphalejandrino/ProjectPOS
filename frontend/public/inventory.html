@@ -100,8 +100,12 @@
             <!-- PRODUCTS TABLE -->
             <div id="products-section">
                 <div class="flex flex-wrap justify-between items-center mb-4 gap-2">
-                    <h2 class="text-xl font-bold text-gray-800">📦 All Products</h2>
+                    <h2 id="products-heading" class="text-xl font-bold text-gray-800">📦 All Products</h2>
                     <div class="flex flex-wrap gap-2 items-center">
+                        <!-- BUG-008: archived (soft-deleted) items toggle -->
+                        <button id="toggle-archived-btn" onclick="toggleArchivedView()" class="px-3 py-2 text-sm font-medium bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 transition flex items-center gap-1.5">
+                            🗃️ View Archived
+                        </button>
                         <div id="manage-categories-btn-wrapper" class="flex flex-wrap gap-2 items-center hidden">
                             <button onclick="openCategoryModal()" class="px-3 py-2 text-sm font-medium bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 transition flex items-center gap-1.5">
                                 ⚙️ Manage Categories
@@ -348,7 +352,11 @@
         });
 
         function attachEventListeners() {
-            document.getElementById('search-input').addEventListener('input', searchProducts);
+            // BUG-010: search-input already calls searchProducts() via its inline
+            // oninput= handler. Binding a SECOND 'input' listener here fired
+            // searchProducts() — and thus a full products-table re-render —
+            // twice per keystroke. Removed the duplicate; the inline handler is
+            // the single source.
             // Menu toggle handled by components/nav.js
         }
 
@@ -435,10 +443,14 @@
 
         async function loadProducts() {
             try {
-                const response = await authenticatedFetch(`${API_BASE}/items/`);
+                // BUG-008: the main inventory list shows live items only. Archived
+                // (soft-deleted) items are reachable via the "View Archived"
+                // toggle. active_only is opt-in; the default /items/ response is
+                // unchanged for every other consumer.
+                const response = await authenticatedFetch(`${API_BASE}/items/?active_only=true`);
                 if (!response.ok) {
                     document.getElementById('products-table-body').innerHTML =
-                        `<tr><td colspan="9" class="px-6 py-8 text-center text-red-500">Failed to load products (${response.status}). Please refresh.</td></tr>`;
+                        `<tr><td colspan="10" class="px-6 py-8 text-center text-red-500">Failed to load products (${response.status}). Please refresh.</td></tr>`;
                     return;
                 }
                 const raw = await response.json();
@@ -451,7 +463,65 @@
                 renderLowStockAlerts();
             } catch (error) {
                 document.getElementById('products-table-body').innerHTML =
-                    `<tr><td colspan="9" class="px-6 py-8 text-center text-red-500">Error loading products: ${error.message}. Please refresh.</td></tr>`;
+                    `<tr><td colspan="10" class="px-6 py-8 text-center text-red-500">Error loading products: ${error.message}. Please refresh.</td></tr>`;
+            }
+        }
+
+        // BUG-008: archived-items view. Same table, but each row offers Restore
+        // (PATCH is_active=true → back into the menu + inventory) instead of the
+        // edit/adjust/delete actions.
+        let viewingArchived = false;
+
+        function toggleArchivedView() {
+            viewingArchived = !viewingArchived;
+            const heading = document.getElementById('products-heading');
+            const btn = document.getElementById('toggle-archived-btn');
+            if (viewingArchived) {
+                if (heading) heading.textContent = '🗃️ Archived Products';
+                if (btn) btn.textContent = '📦 Back to Inventory';
+                // Low-stock alerts are about live stock — hide them while archived.
+                document.getElementById('low-stock-section').classList.add('hidden');
+                loadArchivedProducts();
+            } else {
+                if (heading) heading.textContent = '📦 All Products';
+                if (btn) btn.textContent = '🗃️ View Archived';
+                loadProducts();
+            }
+        }
+
+        async function loadArchivedProducts() {
+            try {
+                const response = await authenticatedFetch(`${API_BASE}/items/?is_active=false`);
+                if (!response.ok) {
+                    document.getElementById('products-table-body').innerHTML =
+                        `<tr><td colspan="10" class="px-6 py-8 text-center text-red-500">Failed to load archived items (${response.status}). Please refresh.</td></tr>`;
+                    return;
+                }
+                const raw = await response.json();
+                allProducts = raw.results !== undefined ? raw.results : raw;
+                applyCurrentFilters();
+            } catch (error) {
+                document.getElementById('products-table-body').innerHTML =
+                    `<tr><td colspan="10" class="px-6 py-8 text-center text-red-500">Error loading archived items: ${error.message}. Please refresh.</td></tr>`;
+            }
+        }
+
+        async function restoreProduct(id) {
+            try {
+                const res = await authenticatedFetch(`${API_BASE}/items/${id}/`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ is_active: true }),
+                });
+                if (res.ok) {
+                    await loadArchivedProducts();   // restored item drops out of the archived list
+                    await loadAnalytics();
+                    window.alertDialog({title: 'Item Restored', message: 'Item is back in your menu and inventory.', icon: '✅'});
+                } else {
+                    window.alertDialog({title: 'Error', message: 'Failed to restore item. Please try again.', icon: '❌'});
+                }
+            } catch (error) {
+                window.alertDialog({title: 'Error', message: 'An error occurred: ' + error.message, icon: '❌'});
             }
         }
 
@@ -532,9 +602,12 @@
                         <td class="px-4 py-3">${makeableCell}</td>
                         <td class="px-4 py-3">
                             <div class="flex items-center gap-2">
-                                <button aria-label="Edit" onclick="editProduct('${item.id}')" class="py-1 px-2 text-sm rounded bg-blue-50 text-blue-600 hover:bg-blue-100 transition" title="Edit">✏️</button>
+                                ${viewingArchived
+                                    ? `<button aria-label="Restore" onclick="restoreProduct('${item.id}')" class="py-1 px-3 text-sm rounded bg-green-50 text-green-700 hover:bg-green-100 transition font-medium" title="Restore to menu & inventory">♻️ Restore</button>`
+                                    : `<button aria-label="Edit" onclick="editProduct('${item.id}')" class="py-1 px-2 text-sm rounded bg-blue-50 text-blue-600 hover:bg-blue-100 transition" title="Edit">✏️</button>
                                 <button aria-label="Adjust Stock" onclick="adjustStock('${item.id}')" class="py-1 px-2 text-sm rounded bg-green-50 text-green-600 hover:bg-green-100 transition" title="Adjust Stock">📦</button>
-                                <button aria-label="Delete" onclick="deleteProduct('${item.id}', '${item.name.replace(/'/g, "\\'")}')" class="py-1 px-2 text-sm rounded bg-red-50 text-red-600 hover:bg-red-100 transition" title="Delete">🗑️</button>
+                                <button aria-label="Delete" onclick="deleteProduct('${item.id}', '${item.name.replace(/'/g, "\\'")}')" class="py-1 px-2 text-sm rounded bg-red-50 text-red-600 hover:bg-red-100 transition" title="Delete">🗑️</button>`
+                                }
                             </div>
                         </td>
                     </tr>

@@ -1088,6 +1088,19 @@ class ItemViewSet(viewsets.ModelViewSet):
             return qs.filter(sku__iexact=sku.strip())
         if search:
             return qs.filter(name__icontains=search.strip())
+        # BUG-008: opt-in active/archived filtering. DEFAULT (no param) is
+        # UNCHANGED — every existing consumer (reports, recipe editor, POS
+        # client-side filter, dashboard) still receives the full set.
+        #   ?active_only=true  → only live items (inventory main list)
+        #   ?is_active=false   → only archived items (inventory Archived view)
+        #   ?is_active=true    → only live items (alias)
+        active_only = self.request.query_params.get('active_only')
+        is_active_param = self.request.query_params.get('is_active')
+        truthy = ('true', '1', 'yes')
+        if active_only is not None and active_only.lower() in truthy:
+            return qs.filter(is_active=True)
+        if is_active_param is not None:
+            return qs.filter(is_active=is_active_param.lower() in truthy)
         return qs
 
     def get_permissions(self):
