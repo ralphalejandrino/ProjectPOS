@@ -172,6 +172,17 @@
             </div>
         </div>
 
+        <!-- NET CASH FLOW (ISSUE-121-FU-G: cash-basis Sales − Restocks headline) -->
+        <div id="cashflow-card" class="hidden bg-white rounded-lg shadow-lg p-6 mb-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h3 class="text-lg font-semibold text-gray-700">💵 Net Cash Flow (Sales − Restocks)</h3>
+                    <p class="text-xs text-gray-400 mt-1">Cash basis — money into the drawer minus restock spend out of it. Not profit/COGS; can be negative on heavy-restock weeks.</p>
+                </div>
+                <span id="cashflow-total" class="text-2xl font-bold text-gray-900">—</span>
+            </div>
+        </div>
+
         <!-- RESTOCK COST (ISSUE-121-FU-B: expense/COGS side for the week) -->
         <div id="restock-card" class="hidden bg-white rounded-lg shadow-lg p-6 mb-6">
             <div class="flex items-center justify-between mb-4">
@@ -179,6 +190,23 @@
                 <span id="restock-total" class="text-2xl font-bold text-rose-600">—</span>
             </div>
             <div id="restock-breakdown" class="space-y-1"></div>
+
+            <!-- ISSUE-121-FU-F: per-restock detail table -->
+            <h4 class="text-sm font-medium text-gray-700 mt-5 mb-2">Restock detail</h4>
+            <div class="overflow-x-auto">
+                <table class="min-w-full text-sm">
+                    <thead>
+                        <tr class="text-left text-gray-500 border-b">
+                            <th class="px-2 py-1">Date</th>
+                            <th class="px-2 py-1">Ingredient</th>
+                            <th class="px-2 py-1 text-right">Qty</th>
+                            <th class="px-2 py-1 text-right">Cost</th>
+                            <th class="px-2 py-1">By</th>
+                        </tr>
+                    </thead>
+                    <tbody id="restock-detail-body"></tbody>
+                </table>
+            </div>
         </div>
 
         <!-- INVENTORY NOTICES (ISSUE-121: never hidden — empty states say so;
@@ -473,6 +501,14 @@
                 : noNotices;
             document.getElementById('notices-card').classList.remove('hidden');
 
+            // Net cash flow (ISSUE-121-FU-G) — Sales − Restocks, may be negative.
+            const ncf = parseFloat(data.net_cash_flow || '0');
+            const ncfEl = document.getElementById('cashflow-total');
+            ncfEl.textContent = formatCurrency(ncf);
+            ncfEl.className = 'text-2xl font-bold ' +
+                (ncf < 0 ? 'text-rose-600' : 'text-emerald-600');
+            document.getElementById('cashflow-card').classList.remove('hidden');
+
             // Restock cost (ISSUE-121-FU-B) — total + per-ingredient breakdown.
             const rc = data.restock_costs || { total: '0.00', by_ingredient: [] };
             document.getElementById('restock-total').textContent =
@@ -485,6 +521,19 @@
                             <span class="font-medium text-gray-900">${formatCurrency(parseFloat(r.cost))}</span>
                         </div>`).join('')
                     : '<p class="text-sm text-gray-400">No restocks this week.</p>';
+
+            // Restock detail table (ISSUE-121-FU-F) — one row per restock event.
+            const detail = data.restock_detail || [];
+            document.getElementById('restock-detail-body').innerHTML = detail.length
+                ? detail.map(d => `
+                    <tr class="border-b last:border-0">
+                        <td class="px-2 py-1 text-gray-500 whitespace-nowrap">${escapeHtml(d.date)}</td>
+                        <td class="px-2 py-1 text-gray-700">${escapeHtml(d.ingredient)}</td>
+                        <td class="px-2 py-1 text-right text-gray-700 whitespace-nowrap">${d.quantity}${escapeHtml(d.unit || '')}</td>
+                        <td class="px-2 py-1 text-right font-medium text-gray-900 whitespace-nowrap">${formatCurrency(parseFloat(d.cost))}</td>
+                        <td class="px-2 py-1 text-gray-500">${escapeHtml(d.recorded_by || '—')}</td>
+                    </tr>`).join('')
+                : '<tr><td colspan="5" class="px-2 py-3 text-center text-gray-400">No restocks this week.</td></tr>';
             document.getElementById('restock-card').classList.remove('hidden');
 
             // Zero-transaction week still renders all cards; the empty-state

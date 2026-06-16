@@ -527,3 +527,122 @@ class ISSUE121WeeklyReportTests(APITestCase):
         resp = self.client.post(
             '/api/canteen/reports/period/print/?week=not-a-date')
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    # --- ISSUE-121-FU-F: restock detail table ---------------------------
+
+    def _beans(self):
+        return Ingredient.objects.create(
+            name='Beans', unit=self._unit(), cost_per_unit=Decimal('1.0000'),
+            current_stock=Decimal('0'))
+
+    def test_restock_detail_rows_include_recorded_by_and_handle_null(self):
+        beans = self._beans()
+        # Row WITH a recorder.
+        IngredientRestockLog.objects.create(
+            ingredient=beans, quantity_added=Decimal('10'),
+            cost_per_unit=Decimal('5.0000'), recorded_by=self.manager)
+        # Row with NULL recorded_by (legacy row) — must render '—', not error.
+        IngredientRestockLog.objects.create(
+            ingredient=beans, quantity_added=Decimal('2'),
+            cost_per_unit=Decimal('3.0000'), recorded_by=None)
+
+        resp = self.client.get(self._this_week())
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        detail = resp.data['restock_detail']
+        self.assertEqual(len(detail), 2)
+        # Every row carries the required fields.
+        for k in ('date', 'ingredient', 'quantity', 'unit', 'cost', 'recorded_by'):
+            self.assertIn(k, detail[0])
+        recorders = {r['recorded_by'] for r in detail}
+        self.assertIn('manager', recorders)   # the recorded row
+        self.assertIn('—', recorders)          # the null row, rendered gracefully
+        # cost is the historical snapshot quantity_added * cost_per_unit.
+        costs = {r['cost'] for r in detail}
+        self.assertIn('50.00', costs)          # 10 * 5
+        self.assertIn('6.00', costs)           # 2 * 3
+        # Unit abbreviation comes through for display.
+        self.assertEqual(detail[0]['unit'], 'g')
+
+    def test_restock_detail_empty_when_no_restocks(self):
+        resp = self.client.get(self._this_week())
+        self.assertEqual(resp.data['restock_detail'], [])
+
+    # --- ISSUE-121-FU-G: net cash flow -----------------------------------
+
+    def test_net_cash_flow_equals_sales_minus_restock(self):
+        beans = self._beans()
+        self._open_shift()
+        self._sell(self.coffee, 4)   # net 200 (VAT disabled → net == gross)
+        IngredientRestockLog.objects.create(
+            ingredient=beans, quantity_added=Decimal('10'),
+            cost_per_unit=Decimal('5.0000'))   # restock spend 50
+
+        resp = self.client.get(self._this_week())
+        s = resp.data['summary']
+        rc = resp.data['restock_costs']
+        expected = Decimal(s['net_total']) - Decimal(rc['total'])
+        self.assertEqual(Decimal(resp.data['net_cash_flow']), expected)
+        self.assertEqual(Decimal(resp.data['net_cash_flow']), Decimal('150.00'))
+
+    def test_net_cash_flow_can_be_negative_on_heavy_restock(self):
+        beans = self._beans()
+        self._open_shift()
+        self._sell(self.coffee, 1)   # net 50
+        IngredientRestockLog.objects.create(
+            ingredient=beans, quantity_added=Decimal('40'),
+            cost_per_unit=Decimal('5.0000'))   # restock spend 200
+
+        resp = self.client.get(self._this_week())
+        # 50 − 200 = −150.00; negative is expected (cash basis, not profit).
+        self.assertEqual(Decimal(resp.data['net_cash_flow']), Decimal('-150.00'))
+
+    # --- ISSUE-121-FU-H: consistent thermal layout ----------------------
+
+    def test_weekly_thermal_includes_restock_detail_and_cash_flow(self):
+        from django.utils import timezone
+        from canteen.views import _weekly_payload
+        from canteen.receipt_service import build_weekly_report_lines
+
+        beans = self._beans()
+        self._open_shift()
+        self._sell(self.coffee, 2)   # net 100
+        IngredientRestockLog.objects.create(
+            ingredient=beans, quantity_added=Decimal('3'),
+            cost_per_unit=Decimal('4.0000'), recorded_by=self.manager)  # 12
+
+        week = timezone.localdate().strftime('%Y-%m-%d')
+        payload, error = _weekly_payload(week)
+        self.assertIsNone(error)
+
+        lines = build_weekly_report_lines(payload, self.bp)
+        text = '\n'.join(lines)
+        # FU-G headline + FU-F detail both present on the paper.
+        self.assertIn('NET CASH FLOW', text)
+        self.assertIn('RESTOCK DETAIL', text)
+        self.assertIn('manager', text)         # the restocker's name in detail
+        # Existing sections still present (no data removed by the FU-H reflow).
+        self.assertIn('WEEKLY PERFORMANCE', text)
+        self.assertIn('SUMMARY', text)
+        self.assertIn('RESTOCK COST', text)
+
+    def test_thermal_builders_share_layout_primitives(self):
+        """FU-H: X/Z/Weekly share one set of layout helpers, so a divider is the
+        full paper width and a KV row is padded to that width."""
+        from canteen.receipt_service import (
+            _thermal_rule, _thermal_kv, _thermal_center, _receipt_cols,
+        )
+        width = _receipt_cols(self.bp)
+        # Divider spans the paper; '-' for sections, '=' for banners.
+        self.assertEqual(len(_thermal_rule(width)), width)
+        self.assertEqual(_thermal_rule(width)[0], '-')
+        self.assertEqual(_thermal_rule(width, '=')[0], '=')
+        # KV row: label left, value right, padded to full width.
+        row = _thermal_kv('Net:', '100.00', width)
+        self.assertEqual(len(row), width)
+        self.assertTrue(row.startswith('Net:'))
+        self.assertTrue(row.endswith('100.00'))
+        # Section titles are centered within the paper width.
+        centered = _thermal_center('SUMMARY', width)
+        self.assertEqual(len(centered), width)
+        self.assertIn('SUMMARY', centered)
+        self.assertTrue(centered.startswith(' '))

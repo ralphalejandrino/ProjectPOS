@@ -2125,6 +2125,38 @@ def _weekly_restock_costs(d_from, d_to):
     return {'total': _money(total), 'by_ingredient': breakdown}
 
 
+def _weekly_restock_detail(d_from, d_to):
+    """ISSUE-121-FU-F: per-restock detail rows for the Sat–Fri window.
+
+    One row per IngredientRestockLog entry (the _weekly_restock_costs summary
+    aggregates these by ingredient; this is the line-item view behind it).
+    Ordered by date so the table reads chronologically. ``cost`` is the
+    historical snapshot quantity_added * cost_per_unit. ``recorded_by`` is null
+    on rows created before that field existed → rendered '—', never an error.
+    Same PHT window resolution as the rest of the report.
+    """
+    rows = (
+        IngredientRestockLog.objects
+        .filter(date__date__gte=d_from, date__date__lte=d_to)
+        .select_related('ingredient', 'ingredient__unit', 'recorded_by')
+        .order_by('date')
+    )
+    detail = []
+    for r in rows:
+        line_cost = _Dec(str(r.quantity_added)) * _Dec(str(r.cost_per_unit))
+        unit_abbr = getattr(getattr(r.ingredient, 'unit', None), 'abbreviation', '') or ''
+        who = getattr(r.recorded_by, 'username', None) or '—'
+        detail.append({
+            'date': timezone.localdate(r.date).strftime('%Y-%m-%d'),
+            'ingredient': r.ingredient.name,
+            'quantity': float(r.quantity_added),
+            'unit': unit_abbr,
+            'cost': _money(line_cost),
+            'recorded_by': who,
+        })
+    return detail
+
+
 def _avg_ticket(gross, txn_count):
     """Average ticket as a money string; None when there are no
     transactions (null-safe for the WoW delta on an empty week)."""
@@ -2254,6 +2286,14 @@ def _weekly_payload(week_param):
             'delta_pct': pct,
         }
 
+    # ISSUE-121-FU-B/F/G: restock summary + line-item detail, and the cash-flow
+    # headline. Cash flow is cash-basis (drawer in − drawer out), NOT profit or
+    # COGS — restock spend is money out of the drawer this week. It can go
+    # negative on a heavy-restock week and that is expected.
+    restock_costs = _weekly_restock_costs(week_start, week_end)
+    restock_detail = _weekly_restock_detail(week_start, week_end)
+    net_cash_flow = _money(_Dec(_money(totals['net'])) - _Dec(restock_costs['total']))
+
     payload = {
         'week_start': week_start.strftime('%Y-%m-%d'),
         'week_end': week_end.strftime('%Y-%m-%d'),
@@ -2279,7 +2319,12 @@ def _weekly_payload(week_param):
         'cashiers': _cashier_summary(week_start, week_end),
         'inventory_notices': _inventory_notices(today),
         # ISSUE-121-FU-B: restock cost (expense side) for the window.
-        'restock_costs': _weekly_restock_costs(week_start, week_end),
+        'restock_costs': restock_costs,
+        # ISSUE-121-FU-F: per-restock line-item detail (date, ingredient, qty,
+        # cost, recorded_by) ordered by date.
+        'restock_detail': restock_detail,
+        # ISSUE-121-FU-G: net cash flow headline (net sales − restock spend).
+        'net_cash_flow': net_cash_flow,
         'previous_week': previous_week,
     }
     return payload, None

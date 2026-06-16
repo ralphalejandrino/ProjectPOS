@@ -61,7 +61,9 @@
 // can't race the rotation/blacklist into a logout.
 // v105: FLAG-079 — on-screen keyboard caps-lock latch (three-state shift:
 // off/shift/caps) so all-caps no longer needs re-tapping ⇧ per letter.
-const CACHE_NAME = 'tarsierpos-v105'; // canonical cache version
+// v106: ISSUE-121-FU-F/G — weekly report restock detail table + net cash flow
+// headline (period.html); consistent X/Z/Weekly thermal layout (FU-H).
+const CACHE_NAME = 'tarsierpos-v106'; // canonical cache version
 const ASSETS = [
   'index.html',
   'login.html',

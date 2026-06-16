@@ -179,6 +179,29 @@ def print_receipt(transaction):
         return {'success': False, 'message': 'Printer error. Check connection.'}
 
 
+# ── ISSUE-121-FU-H: shared thermal layout primitives ──────────────────────
+# One set of formatting helpers so the X, Z, and Weekly thermal reports share
+# the SAME divider style, label/value column spacing, and centered section
+# titles. They operate on the printable column count (_receipt_cols), so they
+# honor each BusinessProfile's paper width. Bold/double-height emphasis stays
+# per-builder (ESC/POS state) — these unify the text geometry.
+def _thermal_rule(width, ch='-'):
+    """A full-width divider line ('-' for sections, '=' for banners)."""
+    return ch * width
+
+def _thermal_kv(label, val, width):
+    """A label/value row: label left, value right, space-padded to `width`."""
+    label, val = str(label), str(val)
+    pad = width - len(label) - len(val)
+    return label + ' ' * max(pad, 1) + val
+
+def _thermal_center(text, width):
+    """Center `text` within `width` (clamped). Lets the pure-line Weekly
+    builder center section titles the same way the X/Z ESC-centering does."""
+    text = str(text)
+    return text[:width] if len(text) >= width else text.center(width)
+
+
 def print_z_report(z_report):
     """Print an immutable ZReport via ESC/POS thermal (58mm, PC437).
 
@@ -206,8 +229,7 @@ def print_z_report(z_report):
         _pset(p, profile, align='left')
 
         def rrow(label, val):
-            pad = RECEIPT_WIDTH - len(label) - len(val)
-            return label + ' ' * max(pad, 1) + val + '\n'
+            return _thermal_kv(label, val, RECEIPT_WIDTH) + '\n'
 
         def money(val):
             return format_currency(val, ccode, ascii_only=True)
@@ -218,13 +240,13 @@ def print_z_report(z_report):
             # --- ISSUE-105: UNOFFICIAL top banner ---
             if not official:
                 _pset(p, profile, align='center', bold=True)
-                p.text('=' * RECEIPT_WIDTH + '\n')
+                p.text(_thermal_rule(RECEIPT_WIDTH, '=') + '\n')
                 _pset(p, profile, align='center', bold=True,
                       double_height=True, double_width=False)
                 p.text('*** UNOFFICIAL ***\n')
                 p.text('NOT FOR BIR SUBMISSION\n')
                 _pset(p, profile, normal_textsize=True, align='center', bold=True)
-                p.text('=' * RECEIPT_WIDTH + '\n')
+                p.text(_thermal_rule(RECEIPT_WIDTH, '=') + '\n')
                 _pset(p, profile, align='left', bold=False)
 
             # --- Header (frozen identity) ---
@@ -251,11 +273,11 @@ def print_z_report(z_report):
                     p.text(f'Permit: {z_report.pos_permit_number}\n')
 
             # --- Z block ---
-            p.text('-' * RECEIPT_WIDTH + '\n')
+            p.text(_thermal_rule(RECEIPT_WIDTH) + '\n')
             _pset(p, profile, align='center', bold=True)
             p.text('Z REPORT\n')
             _pset(p, profile, align='left', bold=False)
-            p.text('-' * RECEIPT_WIDTH + '\n')
+            p.text(_thermal_rule(RECEIPT_WIDTH) + '\n')
             p.text(rrow(f'Z #: {z_report.z_counter}',
                         f'Reset: {z_report.reset_counter}'))
             p.text(f'Business Date: {z_report.business_date}\n')
@@ -280,7 +302,7 @@ def print_z_report(z_report):
                 p.text(f'  VOID {orn}\n')
 
             # --- Sales summary ---
-            p.text('-' * RECEIPT_WIDTH + '\n')
+            p.text(_thermal_rule(RECEIPT_WIDTH) + '\n')
             p.text(rrow('Gross Sales:', money(z_report.gross_sales)))
             p.text(rrow('Less Discounts:', money(-z_report.discount_total)))
             if z_report.sc_discount_total:
@@ -298,7 +320,7 @@ def print_z_report(z_report):
             p.text(rrow('Zero-Rated Sales:', money(z_report.zero_rated_sales)))
 
             # --- Payments ---
-            p.text('-' * RECEIPT_WIDTH + '\n')
+            p.text(_thermal_rule(RECEIPT_WIDTH) + '\n')
             p.text('PAYMENTS:\n')
             labels = {'cash': 'Cash', 'gcash': 'GCash',
                       'maya': 'Maya', 'card': 'Card'}
@@ -315,7 +337,7 @@ def print_z_report(z_report):
             _pset(p, profile, bold=False)
 
             # --- Cash reconciliation ---
-            p.text('-' * RECEIPT_WIDTH + '\n')
+            p.text(_thermal_rule(RECEIPT_WIDTH) + '\n')
             p.text(rrow('Opening Cash:', money(z_report.opening_cash)))
             p.text(rrow('Cash Collected:', money(z_report.cash_collected)))
             p.text(rrow('Cash Expected:', money(z_report.cash_expected)))
@@ -339,7 +361,7 @@ def print_z_report(z_report):
             except Exception:
                 movements = []
             if movements:
-                p.text('-' * RECEIPT_WIDTH + '\n')
+                p.text(_thermal_rule(RECEIPT_WIDTH) + '\n')
                 _pset(p, profile, align='center', bold=True)
                 p.text('STOCK MOVEMENT\n')
                 _pset(p, profile, align='left', bold=False)
@@ -352,7 +374,7 @@ def print_z_report(z_report):
                     p.text(rrow(name, qty_str))
 
             # --- Footer ---
-            p.text('-' * RECEIPT_WIDTH + '\n')
+            p.text(_thermal_rule(RECEIPT_WIDTH) + '\n')
             _pset(p, profile, bold=True)
             p.text(rrow('Grand Total Sales:',
                         money(z_report.grand_total_sales)))
@@ -360,9 +382,9 @@ def print_z_report(z_report):
             p.text(f'Generated {finalized}\n')
             if not official:
                 _pset(p, profile, align='center', bold=True)
-                p.text('=' * RECEIPT_WIDTH + '\n')
+                p.text(_thermal_rule(RECEIPT_WIDTH, '=') + '\n')
                 p.text('*** UNOFFICIAL Z REPORT ***\n')
-                p.text('=' * RECEIPT_WIDTH + '\n')
+                p.text(_thermal_rule(RECEIPT_WIDTH, '=') + '\n')
                 _pset(p, profile, align='center', bold=False)
             p.cut()
         finally:
@@ -391,7 +413,7 @@ def print_xreport_summary(data):
                 p.text(profile.tagline + '\n')
             if profile and profile.receipt_header:
                 p.text(profile.receipt_header + '\n')
-            p.text('-' * RECEIPT_WIDTH + '\n')
+            p.text(_thermal_rule(RECEIPT_WIDTH) + '\n')
             _pset(p, profile, align='center', bold=True)
             p.text('X-REPORT - SHIFT SUMMARY\n')
             _pset(p, profile, align='left', bold=False)
@@ -403,11 +425,10 @@ def print_xreport_summary(data):
                 p.text(f"Opened by: {data['cashier']}\n")
             if data.get('opened_at'):
                 p.text(f"Opened: {str(data['opened_at'])[:16]}\n")
-            p.text('-' * RECEIPT_WIDTH + '\n')
+            p.text(_thermal_rule(RECEIPT_WIDTH) + '\n')
 
             def rrow(label, val):
-                pad = RECEIPT_WIDTH - len(label) - len(val)
-                return label + ' ' * max(pad, 1) + val + '\n'
+                return _thermal_kv(label, val, RECEIPT_WIDTH) + '\n'
 
             p.text(rrow('Gross Sales:', format_currency(data.get('gross_sales', 0), ccode, ascii_only=True)))
             p.text(rrow('Voids:', format_currency(data.get('void_total', 0), ccode, ascii_only=True)))
@@ -415,13 +436,13 @@ def print_xreport_summary(data):
             p.text(rrow('Net Sales:', format_currency(data.get('net_sales', 0), ccode, ascii_only=True)))
             _pset(p, profile, bold=False)
             p.text(rrow('Transactions:', str(data.get('transaction_count', 0))))
-            p.text('-' * RECEIPT_WIDTH + '\n')
+            p.text(_thermal_rule(RECEIPT_WIDTH) + '\n')
             for row in data.get('by_payment_method', []):
                 method = {'cash': 'Cash', 'gcash': 'GCash', 'maya': 'Maya'}.get(
                     row.get('payment_method', ''), row.get('payment_method', 'Other'))
                 p.text(rrow(f"  {method} ({row.get('count', 0)}):",
                             format_currency(row.get('subtotal', 0), ccode, ascii_only=True)))
-            p.text('-' * RECEIPT_WIDTH + '\n')
+            p.text(_thermal_rule(RECEIPT_WIDTH) + '\n')
             _pset(p, profile, align='center')
             if profile and profile.receipt_footer:
                 p.text(profile.receipt_footer + '\n')
@@ -441,41 +462,50 @@ def build_weekly_report_lines(payload, profile):
     a thin emit loop. Single column, no wide tables — every figure is a
     label/value row padded to the paper width. ``payload`` is the dict from
     views._weekly_payload; ``profile`` supplies paper width + currency.
+
+    ISSUE-121-FU-H: shares the divider / KV-row / centered-title geometry with
+    the X and Z thermal builders via the module-level _thermal_* helpers. Since
+    print_weekly_report emits these lines left-aligned, section titles are
+    pre-centered with _thermal_center so they read like the ESC-centered X/Z
+    titles. ISSUE-121-FU-F adds the restock detail table; FU-G adds the net
+    cash flow headline.
     """
     width = _receipt_cols(profile)
     ccode = (getattr(profile, 'currency', None) or 'PHP')
 
     def rrow(label, val):
-        label, val = str(label), str(val)
-        pad = width - len(label) - len(val)
-        return label + ' ' * max(pad, 1) + val
+        return _thermal_kv(label, val, width)
 
     def money(val):
-        # payload money fields are plain strings like "100.00".
+        # payload money fields are plain strings like "100.00" / "-44.00".
         return format_currency(Decimal(str(val or 0)), ccode, ascii_only=True)
 
     def rule(ch='-'):
-        return ch * width
+        return _thermal_rule(width, ch)
+
+    def title(t):
+        return _thermal_center(t, width)
 
     lines = []
+    # --- Header block (mirrors the X/Z centered header) ---
     name = (getattr(profile, 'business_name', None) or 'WEEKLY REPORT')
-    lines.append(name)
+    lines.append(name)  # printed double-height + centered by print_weekly_report
     addr = getattr(profile, 'business_address', None)
     if addr:
         for ln in str(addr).strip().splitlines():
             if ln.strip():
-                lines.append(ln.strip())
+                lines.append(title(ln.strip()))
 
     lines.append(rule())
-    lines.append('WEEKLY PERFORMANCE')
+    lines.append(title('WEEKLY PERFORMANCE'))
     span = f"{payload['week_start']} - {payload['week_end']}"
     if payload.get('live_date'):
         span += ' (to date)'
-    lines.append(span)
+    lines.append(title(span))
 
     s = payload['summary']
     lines.append(rule())
-    lines.append('SUMMARY')
+    lines.append(title('SUMMARY'))
     lines.append(rrow('Gross:', money(s['gross_total'])))
     lines.append(rrow('Net:', money(s['net_total'])))
     lines.append(rrow('Transactions:', s['transaction_count']))
@@ -483,17 +513,23 @@ def build_weekly_report_lines(payload, profile):
         lines.append(rrow('Avg Ticket:', money(s['avg_ticket'])))
     lines.append(rrow('Voids:', s['void_count']))
 
+    # ISSUE-121-FU-G: net cash flow headline (cash-basis: sales − restock spend,
+    # NOT profit/COGS). Can be negative on a heavy-restock week — that's expected.
+    lines.append(rule())
+    lines.append(title('NET CASH FLOW'))
+    lines.append(rrow('Sales - Restocks:', money(payload.get('net_cash_flow', '0'))))
+
     # Payments
     lines.append(rule())
-    lines.append('PAYMENTS')
+    lines.append(title('PAYMENTS'))
     for label, key in (('Cash', 'cash_total'), ('GCash', 'gcash_total'),
                        ('Maya', 'maya_total'), ('Card', 'card_total')):
         lines.append(rrow(f'  {label}:', money(s[key])))
 
-    # ISSUE-121-FU-B: restock cost (expense side).
+    # ISSUE-121-FU-B: restock cost (expense side) — per-ingredient summary.
     rc = payload.get('restock_costs') or {}
     lines.append(rule())
-    lines.append('RESTOCK COST')
+    lines.append(title('RESTOCK COST'))
     lines.append(rrow('Total:', money(rc.get('total', '0'))))
     for r in rc.get('by_ingredient', []):
         nm = r['name']
@@ -503,9 +539,28 @@ def build_weekly_report_lines(payload, profile):
             nm = nm[:max_name]
         lines.append(rrow(f'  {nm}', val))
 
+    # ISSUE-121-FU-F: per-restock detail table (date, ingredient, qty+unit,
+    # cost, who restocked). Two compact lines per entry so it fits 58mm paper.
+    detail = payload.get('restock_detail') or []
+    if detail:
+        lines.append(rule())
+        lines.append(title('RESTOCK DETAIL'))
+        for d in detail:
+            date_s = str(d.get('date', ''))[5:]   # MM-DD
+            cost = money(d.get('cost', '0'))
+            head = f"{date_s} {d.get('ingredient', '')}"
+            max_head = width - len(cost) - 1
+            if max_head > 0 and len(head) > max_head:
+                head = head[:max_head]
+            lines.append(rrow(head, cost))
+            qty = d.get('quantity', 0)
+            unit = d.get('unit', '') or ''
+            who = d.get('recorded_by', '—') or '—'
+            lines.append(f"  {qty}{unit} by {who}"[:width])
+
     # Per-day breakdown (single column).
     lines.append(rule())
-    lines.append('DAILY')
+    lines.append(title('DAILY'))
     for d in payload.get('days', []):
         lines.append(rrow(f"{d['day_name']} {d['date'][5:]}", money(d['gross'])))
 
@@ -513,7 +568,7 @@ def build_weekly_report_lines(payload, profile):
     top = payload.get('top_items', [])
     if top:
         lines.append(rule())
-        lines.append('TOP ITEMS')
+        lines.append(title('TOP ITEMS'))
         for i, it in enumerate(top, 1):
             lines.append(rrow(f"{i}. {it['name']}"[:width - 6], f"x{it['quantity']}"))
 
@@ -521,7 +576,7 @@ def build_weekly_report_lines(payload, profile):
     cashiers = payload.get('cashiers', [])
     if cashiers:
         lines.append(rule())
-        lines.append('CASHIERS')
+        lines.append(title('CASHIERS'))
         for c in cashiers:
             lines.append(rrow(f"{c['name']} ({c['txns']})", money(c['gross'])))
 
@@ -544,10 +599,12 @@ def print_weekly_report(payload):
         p = _get_transport(profile)
         try:
             lines = build_weekly_report_lines(payload, profile)
-            _pset(p, profile, align='center', bold=True)
-            # First line (business name) larger, like the X/Z header.
+            # FU-H: business name in the same double-height centered style as
+            # the X/Z headers, then the body left-aligned (titles pre-centered).
+            _pset(p, profile, align='center', bold=True,
+                  double_height=True, double_width=True)
             p.text((lines[0] if lines else 'WEEKLY REPORT') + '\n')
-            _pset(p, profile, align='left', bold=False)
+            _pset(p, profile, normal_textsize=True, align='left', bold=False)
             for ln in lines[1:]:
                 p.text(ln + '\n')
             _pset(p, profile, align='center')
