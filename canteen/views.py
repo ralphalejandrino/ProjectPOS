@@ -2033,7 +2033,7 @@ def _weekly_busiest_hour(d_from, d_to):
 def _cashier_summary(d_from, d_to):
     """Per-cashier txn count, gross, and void count over a PHT date range,
     seed-free. Shared by FEATURE-014 insights (current month) and the
-    ISSUE-121 weekly report (Mon–Sun week)."""
+    ISSUE-121 weekly report (Sat–Fri week)."""
     rows = (
         PosTransaction.objects
         .filter(
@@ -2062,10 +2062,13 @@ def _cashier_summary(d_from, d_to):
 def _inventory_notices(today):
     """ISSUE-121: current-state inventory notices for the weekly report.
     Active items only. Out-of-stock items are listed once (not repeated in
-    low-stock); expiring covers expiry_date within 14 days, including
-    already-expired stock (negative days_left)."""
+    low-stock).
+
+    ISSUE-121-FU-C: the expiry notice was removed from the weekly report. The
+    expiry logic itself lives elsewhere in the app and is untouched — it just no
+    longer feeds this report, so no expiry data is computed or returned here.
+    """
     active = Item.objects.filter(is_active=True)
-    horizon = today + timedelta(days=14)
 
     low_stock = [
         {'id': i.id, 'name': i.name, 'stock': i.stock,
@@ -2074,23 +2077,52 @@ def _inventory_notices(today):
             stock__gt=0, stock__lte=F('low_stock_threshold')
         ).order_by('stock', 'name')
     ]
-    expiring = [
-        {'id': i.id, 'name': i.name, 'stock': i.stock,
-         'expiry_date': i.expiry_date.strftime('%Y-%m-%d'),
-         'days_left': (i.expiry_date - today).days}
-        for i in active.filter(
-            expiry_date__isnull=False, expiry_date__lte=horizon
-        ).order_by('expiry_date', 'name')
-    ]
     out_of_stock = [
         {'id': i.id, 'name': i.name}
         for i in active.filter(stock=0).order_by('name')
     ]
     return {
         'low_stock': low_stock,
-        'expiring_soon': expiring,
         'out_of_stock': out_of_stock,
     }
+
+
+def _weekly_restock_costs(d_from, d_to):
+    """ISSUE-121-FU-B: cost (COGS/expense side) of everything restocked within
+    the Sat–Fri window.
+
+    SOURCE NOTE: the IngredientLog ledger defines a 'restock' action choice but
+    nothing ever writes it — restocks are recorded only in IngredientRestockLog,
+    which additionally snapshots cost_per_unit at restock time. So cost is read
+    from that table as quantity_added * cost_per_unit (historically accurate,
+    better than deriving from the ingredient's current cost_per_unit). Restocks
+    are not transactions, so is_seed/void exclusions do not apply. Windowed on
+    the PHT date of each restock, mirroring the sales queries' __date lookup.
+    """
+    rows = (
+        IngredientRestockLog.objects
+        .filter(date__date__gte=d_from, date__date__lte=d_to)
+        .select_related('ingredient')
+        .order_by('ingredient__name', 'date')
+    )
+    total = _Dec('0')
+    by_ingredient = {}
+    for r in rows:
+        line_cost = (_Dec(str(r.quantity_added)) * _Dec(str(r.cost_per_unit)))
+        total += line_cost
+        agg = by_ingredient.setdefault(
+            r.ingredient.name,
+            {'name': r.ingredient.name, 'quantity': _Dec('0'), 'cost': _Dec('0')},
+        )
+        agg['quantity'] += _Dec(str(r.quantity_added))
+        agg['cost'] += line_cost
+    breakdown = [
+        {'name': v['name'],
+         'quantity': float(v['quantity']),
+         'cost': _money(v['cost'])}
+        for v in sorted(by_ingredient.values(), key=lambda x: -x['cost'])
+    ]
+    return {'total': _money(total), 'by_ingredient': breakdown}
 
 
 def _avg_ticket(gross, txn_count):
@@ -2101,23 +2133,46 @@ def _avg_ticket(gross, txn_count):
     return _money(_Dec(str(gross if not hasattr(gross, 'amount') else gross.amount)) / txn_count)
 
 
-def _weekly_report(week_param):
-    """ISSUE-118: Weekly Performance Report payload.
+def _resolve_week(anchor):
+    """ISSUE-121-FU-A: snap any date to its SATURDAY→FRIDAY window (PHT).
 
-    The week is Mon–Sun in PHT, derived from any date inside it. Finalized
-    ZReports provide completed days; the current PHT day adds live open-shift
-    (X-style) data when the week is in progress. Days are labelled final/live
-    so the two sources are never silently mixed.
+    The client's handwritten cycle collects 7 daily reports each Saturday, so
+    the business week runs Sat→Fri. date.weekday() has Mon=0..Sat=5; the number
+    of days since the most recent Saturday is (weekday - 5) % 7. This is the
+    single source of weekly boundary math — the daily chart, WoW comparison,
+    and top/bottom queries all derive their range from the returned pair.
+    """
+    days_since_sat = (anchor.weekday() - 5) % 7
+    week_start = anchor - timedelta(days=days_since_sat)   # Saturday
+    week_end = week_start + timedelta(days=6)              # Friday
+    return week_start, week_end
+
+
+def _weekly_report(week_param):
+    """ISSUE-118: Weekly Performance Report HTTP wrapper around _weekly_payload."""
+    payload, error = _weekly_payload(week_param)
+    if error is not None:
+        return Response(error, status=status.HTTP_400_BAD_REQUEST)
+    return Response(payload)
+
+
+def _weekly_payload(week_param):
+    """ISSUE-118: Weekly Performance Report payload (dict).
+
+    The week is SATURDAY→FRIDAY in PHT (ISSUE-121-FU-A), derived from any date
+    inside it. Finalized ZReports provide completed days; the current PHT day
+    adds live open-shift (X-style) data when the week is in progress. Days are
+    labelled final/live so the two sources are never silently mixed.
+
+    Returns (payload_dict, None) on success or (None, error_dict) on a bad week
+    param, so both the JSON view and the thermal-print path (ISSUE-121-FU-D)
+    build from exactly the same data.
     """
     try:
         anchor = datetime.strptime(week_param, '%Y-%m-%d').date()
     except (TypeError, ValueError):
-        return Response(
-            {'error': 'week must be YYYY-MM-DD.'},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-    week_start = anchor - timedelta(days=anchor.weekday())   # Monday
-    week_end = week_start + timedelta(days=6)                # Sunday
+        return None, {'error': 'week must be YYYY-MM-DD.'}
+    week_start, week_end = _resolve_week(anchor)
     today = timezone.localdate()
     live_day = today if week_start <= today <= week_end else None
 
@@ -2174,7 +2229,7 @@ def _weekly_report(week_param):
             'void_count': d_voids,
         })
 
-    # Week-over-week delta vs the previous Mon–Sun (fully in the past, so
+    # Week-over-week delta vs the previous Sat–Fri (fully in the past, so
     # Z-only by construction). Omitted (null) when the prior week is empty.
     prev_start = week_start - timedelta(days=7)
     prev_end = week_start - timedelta(days=1)
@@ -2199,7 +2254,7 @@ def _weekly_report(week_param):
             'delta_pct': pct,
         }
 
-    return Response({
+    payload = {
         'week_start': week_start.strftime('%Y-%m-%d'),
         'week_end': week_end.strftime('%Y-%m-%d'),
         'live_date': live_day.strftime('%Y-%m-%d') if live_day else None,
@@ -2223,8 +2278,11 @@ def _weekly_report(week_param):
         'busiest_hour': _weekly_busiest_hour(week_start, week_end),
         'cashiers': _cashier_summary(week_start, week_end),
         'inventory_notices': _inventory_notices(today),
+        # ISSUE-121-FU-B: restock cost (expense side) for the window.
+        'restock_costs': _weekly_restock_costs(week_start, week_end),
         'previous_week': previous_week,
-    })
+    }
+    return payload, None
 
 
 @api_view(['GET'])
@@ -2233,7 +2291,7 @@ def period_report(request):
     """FEATURE-013 / ISSUE-118: period report, now weekly-first.
 
     ?week=YYYY-MM-DD (any date inside the week) → Weekly Performance Report:
-    Mon–Sun PHT, finalized ZReports + live open-shift data for today, payment
+    Sat–Fri PHT, finalized ZReports + live open-shift data for today, payment
     mix, top items, and week-over-week delta (see _weekly_report).
 
     ?from=&to= keeps the original FEATURE-013 contract: aggregates across the
@@ -2285,6 +2343,30 @@ def period_report(request):
     })
 
 
+@api_view(['POST'])
+@permission_classes([IsManagerOrAbove])
+def period_print(request):
+    """ISSUE-121-FU-D: print the weekly report on the ESC/POS thermal printer.
+
+    Same fire-and-forget mechanism as the X/Z report prints (threaded, never
+    blocks the response). Recomputes the payload server-side via _weekly_payload
+    so the paper and the on-screen report are the same data, then hands it to
+    receipt_service.print_weekly_report (single-column thermal layout).
+    Intended physical workflow: 7 daily Z reports + this weekly report on top.
+    """
+    week = request.query_params.get('week') or request.data.get('week')
+    payload, error = _weekly_payload(week)
+    if error is not None:
+        return Response(error, status=status.HTTP_400_BAD_REQUEST)
+
+    from .receipt_service import print_weekly_report
+    import threading
+    threading.Thread(
+        target=print_weekly_report, args=(payload,), daemon=True
+    ).start()
+    return Response({'status': 'print queued'})
+
+
 @api_view(['GET'])
 @permission_classes([IsManagerOrAbove])
 def insights_report(request):
@@ -2313,7 +2395,7 @@ def insights_report(request):
     peak_hours = [{'hour': h, 'count': hour_counts[h]} for h in range(24)]
 
     # Per-cashier summary — current month, seed-free (shared with the
-    # ISSUE-121 weekly report, which scopes it to a Mon–Sun week).
+    # ISSUE-121 weekly report, which scopes it to a Sat–Fri week).
     month_start = today.replace(day=1)
     cashiers = _cashier_summary(month_start, today)
 

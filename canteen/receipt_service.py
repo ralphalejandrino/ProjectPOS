@@ -396,6 +396,132 @@ def print_xreport_summary(data):
         return {'success': False, 'message': 'Printer error. Check connection.'}
 
 
+def build_weekly_report_lines(payload, profile):
+    """ISSUE-121-FU-D: build the weekly report as thermal text lines.
+
+    Pure (no hardware) so it is unit-testable and so print_weekly_report stays
+    a thin emit loop. Single column, no wide tables — every figure is a
+    label/value row padded to the paper width. ``payload`` is the dict from
+    views._weekly_payload; ``profile`` supplies paper width + currency.
+    """
+    width = _receipt_cols(profile)
+    ccode = (getattr(profile, 'currency', None) or 'PHP')
+
+    def rrow(label, val):
+        label, val = str(label), str(val)
+        pad = width - len(label) - len(val)
+        return label + ' ' * max(pad, 1) + val
+
+    def money(val):
+        # payload money fields are plain strings like "100.00".
+        return format_currency(Decimal(str(val or 0)), ccode, ascii_only=True)
+
+    def rule(ch='-'):
+        return ch * width
+
+    lines = []
+    name = (getattr(profile, 'business_name', None) or 'WEEKLY REPORT')
+    lines.append(name)
+    addr = getattr(profile, 'business_address', None)
+    if addr:
+        for ln in str(addr).strip().splitlines():
+            if ln.strip():
+                lines.append(ln.strip())
+
+    lines.append(rule())
+    lines.append('WEEKLY PERFORMANCE')
+    span = f"{payload['week_start']} - {payload['week_end']}"
+    if payload.get('live_date'):
+        span += ' (to date)'
+    lines.append(span)
+
+    s = payload['summary']
+    lines.append(rule())
+    lines.append('SUMMARY')
+    lines.append(rrow('Gross:', money(s['gross_total'])))
+    lines.append(rrow('Net:', money(s['net_total'])))
+    lines.append(rrow('Transactions:', s['transaction_count']))
+    if s.get('avg_ticket') is not None:
+        lines.append(rrow('Avg Ticket:', money(s['avg_ticket'])))
+    lines.append(rrow('Voids:', s['void_count']))
+
+    # Payments
+    lines.append(rule())
+    lines.append('PAYMENTS')
+    for label, key in (('Cash', 'cash_total'), ('GCash', 'gcash_total'),
+                       ('Maya', 'maya_total'), ('Card', 'card_total')):
+        lines.append(rrow(f'  {label}:', money(s[key])))
+
+    # ISSUE-121-FU-B: restock cost (expense side).
+    rc = payload.get('restock_costs') or {}
+    lines.append(rule())
+    lines.append('RESTOCK COST')
+    lines.append(rrow('Total:', money(rc.get('total', '0'))))
+    for r in rc.get('by_ingredient', []):
+        nm = r['name']
+        val = money(r['cost'])
+        max_name = width - len(val) - 3
+        if max_name > 0 and len(nm) > max_name:
+            nm = nm[:max_name]
+        lines.append(rrow(f'  {nm}', val))
+
+    # Per-day breakdown (single column).
+    lines.append(rule())
+    lines.append('DAILY')
+    for d in payload.get('days', []):
+        lines.append(rrow(f"{d['day_name']} {d['date'][5:]}", money(d['gross'])))
+
+    # Top items.
+    top = payload.get('top_items', [])
+    if top:
+        lines.append(rule())
+        lines.append('TOP ITEMS')
+        for i, it in enumerate(top, 1):
+            lines.append(rrow(f"{i}. {it['name']}"[:width - 6], f"x{it['quantity']}"))
+
+    # Per-cashier.
+    cashiers = payload.get('cashiers', [])
+    if cashiers:
+        lines.append(rule())
+        lines.append('CASHIERS')
+        for c in cashiers:
+            lines.append(rrow(f"{c['name']} ({c['txns']})", money(c['gross'])))
+
+    lines.append(rule())
+    return lines
+
+
+def print_weekly_report(payload):
+    """ISSUE-121-FU-D: emit the weekly report on the ESC/POS thermal printer.
+
+    Reuses the same transport/width/encoding path as the X/Z reports. Returns
+    True on success, False on any printer error (logged, never raised — mirrors
+    the other print_* non-fatal contracts).
+    """
+    try:
+        profile = BusinessProfile.objects.first()
+        if not _is_printer_enabled(profile):
+            logger.warning('Weekly report print skipped: printer not configured.')
+            return False
+        p = _get_transport(profile)
+        try:
+            lines = build_weekly_report_lines(payload, profile)
+            _pset(p, profile, align='center', bold=True)
+            # First line (business name) larger, like the X/Z header.
+            p.text((lines[0] if lines else 'WEEKLY REPORT') + '\n')
+            _pset(p, profile, align='left', bold=False)
+            for ln in lines[1:]:
+                p.text(ln + '\n')
+            _pset(p, profile, align='center')
+            p.cut()
+        finally:
+            p.close()
+        return True
+    except Exception as e:
+        logger.warning(f'Weekly report print failed (non-fatal): {e}')
+        return False
+
+
 def kick_cash_drawer():
     """Send cashbox kick pulse via printer. Non-fatal.
     Pin configurable via settings.CASH_DRAWER_PIN: 0=pin2 (default), 1=pin5.

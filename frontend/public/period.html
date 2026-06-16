@@ -34,7 +34,7 @@
         <!-- PAGE HEADER -->
         <div class="mb-6">
             <h2 class="text-3xl font-bold text-gray-800">🗓️ Weekly Performance Report</h2>
-            <p class="text-gray-600">Mon–Sun week: finalized Z-Reports for completed days, plus live (X) data for today.</p>
+            <p class="text-gray-600">Sat–Fri week: finalized Z-Reports for completed days, plus live (X) data for today.</p>
         </div>
 
         <!-- WEEK NAVIGATION -->
@@ -54,6 +54,11 @@
                     Current Week (to date)
                 </button>
                 <span id="live-week-badge" class="hidden px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded">Current week — to date, includes Live (X)</span>
+                <!-- ISSUE-121-FU-D: thermal print of the current week's report. -->
+                <button id="print-week-btn" onclick="printWeek()"
+                    class="touch-target-pos bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2 rounded-lg font-medium transition ml-auto">
+                    🖨️ Print (thermal)
+                </button>
             </div>
             <p id="range-error" class="hidden text-red-600 text-sm mt-2"></p>
         </div>
@@ -85,7 +90,7 @@
         <!-- DAILY REVENUE CHART (ISSUE-121: CSS-width bars, same pattern as the
              dashboard peak-hours widget — no external chart library) -->
         <div id="chart-card" class="hidden bg-white rounded-lg shadow-lg p-6 mb-6">
-            <h3 class="text-lg font-semibold text-gray-700 mb-4">📊 Daily Revenue (Mon–Sun)</h3>
+            <h3 class="text-lg font-semibold text-gray-700 mb-4">📊 Daily Revenue (Sat–Fri)</h3>
             <div id="daily-chart" class="flex flex-col gap-1.5"></div>
             <p id="busiest-callout" class="text-sm text-gray-600 mt-4">—</p>
         </div>
@@ -165,17 +170,23 @@
             </div>
         </div>
 
-        <!-- INVENTORY NOTICES (ISSUE-121: never hidden — empty states say so) -->
+        <!-- RESTOCK COST (ISSUE-121-FU-B: expense/COGS side for the week) -->
+        <div id="restock-card" class="hidden bg-white rounded-lg shadow-lg p-6 mb-6">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-semibold text-gray-700">📥 Restock Cost (this week)</h3>
+                <span id="restock-total" class="text-2xl font-bold text-rose-600">—</span>
+            </div>
+            <div id="restock-breakdown" class="space-y-1"></div>
+        </div>
+
+        <!-- INVENTORY NOTICES (ISSUE-121: never hidden — empty states say so;
+             ISSUE-121-FU-C removed the expiry notice) -->
         <div id="notices-card" class="hidden bg-white rounded-lg shadow-lg p-6 mb-6">
             <h3 class="text-lg font-semibold text-gray-700 mb-4">📦 Inventory Notices</h3>
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div>
                     <h4 class="text-sm font-medium text-gray-700 mb-2">⚠️ Low Stock</h4>
                     <div id="notice-low-stock" class="space-y-1"></div>
-                </div>
-                <div>
-                    <h4 class="text-sm font-medium text-gray-700 mb-2">⏳ Expiring Within 14 Days</h4>
-                    <div id="notice-expiring" class="space-y-1"></div>
                 </div>
                 <div>
                     <h4 class="text-sm font-medium text-gray-700 mb-2">🚫 Out of Stock (active items)</h4>
@@ -194,21 +205,23 @@
     <script>
         loadSiteName();
 
-        // ISSUE-121: the report defaults to the most recent COMPLETED
-        // Mon–Sun week (PHT) — the current week is reachable only via the
+        // ISSUE-121 / FU-A: the report defaults to the most recent COMPLETED
+        // Sat–Fri week (PHT) — the current week is reachable only via the
         // explicitly labeled "Current Week (to date)" control / Next Week.
         // THE default lives here and only here: to flip the default to
         // current week-to-date, return `new Date()` instead.
         function defaultAnchorDate() {
             const d = new Date();
-            // Back up to last week's Sunday: this week's Monday minus 1 day.
-            const dow = (d.getDay() + 6) % 7;   // 0 = Monday
-            d.setDate(d.getDate() - dow - 1);
+            // getDay(): Sun=0..Sat=6. Days since this week's Saturday start =
+            // (getDay()+1)%7 (0 when today is Saturday). Step one more day back
+            // to land inside the previous, fully-completed Sat–Fri week.
+            const daysSinceSat = (d.getDay() + 1) % 7;
+            d.setDate(d.getDate() - daysSinceSat - 1);
             return d;
         }
 
         // anchorDate is any date inside the displayed week — the server
-        // snaps it to Mon–Sun in PHT.
+        // snaps it to Sat–Fri in PHT.
         let anchorDate = defaultAnchorDate();
         let currentWeekStart = null;
 
@@ -223,6 +236,26 @@
         function goToCurrentWeek() {
             anchorDate = new Date();
             loadWeek();
+        }
+
+        // ISSUE-121-FU-D: print the displayed week on the thermal printer.
+        // Fire-and-forget, same mechanism as X/Z report prints.
+        async function printWeek() {
+            const btn = document.getElementById('print-week-btn');
+            btn.disabled = true;
+            try {
+                const res = await authenticatedFetch(
+                    `${API_BASE}/reports/period/print/?week=${fmtISO(anchorDate)}`,
+                    { method: 'POST' }
+                );
+                const msg = res.ok ? 'Weekly report sent to printer.'
+                                   : 'Failed to queue print.';
+                if (window.toast) window.toast({ message: msg, severity: res.ok ? 'success' : 'error' });
+            } catch (e) {
+                if (window.toast) window.toast({ message: 'Network error queuing print.', severity: 'error' });
+            } finally {
+                btn.disabled = false;
+            }
         }
 
         async function loadWeek() {
@@ -431,18 +464,26 @@
                 ? n.low_stock.map(i =>
                     `<p class="text-sm text-gray-600">${itemLink(i.name)} — ${i.stock} left (alert at ${i.threshold})</p>`).join('')
                 : noNotices;
-            document.getElementById('notice-expiring').innerHTML = (n.expiring_soon || []).length
-                ? n.expiring_soon.map(i =>
-                    `<p class="text-sm text-gray-600">${itemLink(i.name)} — ${
-                        i.days_left < 0 ? `expired ${fmtDayLabel(i.expiry_date)}`
-                        : i.days_left === 0 ? 'expires today'
-                        : `expires ${fmtDayLabel(i.expiry_date)} (${i.days_left}d)`}</p>`).join('')
-                : noNotices;
+            // ISSUE-121-FU-C: expiry notice removed from this report.
             document.getElementById('notice-out-of-stock').innerHTML = (n.out_of_stock || []).length
                 ? n.out_of_stock.map(i =>
                     `<p class="text-sm text-gray-600">${itemLink(i.name)}</p>`).join('')
                 : noNotices;
             document.getElementById('notices-card').classList.remove('hidden');
+
+            // Restock cost (ISSUE-121-FU-B) — total + per-ingredient breakdown.
+            const rc = data.restock_costs || { total: '0.00', by_ingredient: [] };
+            document.getElementById('restock-total').textContent =
+                formatCurrency(parseFloat(rc.total));
+            document.getElementById('restock-breakdown').innerHTML =
+                (rc.by_ingredient || []).length
+                    ? rc.by_ingredient.map(r => `
+                        <div class="flex items-center justify-between text-sm">
+                            <span class="text-gray-700">${escapeHtml(r.name)} <span class="text-gray-400">× ${r.quantity}</span></span>
+                            <span class="font-medium text-gray-900">${formatCurrency(parseFloat(r.cost))}</span>
+                        </div>`).join('')
+                    : '<p class="text-sm text-gray-400">No restocks this week.</p>';
+            document.getElementById('restock-card').classList.remove('hidden');
 
             // Zero-transaction week still renders all cards; the empty-state
             // note appears alongside as an extra hint.

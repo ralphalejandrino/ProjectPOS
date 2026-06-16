@@ -11,6 +11,7 @@ from rest_framework.test import APITestCase
 
 from canteen.models import (
     BusinessProfile, Item, Shift, User, PosTransaction,
+    Ingredient, IngredientUnit, IngredientRestockLog,
 )
 from canteen.services import create_pos_transaction, close_shift_and_finalize_z
 
@@ -141,19 +142,36 @@ class WeeklyReportTests(APITestCase):
     def _url(self, week):
         return f'/api/canteen/reports/period/?week={week}'
 
-    def test_week_window_is_monday_to_sunday(self):
-        """Any date inside the week snaps to the same Mon–Sun PHT window."""
+    def test_week_window_is_saturday_to_friday(self):
+        """ISSUE-121-FU-A: any date inside the week snaps to the same Sat–Fri
+        PHT window. 2026-06-06 is a Saturday → Sat 06-06 to Fri 06-12."""
         import datetime as dt
-        for anchor in ('2026-06-08', '2026-06-10', '2026-06-14'):
+        for anchor in ('2026-06-06', '2026-06-08', '2026-06-12'):
             resp = self.client.get(self._url(anchor))
             self.assertEqual(resp.status_code, status.HTTP_200_OK)
-            self.assertEqual(resp.data['week_start'], '2026-06-08')  # Monday
-            self.assertEqual(resp.data['week_end'], '2026-06-14')    # Sunday
+            self.assertEqual(resp.data['week_start'], '2026-06-06')  # Saturday
+            self.assertEqual(resp.data['week_end'], '2026-06-12')    # Friday
             self.assertEqual(len(resp.data['days']), 7)
-            self.assertEqual(resp.data['days'][0]['day_name'], 'Mon')
-            self.assertEqual(resp.data['days'][6]['day_name'], 'Sun')
-        start = dt.date(2026, 6, 8)
-        self.assertEqual(start.weekday(), 0)
+            self.assertEqual(resp.data['days'][0]['day_name'], 'Sat')
+            self.assertEqual(resp.data['days'][6]['day_name'], 'Fri')
+        start = dt.date(2026, 6, 6)
+        self.assertEqual(start.weekday(), 5)  # Saturday
+
+    def test_prev_next_week_steps_in_sat_fri_increments(self):
+        """ISSUE-121-FU-A: stepping ±7 days from any date inside a week lands
+        in the adjacent Sat–Fri window."""
+        # Anchor inside Sat 06-06 → Fri 06-12.
+        resp = self.client.get(self._url('2026-06-09'))
+        self.assertEqual(resp.data['week_start'], '2026-06-06')
+        self.assertEqual(resp.data['week_end'], '2026-06-12')
+        # Previous week: anchor - 7 days.
+        prev = self.client.get(self._url('2026-06-02'))
+        self.assertEqual(prev.data['week_start'], '2026-05-30')
+        self.assertEqual(prev.data['week_end'], '2026-06-05')
+        # Next week: anchor + 7 days.
+        nxt = self.client.get(self._url('2026-06-16'))
+        self.assertEqual(nxt.data['week_start'], '2026-06-13')
+        self.assertEqual(nxt.data['week_end'], '2026-06-19')
 
     def test_week_combines_finalized_z_and_live_x(self):
         """Finalized Z (closed shift) + live X (open shift) both count for
@@ -238,13 +256,13 @@ class WeeklyReportTests(APITestCase):
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_week_window_crosses_year_boundary(self):
-        """A week spanning Dec→Jan snaps to one Mon–Sun window across the
-        year boundary (PHT). 2025-12-31 is a Wednesday → Mon 2025-12-29 to
-        Sun 2026-01-04."""
+        """A week spanning Dec→Jan snaps to one Sat–Fri window across the
+        year boundary (PHT). 2025-12-31 is a Wednesday → Sat 2025-12-27 to
+        Fri 2026-01-02."""
         resp = self.client.get(self._url('2025-12-31'))
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertEqual(resp.data['week_start'], '2025-12-29')
-        self.assertEqual(resp.data['week_end'], '2026-01-04')
+        self.assertEqual(resp.data['week_start'], '2025-12-27')
+        self.assertEqual(resp.data['week_end'], '2026-01-02')
         self.assertEqual(len(resp.data['days']), 7)
 
 
@@ -367,9 +385,6 @@ class ISSUE121WeeklyReportTests(APITestCase):
     # --- Inventory notices ----------------------------------------------
 
     def test_inventory_notices_thresholds(self):
-        from django.utils import timezone
-        from datetime import timedelta
-        today = timezone.localdate()
         # Healthy item — appears in no notice bucket.
         Item.objects.filter(pk=self.coffee.pk).update(
             stock=500, low_stock_threshold=10)
@@ -377,16 +392,6 @@ class ISSUE121WeeklyReportTests(APITestCase):
                                   stock=5, low_stock_threshold=20)
         out = Item.objects.create(name='Oat Milk', price=Decimal('90.00'),
                                   stock=0, low_stock_threshold=5)
-        expiring = Item.objects.create(
-            name='Fresh Cream', price=Decimal('60.00'), stock=8,
-            low_stock_threshold=2, expiry_date=today + timedelta(days=5))
-        expired = Item.objects.create(
-            name='Day-old Pastry', price=Decimal('30.00'), stock=3,
-            low_stock_threshold=1, expiry_date=today - timedelta(days=1))
-        # Beyond the 14-day horizon — excluded.
-        Item.objects.create(
-            name='Canned Goods', price=Decimal('25.00'), stock=40,
-            low_stock_threshold=5, expiry_date=today + timedelta(days=60))
 
         resp = self.client.get(self._this_week())
         notices = resp.data['inventory_notices']
@@ -398,14 +403,6 @@ class ISSUE121WeeklyReportTests(APITestCase):
 
         self.assertEqual([i['name'] for i in notices['out_of_stock']], ['Oat Milk'])
 
-        expiry_names = [i['name'] for i in notices['expiring_soon']]
-        self.assertIn('Fresh Cream', expiry_names)
-        self.assertIn('Day-old Pastry', expiry_names)  # already expired included
-        self.assertNotIn('Canned Goods', expiry_names)
-        day_old = next(i for i in notices['expiring_soon']
-                       if i['name'] == 'Day-old Pastry')
-        self.assertEqual(day_old['days_left'], -1)
-
     def test_inventory_notices_empty_states_present(self):
         """Section is never hidden: each bucket is an (empty) list, not absent."""
         Item.objects.filter(pk=self.coffee.pk).update(
@@ -413,8 +410,22 @@ class ISSUE121WeeklyReportTests(APITestCase):
         resp = self.client.get(self._this_week())
         notices = resp.data['inventory_notices']
         self.assertEqual(notices['low_stock'], [])
-        self.assertEqual(notices['expiring_soon'], [])
         self.assertEqual(notices['out_of_stock'], [])
+
+    # --- ISSUE-121-FU-C: expiry notice removed from the report ----------
+
+    def test_report_no_longer_includes_expiry_notice(self):
+        """The expiring-soon field is gone from the weekly report payload
+        (expiry logic elsewhere in the app is untouched)."""
+        from datetime import timedelta
+        from django.utils import timezone
+        today = timezone.localdate()
+        # An item that WOULD have shown under the old expiry notice.
+        Item.objects.create(
+            name='Fresh Cream', price=Decimal('60.00'), stock=8,
+            low_stock_threshold=2, expiry_date=today + timedelta(days=5))
+        resp = self.client.get(self._this_week())
+        self.assertNotIn('expiring_soon', resp.data['inventory_notices'])
 
     # --- Per-metric WoW (avg ticket null-safety) ------------------------
 
@@ -430,3 +441,89 @@ class ISSUE121WeeklyReportTests(APITestCase):
     def test_avg_ticket_null_on_empty_week(self):
         resp = self.client.get(self._this_week())
         self.assertIsNone(resp.data['summary']['avg_ticket'])
+
+    # --- ISSUE-121-FU-B: restock cost (expense side) -------------------
+
+    def _unit(self):
+        unit, _ = IngredientUnit.objects.get_or_create(
+            abbreviation='g', defaults={'name': 'Grams'})
+        return unit
+
+    def test_restock_cost_sums_in_window_excludes_out_of_window(self):
+        from django.utils import timezone
+        from datetime import timedelta
+        unit = self._unit()
+        beans = Ingredient.objects.create(
+            name='Beans', unit=unit, cost_per_unit=Decimal('1.0000'),
+            current_stock=Decimal('0'))
+        milk = Ingredient.objects.create(
+            name='Milk', unit=unit, cost_per_unit=Decimal('1.0000'),
+            current_stock=Decimal('0'))
+
+        # In-window restocks: 10*5 = 50 (beans) + 2*3 = 6 (milk) = 56.
+        IngredientRestockLog.objects.create(
+            ingredient=beans, quantity_added=Decimal('10'),
+            cost_per_unit=Decimal('5.0000'))
+        IngredientRestockLog.objects.create(
+            ingredient=milk, quantity_added=Decimal('2'),
+            cost_per_unit=Decimal('3.0000'))
+        # Out-of-window restock (30 days ago) — must NOT count.
+        old = IngredientRestockLog.objects.create(
+            ingredient=beans, quantity_added=Decimal('100'),
+            cost_per_unit=Decimal('9.0000'))
+        IngredientRestockLog.objects.filter(pk=old.pk).update(
+            date=timezone.now() - timedelta(days=30))
+
+        resp = self.client.get(self._this_week())
+        rc = resp.data['restock_costs']
+        self.assertEqual(Decimal(rc['total']), Decimal('56.00'))
+        by_name = {r['name']: r for r in rc['by_ingredient']}
+        self.assertEqual(Decimal(by_name['Beans']['cost']), Decimal('50.00'))
+        self.assertEqual(Decimal(by_name['Milk']['cost']), Decimal('6.00'))
+        # The 30-day-old beans restock is excluded from the beans line.
+        self.assertNotIn('900', by_name['Beans']['cost'])
+
+    def test_restock_cost_zero_when_no_restocks(self):
+        resp = self.client.get(self._this_week())
+        rc = resp.data['restock_costs']
+        self.assertEqual(Decimal(rc['total']), Decimal('0.00'))
+        self.assertEqual(rc['by_ingredient'], [])
+
+    # --- ISSUE-121-FU-D: thermal output --------------------------------
+
+    def test_weekly_report_thermal_output_contains_totals(self):
+        """The thermal line builder produces output without error and the
+        week's gross total + section headers appear on the paper."""
+        from django.utils import timezone
+        from canteen.views import _weekly_payload
+        from canteen.receipt_service import build_weekly_report_lines
+
+        self._open_shift()
+        self._sell(self.coffee, 2)   # gross 100
+
+        week = timezone.localdate().strftime('%Y-%m-%d')
+        payload, error = _weekly_payload(week)
+        self.assertIsNone(error)
+
+        lines = build_weekly_report_lines(payload, self.bp)
+        text = '\n'.join(lines)
+        self.assertIn('WEEKLY PERFORMANCE', text)
+        self.assertIn('SUMMARY', text)
+        self.assertIn('RESTOCK COST', text)
+        # Gross total 100.00 is rendered (ascii currency, no peso glyph).
+        self.assertIn('100.00', text)
+
+    def test_period_print_endpoint_queues(self):
+        """POST to the print endpoint returns queued (printer disabled in
+        tests, so the threaded print is a no-op but the endpoint still 200s)."""
+        from django.utils import timezone
+        week = timezone.localdate().strftime('%Y-%m-%d')
+        resp = self.client.post(
+            f'/api/canteen/reports/period/print/?week={week}')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data['status'], 'print queued')
+
+    def test_period_print_endpoint_rejects_bad_week(self):
+        resp = self.client.post(
+            '/api/canteen/reports/period/print/?week=not-a-date')
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
