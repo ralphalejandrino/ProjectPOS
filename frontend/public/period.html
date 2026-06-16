@@ -65,7 +65,7 @@
             <p id="range-error" class="hidden text-red-600 text-sm mt-2"></p>
         </div>
 
-        <!-- HEADLINE CARDS (ISSUE-121: gross / net / txns / avg ticket, each with WoW) -->
+        <!-- HEADLINE CARDS (ISSUE-121: gross / net / txns; FU-I: net cash flow replaces avg ticket) -->
         <div id="summary-row" class="hidden grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
             <div class="bg-white rounded-lg shadow-lg p-6 border-l-4 border-blue-500">
                 <p class="text-sm text-gray-600 mb-1">Week Gross</p>
@@ -82,10 +82,10 @@
                 <p id="sum-txns" class="text-3xl font-bold text-purple-600">—</p>
                 <p id="wow-txns" class="text-xs mt-1 text-gray-500">—</p>
             </div>
-            <div class="bg-white rounded-lg shadow-lg p-6 border-l-4 border-amber-500">
-                <p class="text-sm text-gray-600 mb-1">Avg Ticket</p>
-                <p id="sum-avg" class="text-3xl font-bold text-amber-600">—</p>
-                <p id="wow-avg" class="text-xs mt-1 text-gray-500">—</p>
+            <div id="ncf-card" class="bg-white rounded-lg shadow-lg p-6 border-l-4 border-emerald-500">
+                <p class="text-sm text-gray-600 mb-1">Net Cash Flow</p>
+                <p id="sum-ncf" class="text-3xl font-bold text-emerald-600">—</p>
+                <p class="text-xs mt-1 text-gray-400">Sales − Restocks · cash basis</p>
             </div>
         </div>
 
@@ -172,16 +172,8 @@
             </div>
         </div>
 
-        <!-- NET CASH FLOW (ISSUE-121-FU-G: cash-basis Sales − Restocks headline) -->
-        <div id="cashflow-card" class="hidden bg-white rounded-lg shadow-lg p-6 mb-6">
-            <div class="flex items-center justify-between">
-                <div>
-                    <h3 class="text-lg font-semibold text-gray-700">💵 Net Cash Flow (Sales − Restocks)</h3>
-                    <p class="text-xs text-gray-400 mt-1">Cash basis — money into the drawer minus restock spend out of it. Not profit/COGS; can be negative on heavy-restock weeks.</p>
-                </div>
-                <span id="cashflow-total" class="text-2xl font-bold text-gray-900">—</span>
-            </div>
-        </div>
+        <!-- NET CASH FLOW: promoted to a headline card in ISSUE-121-FU-I (was a
+             standalone section in FU-G); removed here to avoid duplication. -->
 
         <!-- RESTOCK COST (ISSUE-121-FU-B: expense/COGS side for the week) -->
         <div id="restock-card" class="hidden bg-white rounded-lg shadow-lg p-6 mb-6">
@@ -359,12 +351,18 @@
             document.getElementById('sum-gross').textContent = formatCurrency(parseFloat(s.gross_total));
             document.getElementById('sum-net').textContent = formatCurrency(parseFloat(s.net_total));
             document.getElementById('sum-txns').textContent = s.transaction_count;
-            document.getElementById('sum-avg').textContent =
-                s.avg_ticket === null ? '—' : formatCurrency(parseFloat(s.avg_ticket));
             renderWowLine('wow-gross', s.gross_total, prev ? prev.gross_total : null);
             renderWowLine('wow-net', s.net_total, prev ? prev.net_total : null);
             renderWowLine('wow-txns', s.transaction_count, prev ? prev.transaction_count : null);
-            renderWowLine('wow-avg', s.avg_ticket, prev ? prev.avg_ticket : null);
+            // Net cash flow headline card (ISSUE-121-FU-I) — Sales − Restocks, may be
+            // negative; green/rose color logic, matching the FU-G display it replaced.
+            const ncf = parseFloat(data.net_cash_flow || '0');
+            const ncfEl = document.getElementById('sum-ncf');
+            ncfEl.textContent = formatCurrency(ncf);
+            ncfEl.className = 'text-3xl font-bold ' + (ncf < 0 ? 'text-rose-600' : 'text-emerald-600');
+            document.getElementById('ncf-card').className =
+                'bg-white rounded-lg shadow-lg p-6 border-l-4 ' +
+                (ncf < 0 ? 'border-rose-500' : 'border-emerald-500');
             document.getElementById('summary-row').classList.remove('hidden');
 
             // Daily revenue chart — CSS-width bars (dashboard widget pattern).
@@ -501,13 +499,7 @@
                 : noNotices;
             document.getElementById('notices-card').classList.remove('hidden');
 
-            // Net cash flow (ISSUE-121-FU-G) — Sales − Restocks, may be negative.
-            const ncf = parseFloat(data.net_cash_flow || '0');
-            const ncfEl = document.getElementById('cashflow-total');
-            ncfEl.textContent = formatCurrency(ncf);
-            ncfEl.className = 'text-2xl font-bold ' +
-                (ncf < 0 ? 'text-rose-600' : 'text-emerald-600');
-            document.getElementById('cashflow-card').classList.remove('hidden');
+            // Net cash flow now rendered in the headline card (ISSUE-121-FU-I, above).
 
             // Restock cost (ISSUE-121-FU-B) — total + per-ingredient breakdown.
             const rc = data.restock_costs || { total: '0.00', by_ingredient: [] };

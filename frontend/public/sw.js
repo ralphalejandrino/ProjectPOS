@@ -63,7 +63,7 @@
 // off/shift/caps) so all-caps no longer needs re-tapping ⇧ per letter.
 // v106: ISSUE-121-FU-F/G — weekly report restock detail table + net cash flow
 // headline (period.html); consistent X/Z/Weekly thermal layout (FU-H).
-const CACHE_NAME = 'tarsierpos-v106'; // canonical cache version
+const CACHE_NAME = 'tarsierpos-v107'; // canonical cache version
 const ASSETS = [
   'index.html',
   'login.html',
