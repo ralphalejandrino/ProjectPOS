@@ -32,9 +32,16 @@
     <div class="container mx-auto px-4 py-6">
 
         <!-- PAGE HEADER -->
-        <div class="mb-6">
-            <h2 class="text-3xl font-bold text-gray-800">🗓️ Weekly Performance Report</h2>
-            <p class="text-gray-600">Sat–Fri week: finalized Z-Reports for completed days, plus live (X) data for today.</p>
+        <div class="flex items-center justify-between mb-6">
+            <div>
+                <h2 class="text-3xl font-bold text-gray-800">🗓️ Weekly Performance Report</h2>
+                <p class="text-gray-600">Sat–Fri week: finalized Z-Reports for completed days, plus live (X) data for today.</p>
+            </div>
+            <!-- ISSUE-121-FU-E: top-right print button, matching the X/Z report
+                 print buttons (same green style + class names) for consistency. -->
+            <button id="print-week-btn" onclick="printWeek()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition">
+                🖨️ Print Weekly
+            </button>
         </div>
 
         <!-- WEEK NAVIGATION -->
@@ -54,11 +61,6 @@
                     Current Week (to date)
                 </button>
                 <span id="live-week-badge" class="hidden px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded">Current week — to date, includes Live (X)</span>
-                <!-- ISSUE-121-FU-D: thermal print of the current week's report. -->
-                <button id="print-week-btn" onclick="printWeek()"
-                    class="touch-target-pos bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2 rounded-lg font-medium transition ml-auto">
-                    🖨️ Print (thermal)
-                </button>
             </div>
             <p id="range-error" class="hidden text-red-600 text-sm mt-2"></p>
         </div>
