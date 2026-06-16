@@ -56,7 +56,10 @@
 // v98: FEATURE-046 — ingredient-derived "makeable" stock (read-time, zero
 // migration): inventory "On hand (counted)" vs "Can make now" columns and the
 // dashboard low-stock widget showing what recipe items can make now.
-const CACHE_NAME = 'tarsierpos-v103'; // canonical cache version
+// v104: BUG-005 — proactive + single-flight token refresh in config.js so an
+// idle kiosk's 15-min access token never lapses and the wake-up call burst
+// can't race the rotation/blacklist into a logout.
+const CACHE_NAME = 'tarsierpos-v104'; // canonical cache version
 const ASSETS = [
   'index.html',
   'login.html',

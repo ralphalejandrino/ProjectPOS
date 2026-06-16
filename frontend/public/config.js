@@ -23,9 +23,16 @@ const escapeHtml = (str) => {
 const getToken = () => localStorage.getItem('access_token');
 const setToken = (access, refresh) => {
     localStorage.setItem('access_token', access);
+    // BUG-005: only overwrite the refresh token when a new one is actually
+    // provided — a rotation response that omits it must never wipe the valid
+    // stored token (the guard makes setToken(access, undefined) a no-op for it).
     if (refresh) localStorage.setItem('refresh_token', refresh);
+    // Any time we have a live session, make sure proactive refresh is running.
+    startProactiveTokenRefresh();
 };
 const clearTokens = async () => {
+    // Stop the proactive timer first so it can't re-arm a session we're killing.
+    stopProactiveTokenRefresh();
     const refresh = localStorage.getItem('refresh_token');
     if (refresh) {
         try {
@@ -48,6 +55,86 @@ const clearTokens = async () => {
 async function logout() {
     await clearTokens();
     window.location.replace('login.html');
+}
+
+// ============================================================
+// BUG-005 — token refresh orchestration (proactive + single-flight)
+// Supersedes BUG-002's REFRESH_TOKEN_LIFETIME bump. The real cause of the
+// idle kiosk logout was NOT the refresh window: the 15-min access token is
+// refreshed PURELY REACTIVELY (only on a 401). An idle kiosk makes no calls,
+// so the access token lapses; when the screen wakes and fires several calls
+// at once they all 401 and RACE to refresh. With ROTATE_REFRESH_TOKENS +
+// BLACKLIST_AFTER_ROTATION the first refresh blacklists the old refresh
+// token, the concurrent ones then refresh with a blacklisted token → fail →
+// logout. The two pieces below remove both failure modes. SIMPLE_JWT settings
+// are unchanged — this is frontend refresh orchestration only.
+// ============================================================
+
+// (1) SINGLE-FLIGHT GUARD: at most one /token/refresh/ POST in flight.
+// Concurrent callers await the SAME promise instead of each rotating the
+// refresh token out from under the others. Resolves to the new access token
+// string on success, or null on failure (caller decides whether to redirect).
+let _refreshInFlight = null;
+
+function refreshAccessToken() {
+    if (_refreshInFlight) return _refreshInFlight;
+    const refreshToken = localStorage.getItem('refresh_token');
+    if (!refreshToken) return Promise.resolve(null);
+
+    _refreshInFlight = (async () => {
+        try {
+            const resp = await fetch(`${AUTH_API}/token/refresh/`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ refresh: refreshToken })
+            });
+            if (!resp.ok) return null;
+            const data = await resp.json();
+            // setToken guards the refresh write, so an omitted rotation token
+            // leaves the stored one intact (BUG-005 token-wipe fix).
+            setToken(data.access, data.refresh);
+            return data.access || null;
+        } catch (e) {
+            console.error('Token refresh failed:', e);
+            return null;
+        } finally {
+            _refreshInFlight = null;
+        }
+    })();
+    return _refreshInFlight;
+}
+
+// (2) PROACTIVE REFRESH: refresh the 15-min access token on a 10-min timer
+// while logged in, so an idle kiosk never lets it lapse. A tick failure does
+// NOT redirect — the reactive 401 path stays the authority on real auth
+// failure, so a transient network blip can't bounce the user mid-shift.
+const PROACTIVE_REFRESH_MS = 10 * 60 * 1000; // 10 min < 15 min access lifetime
+let _proactiveRefreshTimer = null;
+
+function startProactiveTokenRefresh() {
+    if (_proactiveRefreshTimer) return;                  // already running
+    if (!localStorage.getItem('refresh_token')) return;  // not logged in
+    _proactiveRefreshTimer = setInterval(() => {
+        if (!localStorage.getItem('refresh_token')) {
+            stopProactiveTokenRefresh();
+            return;
+        }
+        refreshAccessToken(); // fire-and-forget through the single-flight guard
+    }, PROACTIVE_REFRESH_MS);
+}
+
+function stopProactiveTokenRefresh() {
+    if (_proactiveRefreshTimer) {
+        clearInterval(_proactiveRefreshTimer);
+        _proactiveRefreshTimer = null;
+    }
+}
+
+// config.js loads on every page before other scripts — so a kiosk that opens
+// or reloads a page while already logged in re-arms the proactive timer here,
+// not just on the login → setToken path.
+if (typeof localStorage !== 'undefined' && localStorage.getItem('refresh_token')) {
+    startProactiveTokenRefresh();
 }
 
 function getUserRole() {
@@ -122,30 +209,21 @@ async function authenticatedFetch(url, options = {}) {
 
     const response = await fetch(url, { ...options, headers });
 
-    // Handle session expiry — attempt token refresh before redirecting
+    // Handle session expiry — reactive refresh as a FALLBACK to the proactive
+    // timer. Routed through refreshAccessToken() so concurrent 401s (the kiosk
+    // wake-up burst) share ONE single-flight refresh instead of racing the
+    // rotation/blacklist. A null result means the refresh token is truly bad
+    // or expired → redirect to login.
     if (response.status === 401) {
-        const refreshToken = localStorage.getItem('refresh_token');
-        if (refreshToken) {
-            try {
-                const refreshResponse = await fetch(`${AUTH_API}/token/refresh/`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ refresh: refreshToken })
-                });
-                if (refreshResponse.ok) {
-                    const refreshData = await refreshResponse.json();
-                    setToken(refreshData.access, refreshData.refresh || null);
-                    // Retry original request directly with fetch() — NOT authenticatedFetch() to prevent infinite loop
-                    const retryHeaders = { ...(options.headers || {}) };
-                    retryHeaders['Authorization'] = `Bearer ${refreshData.access}`;
-                    if (!(options.body instanceof FormData)) {
-                        retryHeaders['Content-Type'] = retryHeaders['Content-Type'] || 'application/json';
-                    }
-                    return await fetch(url, { ...options, headers: retryHeaders });
-                }
-            } catch (e) {
-                console.error('Token refresh failed:', e);
+        const newAccess = await refreshAccessToken();
+        if (newAccess) {
+            // Retry original request directly with fetch() — NOT authenticatedFetch() to prevent infinite loop
+            const retryHeaders = { ...(options.headers || {}) };
+            retryHeaders['Authorization'] = `Bearer ${newAccess}`;
+            if (!(options.body instanceof FormData)) {
+                retryHeaders['Content-Type'] = retryHeaders['Content-Type'] || 'application/json';
             }
+            return await fetch(url, { ...options, headers: retryHeaders });
         }
         console.warn('Session expired. Redirecting to login...');
         clearTokens();
