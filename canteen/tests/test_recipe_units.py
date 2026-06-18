@@ -139,7 +139,7 @@ class DepletionAccuracyTests(RecipeUnitsBase):
             product=self.item, group=group, enabled=True
         )
         RecipeIngredient.objects.create(
-            variant=opt, ingredient=self.powder,
+            item=self.item, variant=opt, ingredient=self.powder,
             quantity_used=Decimal('20.0000'),
         )
         self._sell(quantity=1, extra={'variant_selections': [
@@ -165,7 +165,7 @@ class DepletionAccuracyTests(RecipeUnitsBase):
             product=self.item, group=group, enabled=True
         )
         RecipeIngredient.objects.create(
-            variant=opt, ingredient=syrup, quantity_used=Decimal('15.0000'),
+            item=self.item, variant=opt, ingredient=syrup, quantity_used=Decimal('15.0000'),
         )
         self._sell(quantity=2, extra={'variant_selections': [
             {'group_id': group.id, 'option_id': opt.id},

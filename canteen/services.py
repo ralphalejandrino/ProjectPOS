@@ -87,8 +87,15 @@ def item_makeable(item):
 
     Relies on the ``recipe_ingredients__ingredient`` prefetch (ItemViewSet) — no
     per-item query when prefetched.
+
+    BUG-013: variant lines now also carry ``item`` (per-item variant recipes),
+    so the base recipe is the item's lines with ``variant`` null. Filtered in
+    Python to keep the prefetch intact (a queryset .filter() would re-query).
     """
-    return compute_makeable(item.recipe_ingredients.all())
+    base_lines = [
+        line for line in item.recipe_ingredients.all() if line.variant_id is None
+    ]
+    return compute_makeable(base_lines)
 
 
 def _deplete_ingredients(item, variant_option_ids, quantity,
@@ -107,8 +114,11 @@ def _deplete_ingredients(item, variant_option_ids, quantity,
 
     # Variant-level recipes first
     if variant_option_ids:
+        # BUG-013: scope to THIS item's variant lines. The VariantOption is
+        # shared across products, so filtering on variant alone depleted every
+        # item's recipe for that option. Identity is (item, variant).
         variant_recipes = RecipeIngredient.objects.filter(
-            variant_id__in=variant_option_ids
+            item=item, variant_id__in=variant_option_ids
         ).select_related('ingredient')
         for recipe in variant_recipes:
             _move_ingredient(
@@ -122,9 +132,12 @@ def _deplete_ingredients(item, variant_option_ids, quantity,
             if recipe.depletion_mode == 'replace':
                 depleted_ingredient_ids.add(recipe.ingredient.pk)
 
-    # Item-level recipes for ingredients not covered by variants
+    # Item-level (base) recipes for ingredients not covered by variants.
+    # BUG-013: variant lines now also carry item, so the base recipe is the
+    # subset with variant null — without this filter the variant lines above
+    # would be depleted a second time here.
     item_recipes = RecipeIngredient.objects.filter(
-        item=item
+        item=item, variant__isnull=True
     ).select_related('ingredient')
     for recipe in item_recipes:
         if recipe.ingredient.pk not in depleted_ingredient_ids:
@@ -167,8 +180,11 @@ def _restore_ingredients(item, transaction_item, quantity,
 
     # Variant-level restore first
     if variant_option_ids:
+        # BUG-013: mirror _deplete_ingredients — restore only THIS item's
+        # variant lines, not every item that shares the option. Keeps void/
+        # restore symmetric with the per-item depletion above.
         variant_recipes = RecipeIngredient.objects.filter(
-            variant_id__in=variant_option_ids
+            item=item, variant_id__in=variant_option_ids
         ).select_related('ingredient')
         for recipe in variant_recipes:
             _move_ingredient(
@@ -182,9 +198,10 @@ def _restore_ingredients(item, transaction_item, quantity,
             if recipe.depletion_mode == 'replace':
                 restored_ingredient_ids.add(recipe.ingredient.pk)
 
-    # Item-level restore
+    # Item-level (base) restore. BUG-013: exclude variant lines (they now carry
+    # item) so the base restore mirrors the base depletion exactly.
     item_recipes = RecipeIngredient.objects.filter(
-        item=item
+        item=item, variant__isnull=True
     ).select_related('ingredient')
     for recipe in item_recipes:
         if recipe.ingredient.pk not in restored_ingredient_ids:

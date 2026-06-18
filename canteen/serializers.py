@@ -501,17 +501,19 @@ class RecipeIngredientSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs):
-        # BUG-001: enforce the model's XOR (recipe_item_or_variant_not_both) at
-        # the serializer so the API returns a clean 400 instead of letting an
-        # uncaught sqlite IntegrityError surface as a 500. A row is item-scoped
-        # OR variant-scoped — never both, never neither. On update, fall back to
-        # the existing instance for whichever side the payload omits.
+        # BUG-013: every recipe line is owned by an Item (recipe_item_required).
+        # ``variant`` null = the item's base recipe; ``variant`` set = a recipe
+        # specific to that item + variant option. Requiring the item is what
+        # keeps variant recipes per-item: the VariantOption is shared across
+        # products, so without the owning item a variant line bled onto every
+        # item that shared the option (supersedes BUG-001's item/variant XOR).
+        # On update, fall back to the existing instance when the payload omits
+        # ``item``. Returns 400 (not an uncaught IntegrityError → 500).
         item = attrs.get('item') if 'item' in attrs else getattr(self.instance, 'item', None)
-        variant_xor = attrs.get('variant') if 'variant' in attrs else getattr(self.instance, 'variant', None)
-        if bool(item) == bool(variant_xor):
+        if not item:
             raise serializers.ValidationError(
-                'A recipe ingredient must be scoped to exactly one of "item" or '
-                '"variant" — set one and leave the other null.'
+                'A recipe ingredient must belong to an "item". Set "item"; '
+                'add "variant" too to scope the line to a specific variant.'
             )
 
         # FLAG-050: reject a variant recipe that would make the same ingredient

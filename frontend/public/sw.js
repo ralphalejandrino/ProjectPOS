@@ -66,7 +66,7 @@
 // v109: BUG-008/009/010 — archived-items view + restore (inventory.html),
 // reliable frontend-triggered receipt auto-print (index.html), and
 // numpad value/focus retention (inventory.html + keyboard.js).
-const CACHE_NAME = 'tarsierpos-v110'; // canonical cache version
+const CACHE_NAME = 'tarsierpos-v111'; // canonical cache version
 const ASSETS = [
   'index.html',
   'login.html',

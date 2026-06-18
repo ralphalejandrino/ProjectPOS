@@ -138,11 +138,13 @@ class MakeableSerializerTests(APITestCase):
         option = VariantOption.objects.create(group=group, name='Large')
         ProductVariantGroup.objects.create(product=item, group=group, enabled=True)
         ing = self._ingredient('Espresso', '100.0000')
-        # Recipe attached to the VARIANT, not the item.
-        RecipeIngredient.objects.create(variant=option, ingredient=ing,
+        # BUG-013: a variant line is owned by the item but scoped to the option.
+        RecipeIngredient.objects.create(item=item, variant=option, ingredient=ing,
                                         quantity_used=Decimal('5.0000'))
-        # Sanity: the item has zero direct recipe lines.
-        self.assertEqual(item.recipe_ingredients.count(), 0)
+        # Sanity: the item has zero BASE (variant-null) recipe lines — the only
+        # lines makeable computes over. Its variant line must not count.
+        self.assertEqual(
+            item.recipe_ingredients.filter(variant__isnull=True).count(), 0)
         data = self._get_item(item.id)
         self.assertIsNone(data['makeable'])
         self.assertEqual(data['makeable_status'], 'no_recipe')

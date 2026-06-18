@@ -37,8 +37,10 @@ class ItemAdmin(admin.ModelAdmin):
     @admin.display(description='Recipe linked', boolean=False)
     def recipe_linked(self, obj):
         # FLAG-045: surface the recipe-coverage gap at a glance. ✓ when the
-        # item has at least one item-level RecipeIngredient, ✗ otherwise.
-        return '✓' if obj.recipe_ingredients.exists() else '✗'
+        # item has at least one item-level (base) RecipeIngredient, ✗ otherwise.
+        # BUG-013: variant lines now also carry item, so the base recipe is the
+        # subset with variant null — exclude variant lines from the coverage tick.
+        return '✓' if obj.recipe_ingredients.filter(variant__isnull=True).exists() else '✗'
 
 @admin.register(ItemLog)
 class ItemLogAdmin(admin.ModelAdmin):

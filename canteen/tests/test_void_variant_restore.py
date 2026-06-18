@@ -76,11 +76,11 @@ class VoidVariantRestoreTests(APITestCase):
 
         # Variant-level recipes: each "Regular" depletes a different ingredient.
         RecipeIngredient.objects.create(
-            variant=self.opt_size_regular, ingredient=self.ing_size,
+            item=self.item, variant=self.opt_size_regular, ingredient=self.ing_size,
             quantity_used=Decimal('2.0000'),
         )
         RecipeIngredient.objects.create(
-            variant=self.opt_sugar_regular, ingredient=self.ing_sugar,
+            item=self.item, variant=self.opt_sugar_regular, ingredient=self.ing_sugar,
             quantity_used=Decimal('3.0000'),
         )
 

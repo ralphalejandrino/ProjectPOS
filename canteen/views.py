@@ -1753,6 +1753,11 @@ class RecipeIngredientViewSet(viewsets.ModelViewSet):
             qs = qs.filter(item_id=item_id)
         if variant_id:
             qs = qs.filter(variant_id=variant_id)
+        elif item_id:
+            # BUG-013: variant lines now also carry item, so a bare ?item=<id>
+            # (the base-recipe view, no variant selected) must return only the
+            # item's base lines — not its variant lines mixed in.
+            qs = qs.filter(variant__isnull=True)
         return qs
 
 

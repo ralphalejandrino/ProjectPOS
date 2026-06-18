@@ -1260,12 +1260,17 @@ class RecipeIngredient(models.Model):
 
     class Meta:
         constraints = [
+            # BUG-013: every recipe line is owned by an Item. ``variant`` null is
+            # the item's base recipe; ``variant`` set is a recipe specific to that
+            # item + variant option. The owning item is mandatory because the
+            # VariantOption is shared across products (CategoryVariantGroup /
+            # ProductVariantGroup) — without the item dimension a variant line
+            # bled onto every item that shared the option. (Supersedes BUG-001's
+            # recipe_item_or_variant_not_both XOR, which forced item NULL on
+            # variant lines and caused the cross-item bleed.)
             models.CheckConstraint(
-                check=(
-                    (models.Q(item__isnull=False) & models.Q(variant__isnull=True)) |
-                    (models.Q(item__isnull=True) & models.Q(variant__isnull=False))
-                ),
-                name='recipe_item_or_variant_not_both'
+                check=models.Q(item__isnull=False),
+                name='recipe_item_required'
             )
         ]
 

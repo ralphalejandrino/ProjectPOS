@@ -1,11 +1,16 @@
-"""BUG-001 — recipe-ingredient scope XOR is validated at the serializer.
+"""Recipe-ingredient scope is validated at the serializer.
 
-A RecipeIngredient row is scoped to EXACTLY one of `item` or `variant`; the
-model enforces this with the `recipe_item_or_variant_not_both` CheckConstraint.
-Before this fix the serializer never validated the XOR, so a payload with both
-(or neither) reached the DB and surfaced as an uncaught IntegrityError → HTTP
-500. The serializer must reject those with a clean 400 instead, while valid
-item-only and variant-only payloads still create (201).
+BUG-013 supersedes BUG-001's item/variant XOR: every RecipeIngredient row is now
+owned by an `item` (the `recipe_item_required` CheckConstraint). A base line is
+item-only (`variant` null); a variant line carries BOTH item and variant so it
+stays scoped to that one item — the VariantOption is shared across products, and
+the old XOR forced `item` NULL on variant lines, attaching them to the shared
+option and bleeding them across items.
+
+The serializer must reject a payload with no item with a clean 400 (not an
+uncaught IntegrityError → 500), while item-only and item+variant payloads create
+(201). The cross-item isolation guarantee itself is covered by
+test_recipe_variant_isolation.py (the BUG-013 regression test).
 """
 
 from decimal import Decimal
@@ -51,16 +56,20 @@ class RecipeScopeXorTests(APITestCase):
             '/api/canteen/recipe-ingredients/', payload, format='json',
         )
 
-    def test_both_item_and_variant_is_rejected_400_not_500(self):
+    def test_item_and_variant_together_is_created_201(self):
+        # BUG-013: a variant line now carries BOTH item and variant (was a 400
+        # under BUG-001's XOR). This is the per-item variant recipe.
         resp = self._post({
             'item': str(self.item.id), 'variant': str(self.opt_size.id),
             'ingredient': str(self.ing.id), 'quantity_used': '50.0',
         })
         self.assertEqual(
-            resp.status_code, status.HTTP_400_BAD_REQUEST,
-            f"Expected 400, got {resp.status_code}: {resp.data}",
+            resp.status_code, status.HTTP_201_CREATED,
+            f"Expected 201, got {resp.status_code}: {resp.data}",
         )
-        self.assertEqual(RecipeIngredient.objects.count(), 0)
+        row = RecipeIngredient.objects.get()
+        self.assertEqual(row.item_id, self.item.id)
+        self.assertEqual(row.variant_id, self.opt_size.id)
 
     def test_neither_item_nor_variant_is_rejected_400(self):
         resp = self._post({
@@ -72,17 +81,18 @@ class RecipeScopeXorTests(APITestCase):
         )
         self.assertEqual(RecipeIngredient.objects.count(), 0)
 
-    def test_variant_only_is_created_201(self):
+    def test_variant_without_item_is_rejected_400(self):
+        # BUG-013: item is mandatory — a variant line with item NULL is what
+        # bled across items, so it must now be rejected (was 201 under BUG-001).
         resp = self._post({
             'item': None, 'variant': str(self.opt_size.id),
             'ingredient': str(self.ing.id), 'quantity_used': '50.0',
         })
         self.assertEqual(
-            resp.status_code, status.HTTP_201_CREATED, resp.data,
+            resp.status_code, status.HTTP_400_BAD_REQUEST,
+            f"Expected 400, got {resp.status_code}: {resp.data}",
         )
-        row = RecipeIngredient.objects.get()
-        self.assertIsNone(row.item)
-        self.assertEqual(row.variant_id, self.opt_size.id)
+        self.assertEqual(RecipeIngredient.objects.count(), 0)
 
     def test_item_only_is_created_201(self):
         resp = self._post({
@@ -96,34 +106,41 @@ class RecipeScopeXorTests(APITestCase):
         self.assertEqual(row.item_id, self.item.id)
         self.assertIsNone(row.variant)
 
-    # ── Read-side scope contract (BUG-001 list fix) ──────────────────────
-    # The recipe editor lists lines by the SAME scope it writes them with:
-    # ?variant=<id> when a variant is selected, ?item=<id> otherwise. These
-    # lock the backend filter the frontend now relies on, so an item-scoped
-    # GET never silently hides variant-scoped lines (or vice versa).
+    # ── Read-side scope contract (BUG-013) ───────────────────────────────
+    # The recipe editor lists lines by the SAME (item, variant) scope it writes
+    # with: ?item=<id>&variant=<id> when a variant is selected, ?item=<id>
+    # otherwise. These lock the backend filter the frontend relies on so the
+    # base view never shows variant lines, and the variant view returns only
+    # THIS item's lines for that option.
 
-    def test_list_by_variant_returns_only_that_variants_lines(self):
-        item_line = RecipeIngredient.objects.create(
+    def test_list_by_item_and_variant_returns_only_that_lines(self):
+        base_line = RecipeIngredient.objects.create(
             item=self.item, ingredient=self.ing, quantity_used=Decimal('10.0'),
         )
         variant_line = RecipeIngredient.objects.create(
-            variant=self.opt_size, ingredient=self.ing, quantity_used=Decimal('20.0'),
+            item=self.item, variant=self.opt_size, ingredient=self.ing,
+            quantity_used=Decimal('20.0'),
         )
         resp = self.client.get(
-            f'/api/canteen/recipe-ingredients/?variant={self.opt_size.id}'
+            f'/api/canteen/recipe-ingredients/'
+            f'?item={self.item.id}&variant={self.opt_size.id}'
         )
         self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.data)
         rows = resp.data['results'] if isinstance(resp.data, dict) else resp.data
         ids = {r['id'] for r in rows}
         self.assertEqual(ids, {variant_line.id})
-        self.assertNotIn(item_line.id, ids)
+        self.assertNotIn(base_line.id, ids)
 
-    def test_list_by_item_returns_only_item_level_lines(self):
-        item_line = RecipeIngredient.objects.create(
+    def test_list_by_item_returns_only_base_lines(self):
+        # A bare ?item=<id> (base-recipe view) must exclude the item's variant
+        # lines — they now carry item too, so an unfiltered item query would
+        # leak them into the base view.
+        base_line = RecipeIngredient.objects.create(
             item=self.item, ingredient=self.ing, quantity_used=Decimal('10.0'),
         )
         RecipeIngredient.objects.create(
-            variant=self.opt_size, ingredient=self.ing, quantity_used=Decimal('20.0'),
+            item=self.item, variant=self.opt_size, ingredient=self.ing,
+            quantity_used=Decimal('20.0'),
         )
         resp = self.client.get(
             f'/api/canteen/recipe-ingredients/?item={self.item.id}'
@@ -131,4 +148,4 @@ class RecipeScopeXorTests(APITestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.data)
         rows = resp.data['results'] if isinstance(resp.data, dict) else resp.data
         ids = {r['id'] for r in rows}
-        self.assertEqual(ids, {item_line.id})
+        self.assertEqual(ids, {base_line.id})

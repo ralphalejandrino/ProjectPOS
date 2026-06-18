@@ -875,12 +875,14 @@ async function loadRecipeIngredients() {
   tbody.innerHTML = `<tr><td colspan="5" class="text-center py-6"><div class="flex justify-center"><div class="spinner"></div></div></td></tr>`;
 
   try {
-    // BUG-001: list by the SAME scope the write path uses (saveRecipeIngredient).
-    // A variant is saved with item:null + variant set, so an item-scoped GET
-    // never finds it. When a variant is selected, list by variant; otherwise
-    // list item-level lines. Read and write scopes must always match.
+    // BUG-013: list by the SAME (item, variant) scope the write path uses
+    // (saveRecipeIngredient). A variant line is now owned by THIS item, so it
+    // must be listed by item AND variant — listing by variant alone returned
+    // every item's recipe for that shared option (the cross-item bleed). With
+    // no variant selected, ?item=<id> returns the item's base lines only (the
+    // backend filters variant__isnull when variant is absent).
     const url = variantId
-      ? `/recipe-ingredients/?variant=${variantId}`
+      ? `/recipe-ingredients/?item=${itemId}&variant=${variantId}`
       : `/recipe-ingredients/?item=${itemId}`;
     const data = await apiFetch(url);
     const list = Array.isArray(data) ? data : (data?.results || []);
@@ -960,15 +962,16 @@ async function saveRecipeIngredient() {
     return;
   }
 
-  // BUG-001: a recipe row is scoped to EXACTLY one of item or variant (the
-  // model enforces an XOR). The menu-item dropdown is only context for picking
-  // the variant — it must not be sent as `item` in the variant case. Send the
-  // chosen scope and explicitly null the other side.
+  // BUG-013: a recipe line is always owned by the selected menu item. A base
+  // line is item-only (variant null); a variant line carries item AND variant,
+  // so it stays scoped to THIS item — the VariantOption is shared across
+  // products, and sending item:null (the old BUG-001 behaviour) attached the
+  // line to the shared option and bled it onto every item using that option.
   // BUG-003: depletion_mode controls whether a variant line replaces or adds to
   // the base ingredient. Default 'replace' preserves substitution behaviour.
   const mode = document.getElementById('newRecipeMode').value || 'replace';
   const payload = variantId
-    ? { item: null, variant: variantId, ingredient: ingId, quantity_used: qty, depletion_mode: mode }
+    ? { item: itemId, variant: variantId, ingredient: ingId, quantity_used: qty, depletion_mode: mode }
     : { item: itemId, variant: null, ingredient: ingId, quantity_used: qty, depletion_mode: mode };
 
   try {

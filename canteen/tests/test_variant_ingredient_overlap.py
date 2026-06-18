@@ -49,10 +49,12 @@ class VariantIngredientOverlapTests(APITestCase):
         )
 
     def _post_recipe(self, variant, ingredient, qty='50.0'):
+        # BUG-013: a variant line is owned by its item (recipe_item_required);
+        # the FLAG-050 cross-group overlap check is group-based and unaffected.
         return self.client.post(
             '/api/canteen/recipe-ingredients/',
-            {'variant': str(variant.id), 'ingredient': str(ingredient.id),
-             'quantity_used': qty},
+            {'item': str(self.item.id), 'variant': str(variant.id),
+             'ingredient': str(ingredient.id), 'quantity_used': qty},
             format='json',
         )
 

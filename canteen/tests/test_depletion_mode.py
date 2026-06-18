@@ -87,7 +87,7 @@ class DepletionModeTests(APITestCase):
     # (a) replace: variant 20g suppresses the 18g base → 20g depleted.
     def test_replace_mode_suppresses_base(self):
         RecipeIngredient.objects.create(
-            variant=self.opt_extra, ingredient=self.espresso,
+            item=self.item, variant=self.opt_extra, ingredient=self.espresso,
             quantity_used=Decimal('20.0000'), depletion_mode='replace',
         )
         self._sell_with([self.opt_extra.id])
@@ -97,7 +97,7 @@ class DepletionModeTests(APITestCase):
     # (b) add: variant 20g adds to the 18g base → 38g depleted.
     def test_add_mode_sums_with_base(self):
         RecipeIngredient.objects.create(
-            variant=self.opt_extra, ingredient=self.espresso,
+            item=self.item, variant=self.opt_extra, ingredient=self.espresso,
             quantity_used=Decimal('20.0000'), depletion_mode='add',
         )
         self._sell_with([self.opt_extra.id])
@@ -107,11 +107,11 @@ class DepletionModeTests(APITestCase):
     # (c) multi-select: base + two 'add' add-ons all sum (18 + 20 + 5 = 43).
     def test_multi_select_add_addons_all_sum(self):
         RecipeIngredient.objects.create(
-            variant=self.opt_extra, ingredient=self.espresso,
+            item=self.item, variant=self.opt_extra, ingredient=self.espresso,
             quantity_used=Decimal('20.0000'), depletion_mode='add',
         )
         RecipeIngredient.objects.create(
-            variant=self.opt_addon, ingredient=self.espresso,
+            item=self.item, variant=self.opt_addon, ingredient=self.espresso,
             quantity_used=Decimal('5.0000'), depletion_mode='add',
         )
         self._sell_with([self.opt_extra.id, self.opt_addon.id])
@@ -121,7 +121,7 @@ class DepletionModeTests(APITestCase):
     # (d) void of an 'add'-mode sale restores the full summed amount.
     def test_void_of_add_mode_restores_full_sum(self):
         RecipeIngredient.objects.create(
-            variant=self.opt_extra, ingredient=self.espresso,
+            item=self.item, variant=self.opt_extra, ingredient=self.espresso,
             quantity_used=Decimal('20.0000'), depletion_mode='add',
         )
         txn = self._sell_with([self.opt_extra.id])
@@ -140,7 +140,7 @@ class DepletionModeTests(APITestCase):
     # (e) default mode is 'replace' so pre-existing rows keep substitution.
     def test_default_mode_is_replace(self):
         line = RecipeIngredient.objects.create(
-            variant=self.opt_extra, ingredient=self.espresso,
+            item=self.item, variant=self.opt_extra, ingredient=self.espresso,
             quantity_used=Decimal('20.0000'),
         )
         self.assertEqual(line.depletion_mode, 'replace')
