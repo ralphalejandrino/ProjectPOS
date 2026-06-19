@@ -1076,11 +1076,33 @@ async function submitIngredientModal() {
 
   try {
     if (id) {
+      // ISSUE-071: current_stock is ledger-controlled and read-only on PATCH.
+      // Sending it does nothing, so move the stock through the sanctioned
+      // adjust endpoint instead: compute the delta from the value we loaded
+      // into the modal and post a signed quantity_change (writes an
+      // IngredientLog). This makes the editable Current Stock field actually
+      // set the stock the manager types, without bypassing the ledger.
+      const { current_stock: _omitStock, ...patchPayload } = payload;
       await apiFetch(`/ingredients/${id}/`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(patchPayload),
       });
+
+      const orig  = ingredients.find(i => i.id === parseInt(id, 10));
+      const before = parseFloat(orig?.current_stock || 0);
+      const after  = parseFloat(payload.current_stock || 0);
+      const delta  = Math.round((after - before) * 1000) / 1000;
+      if (delta !== 0) {
+        await apiFetch(`/ingredients/${id}/adjust/`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            quantity_change: delta,
+            notes: 'Manual set via ingredient edit',
+          }),
+        });
+      }
       window.toast({message: 'Ingredient updated', severity: 'success'});
     } else {
       await apiFetch('/ingredients/', {

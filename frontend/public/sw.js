@@ -66,7 +66,12 @@
 // v109: BUG-008/009/010 — archived-items view + restore (inventory.html),
 // reliable frontend-triggered receipt auto-print (index.html), and
 // numpad value/focus retention (inventory.html + keyboard.js).
-const CACHE_NAME = 'tarsierpos-v112'; // canonical cache version
+// v113: BUG-016 — ingredient edit modal's Current Stock field was silently
+// dropped on PATCH (ISSUE-071 makes it read-only on update), so managers
+// couldn't encode opening stock — it always showed 0. The edit path now
+// routes the typed value through the sanctioned adjust endpoint (signed
+// delta, writes an IngredientLog), so the field actually sets the stock.
+const CACHE_NAME = 'tarsierpos-v113'; // canonical cache version
 const ASSETS = [
   'index.html',
   'login.html',
