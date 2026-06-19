@@ -71,6 +71,11 @@ class HealthCheckView(APIView):
 class ItemCategoryViewSet(viewsets.ModelViewSet):
     queryset = ItemCategory.objects.all()
     serializer_class = ItemCategorySerializer
+    # BUG-015: same global-PAGE_SIZE=50 truncation as Item/Ingredient. The
+    # inventory frontend reads `results` (page 1) only, and categories drive the
+    # POS grid grouping + item-assignment dropdowns — serve the (small) catalog
+    # whole so a 51st category can't silently vanish.
+    pagination_class = None
 
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
@@ -489,6 +494,10 @@ class VariantGroupViewSet(viewsets.ModelViewSet):
     serializer_class = VariantGroupSerializer
     # FEATURE-044: variant management gated by 'inventory' page.
     permission_classes = [HasPageAccess('inventory')]
+    # BUG-015: top-level catalog list read whole by inventory.html
+    # (_allVariantGroups) — exempt from the global PAGE_SIZE=50 paginator so a
+    # 51st variant group doesn't disappear from assignment UIs.
+    pagination_class = None
 
     @action(detail=True, methods=['patch'], url_path='reorder-options')
     def reorder_options(self, request, pk=None):
@@ -1661,6 +1670,11 @@ class IngredientUnitViewSet(viewsets.ModelViewSet):
     queryset = IngredientUnit.objects.all().order_by('name')
     serializer_class = IngredientUnitSerializer
     permission_classes = [IsAuthenticated]
+    # BUG-015: same truncation as Bug A on ItemViewSet — the global PAGE_SIZE=50
+    # silently dropped page-2 rows, and the ingredients frontend reads only
+    # `results` (page 1) with no next-page handling. Reference data is small;
+    # serve it whole so new entries past the alphabetical cutoff stay visible.
+    pagination_class = None
 
 
 class SupplierViewSet(viewsets.ModelViewSet):
@@ -1668,6 +1682,9 @@ class SupplierViewSet(viewsets.ModelViewSet):
     serializer_class = SupplierSerializer
     # FEATURE-044: gated by the 'ingredients' page (defaults to manager/admin).
     permission_classes = [HasPageAccess('ingredients')]
+    # BUG-015: see IngredientUnitViewSet — disable pagination so the supplier
+    # list isn't truncated to the first 50 in the frontend.
+    pagination_class = None
 
 
 class IngredientViewSet(viewsets.ModelViewSet):
@@ -1675,6 +1692,12 @@ class IngredientViewSet(viewsets.ModelViewSet):
     serializer_class = IngredientSerializer
     # FEATURE-044: gated by the 'ingredients' page (defaults to manager/admin).
     permission_classes = [HasPageAccess('ingredients')]
+    # BUG-015: root cause — this inherited the global PAGE_SIZE=50 paginator
+    # (settings.py), but ingredients.html reads only `results` (page 1) with no
+    # pagination UI. Once the canteen crossed 50 ingredients, new entries that
+    # sort past the page-1 cutoff (e.g. "wintermelon") saved fine (201) but
+    # never appeared in the list or recipe dropdown. Same fix as ItemViewSet.
+    pagination_class = None
 
     @action(detail=True, methods=['post'])
     def restock(self, request, pk=None):
