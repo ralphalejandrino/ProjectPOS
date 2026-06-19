@@ -1076,12 +1076,14 @@ async function submitIngredientModal() {
 
   try {
     if (id) {
-      // ISSUE-071: current_stock is ledger-controlled and read-only on PATCH.
-      // Sending it does nothing, so move the stock through the sanctioned
-      // adjust endpoint instead: compute the delta from the value we loaded
-      // into the modal and post a signed quantity_change (writes an
-      // IngredientLog). This makes the editable Current Stock field actually
-      // set the stock the manager types, without bypassing the ledger.
+      // ISSUE-071: current_stock is ledger-controlled and read-only on PATCH,
+      // so it's moved through the sanctioned adjust endpoint instead.
+      // BUG-017: send the ABSOLUTE typed value as new_stock and let the server
+      // compute the delta against the locked row. The previous version computed
+      // the delta here from the stock value cached in the `ingredients` list,
+      // which could be stale (sales/restocks since load) — that set
+      // 'Apple green tea syrup' to 10.017 instead of 960. Never trust the
+      // client baseline for stock.
       const { current_stock: _omitStock, ...patchPayload } = payload;
       await apiFetch(`/ingredients/${id}/`, {
         method: 'PATCH',
@@ -1089,20 +1091,14 @@ async function submitIngredientModal() {
         body: JSON.stringify(patchPayload),
       });
 
-      const orig  = ingredients.find(i => i.id === parseInt(id, 10));
-      const before = parseFloat(orig?.current_stock || 0);
-      const after  = parseFloat(payload.current_stock || 0);
-      const delta  = Math.round((after - before) * 1000) / 1000;
-      if (delta !== 0) {
-        await apiFetch(`/ingredients/${id}/adjust/`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            quantity_change: delta,
-            notes: 'Manual set via ingredient edit',
-          }),
-        });
-      }
+      await apiFetch(`/ingredients/${id}/adjust/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          new_stock: parseFloat(payload.current_stock || 0),
+          notes: 'Manual set via ingredient edit',
+        }),
+      });
       window.toast({message: 'Ingredient updated', severity: 'success'});
     } else {
       await apiFetch('/ingredients/', {

@@ -71,7 +71,11 @@
 // couldn't encode opening stock — it always showed 0. The edit path now
 // routes the typed value through the sanctioned adjust endpoint (signed
 // delta, writes an IngredientLog), so the field actually sets the stock.
-const CACHE_NAME = 'tarsierpos-v113'; // canonical cache version
+// v114: BUG-017 — the v113 delta was computed from the client's cached stock,
+// which could be stale, setting the wrong value (e.g. 10.017 instead of 960).
+// The edit modal now sends the ABSOLUTE new_stock and the server computes the
+// delta under a row lock, so a stale client baseline can't corrupt stock.
+const CACHE_NAME = 'tarsierpos-v114'; // canonical cache version
 const ASSETS = [
   'index.html',
   'login.html',

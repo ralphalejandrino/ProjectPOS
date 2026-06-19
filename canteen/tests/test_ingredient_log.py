@@ -136,6 +136,52 @@ class AdjustEndpointTests(IngredientLogBase):
         )
         self.assertEqual(resp.status_code, 400)
 
+    def test_adjust_new_stock_sets_absolute_value(self):
+        # BUG-017: new_stock sets the absolute value; the server computes the
+        # delta against the locked row, so the result is exactly what's typed
+        # regardless of any stale client baseline.
+        self.client.force_authenticate(self.manager)
+        resp = self.client.post(
+            f'/api/canteen/ingredients/{self.ing.id}/adjust/',
+            {'new_stock': '960.0000', 'notes': 'opening stock'}, format='json',
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.ing.refresh_from_db()
+        self.assertEqual(self.ing.current_stock, Decimal('960.0000'))
+        log = IngredientLog.objects.get(ingredient=self.ing, action='adjustment')
+        # delta = 960 - START(100) = 860
+        self.assertEqual(log.quantity_change, Decimal('860.0000'))
+        self.assertEqual(log.stock_before, self.START)
+        self.assertEqual(log.stock_after, Decimal('960.0000'))
+        self.assertEqual(log.performed_by_id, self.manager.id)
+
+    def test_adjust_new_stock_equal_is_noop(self):
+        self.client.force_authenticate(self.manager)
+        resp = self.client.post(
+            f'/api/canteen/ingredients/{self.ing.id}/adjust/',
+            {'new_stock': str(self.START)}, format='json',
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(
+            IngredientLog.objects.filter(ingredient=self.ing).exists()
+        )
+
+    def test_adjust_rejects_new_stock_negative(self):
+        self.client.force_authenticate(self.manager)
+        resp = self.client.post(
+            f'/api/canteen/ingredients/{self.ing.id}/adjust/',
+            {'new_stock': '-1'}, format='json',
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def test_adjust_rejects_both_params(self):
+        self.client.force_authenticate(self.manager)
+        resp = self.client.post(
+            f'/api/canteen/ingredients/{self.ing.id}/adjust/',
+            {'new_stock': '5', 'quantity_change': '5'}, format='json',
+        )
+        self.assertEqual(resp.status_code, 400)
+
     def test_patch_cannot_write_current_stock(self):
         self.client.force_authenticate(self.manager)
         resp = self.client.patch(

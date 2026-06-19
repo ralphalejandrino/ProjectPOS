@@ -1724,24 +1724,53 @@ class IngredientViewSet(viewsets.ModelViewSet):
         updates stock atomically under select_for_update() and writes an
         IngredientLog(action='adjustment') attributed to request.user.
 
-        Body: { quantity_change: decimal (signed), notes: string }
+        Two body forms (provide exactly one):
+          { new_stock: decimal }       — BUG-017: set stock to this ABSOLUTE
+              value. The delta is computed server-side against the locked row,
+              so a stale client baseline can't corrupt the result (the old
+              client-computed quantity_change set 'Apple green tea syrup' to
+              10.017 instead of 960 because the browser's cached stock was out
+              of sync). This is what the edit modal's Current Stock field sends.
+          { quantity_change: decimal } — signed delta (e.g. ad-hoc correction).
+        Both accept an optional { notes: string }.
         """
         from decimal import Decimal, InvalidOperation
-        raw = request.data.get('quantity_change')
         notes = request.data.get('notes', '') or ''
-        try:
-            qty = Decimal(str(raw))
-        except (InvalidOperation, TypeError, ValueError):
-            return Response({'error': 'quantity_change must be a number.'},
-                            status=status.HTTP_400_BAD_REQUEST)
-        if qty == 0:
-            return Response({'error': 'quantity_change cannot be zero.'},
-                            status=status.HTTP_400_BAD_REQUEST)
+        raw_new = request.data.get('new_stock')
+        raw_delta = request.data.get('quantity_change')
+
+        if (raw_new is None) == (raw_delta is None):
+            return Response(
+                {'error': 'Provide exactly one of new_stock or quantity_change.'},
+                status=status.HTTP_400_BAD_REQUEST)
 
         with db_transaction.atomic():
             ingredient = Ingredient.objects.select_for_update().get(pk=pk)
             before = ingredient.current_stock
-            after = before + qty
+            if raw_new is not None:
+                try:
+                    after = Decimal(str(raw_new))
+                except (InvalidOperation, TypeError, ValueError):
+                    return Response({'error': 'new_stock must be a number.'},
+                                    status=status.HTTP_400_BAD_REQUEST)
+                if after < 0:
+                    return Response({'error': 'new_stock cannot be negative.'},
+                                    status=status.HTTP_400_BAD_REQUEST)
+                qty = after - before
+                if qty == 0:
+                    # Already at the requested value — harmless no-op, no ledger row.
+                    return Response(self.get_serializer(ingredient).data)
+            else:
+                try:
+                    qty = Decimal(str(raw_delta))
+                except (InvalidOperation, TypeError, ValueError):
+                    return Response({'error': 'quantity_change must be a number.'},
+                                    status=status.HTTP_400_BAD_REQUEST)
+                if qty == 0:
+                    return Response({'error': 'quantity_change cannot be zero.'},
+                                    status=status.HTTP_400_BAD_REQUEST)
+                after = before + qty
+
             ingredient.current_stock = after
             ingredient.save(update_fields=['current_stock', 'updated_at'])
             IngredientLog.objects.create(
