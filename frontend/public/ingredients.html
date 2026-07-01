@@ -504,6 +504,23 @@
            "N packages @ ₱P" converts to base units so the manager never counts
            scoops. Falls back to base-unit entry (ISSUE-113 unit labels). -->
       <div id="restockPackageFields" class="hidden space-y-3">
+        <!-- FEATURE-050: the package (purchase unit + conversion) can be set up
+             right here, not just in the ingredient editor. It's persisted to the
+             ingredient on save, so it's remembered for next time. -->
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">Purchase Unit <span class="text-red-500">*</span></label>
+            <select aria-label="Purchase Unit" id="restockPurchaseUnit" onchange="onRestockPurchaseUnitChange()"
+              class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300">
+              <option value="">Select…</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">Base units per package <span class="text-gray-400" id="restockFactorSuffix"></span> <span class="text-red-500">*</span></label>
+            <input aria-label="Base units per package" type="number" id="restockFactor" min="0" step="0.001" oninput="updateRestockPreview()"
+              class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+          </div>
+        </div>
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="block text-xs font-medium text-gray-600 mb-1">Packages <span class="text-gray-400" id="restockPkgUnitLabel"></span> <span class="text-red-500">*</span></label>
@@ -1303,13 +1320,20 @@ function openRestockModal(id) {
   document.getElementById('restockPackagePrice').value = '';
   document.getElementById('restockNotes').value = '';
 
-  // FEATURE-050: if a purchase unit + conversion is configured, default to
-  // package-based entry and prefill the last known package price.
-  const pkgAbbr = ing?.purchase_unit_detail?.abbreviation || '';
-  const factor  = parseFloat(ing?.purchase_to_base_factor);
-  const hasPackage = !!pkgAbbr && factor > 0;
-  document.getElementById('restockPkgUnitLabel').textContent = pkgAbbr ? `(${pkgAbbr})` : '';
-  document.getElementById('restockToPackageBtn').classList.toggle('hidden', !hasPackage);
+  // FEATURE-050: the package (purchase unit + conversion) can be configured
+  // right here. Prefill from the ingredient if already set; the "Base units per
+  // package" label mirrors the base unit. Package entry is always reachable via
+  // the toggle, even if the ingredient hasn't been set up yet.
+  const purSel = document.getElementById('restockPurchaseUnit');
+  purSel.innerHTML = '<option value="">Select…</option>' +
+    units.filter(u => u.is_active).map(u => `<option value="${u.id}" data-abbr="${esc(u.abbreviation)}">${esc(u.name)} (${esc(u.abbreviation)})</option>`).join('');
+  purSel.value = ing?.purchase_unit || '';
+  document.getElementById('restockFactor').value = ing?.purchase_to_base_factor || '';
+  document.getElementById('restockFactorSuffix').textContent = abbr ? `(${abbr})` : '';
+  onRestockPurchaseUnitChange();  // sets the "Packages (unit)" label from the selection
+
+  const hasPackage = !!ing?.purchase_unit && parseFloat(ing?.purchase_to_base_factor) > 0;
+  document.getElementById('restockToPackageBtn').classList.remove('hidden');
   if (hasPackage && ing.last_purchase_price != null) {
     document.getElementById('restockPackagePrice').value = ing.last_purchase_price;
   }
@@ -1324,11 +1348,21 @@ function setRestockMode(mode) {
   if (mode === 'package') updateRestockPreview();
 }
 
+// FEATURE-050: keep the "Packages (unit)" label in sync with the selected
+// purchase unit, then refresh the conversion preview.
+function onRestockPurchaseUnitChange() {
+  const sel  = document.getElementById('restockPurchaseUnit');
+  const abbr = sel.options[sel.selectedIndex]?.dataset?.abbr || '';
+  document.getElementById('restockPkgUnitLabel').textContent = abbr ? `(${abbr})` : '';
+  updateRestockPreview();
+}
+
 // FEATURE-050: live "= N base units @ ₱X per unit" preview under the package
-// inputs, so the manager sees exactly what the POS will record.
+// inputs, so the manager sees exactly what the POS will record. Reads the
+// factor from the modal field (which may be freshly entered, not yet saved).
 function updateRestockPreview() {
   const el = document.getElementById('restockPreview');
-  const factor   = parseFloat(_restockIng?.purchase_to_base_factor);
+  const factor   = parseFloat(document.getElementById('restockFactor').value);
   const pkgs     = parseFloat(document.getElementById('restockPackages').value);
   const price    = parseFloat(document.getElementById('restockPackagePrice').value);
   const baseAbbr = _restockIng?.unit_detail?.abbreviation || 'units';
@@ -1351,9 +1385,33 @@ async function submitRestockModal() {
   const notes = document.getElementById('restockNotes').value.trim();
   let payload;
   if (_restockMode === 'package') {
-    // FEATURE-050: "N packages @ ₱P" — the server converts to base units.
+    // FEATURE-050: "N packages @ ₱P" — the server converts to base units using
+    // the ingredient's purchase_to_base_factor, so the package config must be
+    // set (and is persisted here for next time).
+    const purchaseUnit = document.getElementById('restockPurchaseUnit').value;
+    const factor = document.getElementById('restockFactor').value;
+    if (!purchaseUnit) { window.toast({message: 'Select a purchase unit', severity: 'error'}); return; }
+    if (!factor || parseFloat(factor) <= 0) { window.toast({message: 'Enter how many base units are in one package', severity: 'error'}); return; }
     const pkgs = document.getElementById('restockPackages').value;
     if (!pkgs || parseFloat(pkgs) <= 0) { window.toast({message: 'Enter a valid number of packages', severity: 'error'}); return; }
+
+    // Persist the package config to the ingredient if it's new or changed, so
+    // the server can convert this restock and remember it for next time.
+    const configChanged = String(item?.purchase_unit || '') !== String(purchaseUnit)
+      || String(item?.purchase_to_base_factor || '') !== String(factor);
+    try {
+      if (configChanged) {
+        await apiFetch(`/ingredients/${id}/`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ purchase_unit: purchaseUnit, purchase_to_base_factor: parseFloat(factor) }),
+        });
+      }
+    } catch (e) {
+      window.toast({message: 'Could not save the package setup: ' + e.message, severity: 'error'});
+      return;
+    }
+
     payload = {
       packages      : parseFloat(pkgs),
       package_price : document.getElementById('restockPackagePrice').value || null,

@@ -125,6 +125,33 @@ class LegacyBaseUnitPathTests(PurchaseUnitRestockBase):
         self.assertEqual(resp.status_code, 400)
 
 
+class ConfigureViaPatchThenPackageRestockTests(PurchaseUnitRestockBase):
+    """FEATURE-050 restock-modal flow: an unconfigured ingredient gets its
+    package set up via PATCH (what the modal does before the package restock),
+    then restocks by the package."""
+
+    def test_patch_config_then_package_restock(self):
+        self.assertIsNone(self.milk.purchase_unit)
+        bottle, _ = IngredientUnit.objects.get_or_create(
+            abbreviation='bottle', defaults={'name': 'Bottle'}
+        )
+        resp = self.client.patch(
+            f'/api/canteen/ingredients/{self.milk.id}/',
+            {'purchase_unit': bottle.id, 'purchase_to_base_factor': '1000'},
+            format='json',
+        )
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.milk.refresh_from_db()
+        self.assertEqual(self.milk.purchase_unit_id, bottle.id)
+        self.assertEqual(self.milk.purchase_to_base_factor, Decimal('1000.0000'))
+        # Now the package restock the modal posts next converts correctly.
+        resp2 = self._restock(self.milk, packages='2', package_price='500')
+        self.assertEqual(resp2.status_code, 201, resp2.data)
+        self.milk.refresh_from_db()
+        # 1000 + 2*1000 = 3000
+        self.assertEqual(self.milk.current_stock, Decimal('3000.0000'))
+
+
 class PurchaseFieldsSerializedTests(PurchaseUnitRestockBase):
     def test_ingredient_exposes_purchase_fields(self):
         resp = self.client.get(f'/api/canteen/ingredients/{self.sugar.id}/')
