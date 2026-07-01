@@ -92,17 +92,17 @@
         <!-- FEATURE-054: PROFITABILITY (recipe-valued COGS) — a true profit view,
              distinct from the cash-basis Net Cash Flow card above. -->
         <div id="profit-row" class="hidden grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-            <div class="bg-white rounded-lg shadow-lg p-6 border-l-4 border-green-600">
+            <div class="bg-white rounded-lg shadow-lg p-6 border-l-4 border-green-500">
                 <p class="text-sm text-gray-600 mb-1">Gross Profit</p>
                 <p id="sum-gp" class="text-3xl font-bold text-green-700">—</p>
                 <p class="text-xs mt-1 text-gray-400">Net Sales − COGS · profitability</p>
             </div>
-            <div class="bg-white rounded-lg shadow-lg p-6 border-l-4 border-rose-500">
+            <div class="bg-white rounded-lg shadow-lg p-6 border-l-4 border-red-500">
                 <p class="text-sm text-gray-600 mb-1">COGS (cost of goods sold)</p>
-                <p id="sum-cogs" class="text-3xl font-bold text-rose-600">—</p>
+                <p id="sum-cogs" class="text-3xl font-bold text-red-600">—</p>
                 <p id="cogs-coverage" class="text-xs mt-1 text-gray-400">recipe-valued</p>
             </div>
-            <div class="bg-white rounded-lg shadow-lg p-6 border-l-4 border-green-600">
+            <div class="bg-white rounded-lg shadow-lg p-6 border-l-4 border-green-500">
                 <p class="text-sm text-gray-600 mb-1">Gross Margin</p>
                 <p id="sum-gm" class="text-3xl font-bold text-green-700">—</p>
                 <p class="text-xs mt-1 text-gray-400">Gross Profit ÷ Net Sales</p>
@@ -227,12 +227,12 @@
         <div id="restock-card" class="hidden bg-white rounded-lg shadow-lg p-6 mb-6">
             <div class="flex items-center justify-between mb-4">
                 <h3 class="text-lg font-semibold text-gray-700">📥 Restock Cost (this week)</h3>
-                <span id="restock-total" class="text-2xl font-bold text-rose-600">—</span>
+                <span id="restock-total" class="text-2xl font-bold text-red-600">—</span>
             </div>
             <div id="restock-breakdown" class="space-y-1"></div>
 
             <!-- ISSUE-121-FU-F: per-restock detail table -->
-            <h4 class="text-sm font-medium text-gray-700 mt-5 mb-2">Restock detail</h4>
+            <h4 class="text-sm font-medium text-gray-700 mt-6 mb-2">Restock detail</h4>
             <div class="overflow-x-auto">
                 <table class="min-w-full text-sm">
                     <thead>
@@ -407,10 +407,10 @@
             const ncf = parseFloat(data.net_cash_flow || '0');
             const ncfEl = document.getElementById('sum-ncf');
             ncfEl.textContent = formatCurrency(ncf);
-            ncfEl.className = 'text-3xl font-bold ' + (ncf < 0 ? 'text-rose-600' : 'text-emerald-600');
+            ncfEl.className = 'text-3xl font-bold ' + (ncf < 0 ? 'text-red-600' : 'text-emerald-600');
             document.getElementById('ncf-card').className =
                 'bg-white rounded-lg shadow-lg p-6 border-l-4 ' +
-                (ncf < 0 ? 'border-rose-500' : 'border-emerald-500');
+                (ncf < 0 ? 'border-red-500' : 'border-emerald-500');
             document.getElementById('summary-row').classList.remove('hidden');
 
             // FEATURE-054: profitability (recipe-valued COGS). Gross profit may
@@ -419,7 +419,7 @@
             const gp = parseFloat(prof.gross_profit || '0');
             const gpEl = document.getElementById('sum-gp');
             gpEl.textContent = formatCurrency(gp);
-            gpEl.className = 'text-3xl font-bold ' + (gp < 0 ? 'text-rose-600' : 'text-green-700');
+            gpEl.className = 'text-3xl font-bold ' + (gp < 0 ? 'text-red-600' : 'text-green-700');
             document.getElementById('sum-cogs').textContent = formatCurrency(parseFloat(prof.cogs || '0'));
             document.getElementById('sum-gm').textContent =
                 prof.gross_margin_pct != null ? prof.gross_margin_pct.toFixed(1) + '%' : '—';
@@ -576,8 +576,8 @@
                         <td class="px-2 py-1 text-gray-800">${escapeHtml(r.name)}</td>
                         <td class="px-2 py-1 text-right text-gray-600">${r.quantity}</td>
                         <td class="px-2 py-1 text-right">${formatCurrency(parseFloat(r.revenue))}</td>
-                        <td class="px-2 py-1 text-right text-rose-600">${formatCurrency(parseFloat(r.cost))}</td>
-                        <td class="px-2 py-1 text-right font-medium ${profit < 0 ? 'text-rose-600' : 'text-green-700'}">${formatCurrency(profit)}</td>
+                        <td class="px-2 py-1 text-right text-red-600">${formatCurrency(parseFloat(r.cost))}</td>
+                        <td class="px-2 py-1 text-right font-medium ${profit < 0 ? 'text-red-600' : 'text-green-700'}">${formatCurrency(profit)}</td>
                         <td class="px-2 py-1 text-right text-gray-600">${r.margin_pct != null ? r.margin_pct.toFixed(1) + '%' : '—'}</td>
                     </tr>`;
                 }).join('')
