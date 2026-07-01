@@ -89,6 +89,26 @@
             </div>
         </div>
 
+        <!-- FEATURE-054: PROFITABILITY (recipe-valued COGS) — a true profit view,
+             distinct from the cash-basis Net Cash Flow card above. -->
+        <div id="profit-row" class="hidden grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+            <div class="bg-white rounded-lg shadow-lg p-6 border-l-4 border-green-600">
+                <p class="text-sm text-gray-600 mb-1">Gross Profit</p>
+                <p id="sum-gp" class="text-3xl font-bold text-green-700">—</p>
+                <p class="text-xs mt-1 text-gray-400">Net Sales − COGS · profitability</p>
+            </div>
+            <div class="bg-white rounded-lg shadow-lg p-6 border-l-4 border-rose-500">
+                <p class="text-sm text-gray-600 mb-1">COGS (cost of goods sold)</p>
+                <p id="sum-cogs" class="text-3xl font-bold text-rose-600">—</p>
+                <p id="cogs-coverage" class="text-xs mt-1 text-gray-400">recipe-valued</p>
+            </div>
+            <div class="bg-white rounded-lg shadow-lg p-6 border-l-4 border-green-600">
+                <p class="text-sm text-gray-600 mb-1">Gross Margin</p>
+                <p id="sum-gm" class="text-3xl font-bold text-green-700">—</p>
+                <p class="text-xs mt-1 text-gray-400">Gross Profit ÷ Net Sales</p>
+            </div>
+        </div>
+
         <!-- DAILY REVENUE CHART (ISSUE-121: CSS-width bars, same pattern as the
              dashboard peak-hours widget — no external chart library) -->
         <div id="chart-card" class="hidden bg-white rounded-lg shadow-lg p-6 mb-6">
@@ -170,6 +190,34 @@
                     <tbody id="cashier-body"></tbody>
                 </table>
             </div>
+        </div>
+
+        <!-- FEATURE-054: PROFIT BY ITEM — what actually MAKES money, ranked by
+             gross profit (not just units sold). -->
+        <div id="profit-item-card" class="hidden bg-white rounded-lg shadow-lg p-6 mb-6">
+            <h3 class="text-lg font-semibold text-gray-700 mb-4">💰 Profit by Item (ranked by gross profit)</h3>
+            <div class="overflow-x-auto">
+                <table class="min-w-full text-sm">
+                    <thead>
+                        <tr class="text-left text-gray-500 border-b">
+                            <th class="px-2 py-1">Item</th>
+                            <th class="px-2 py-1 text-right">Qty</th>
+                            <th class="px-2 py-1 text-right">Revenue</th>
+                            <th class="px-2 py-1 text-right">COGS</th>
+                            <th class="px-2 py-1 text-right">Gross Profit</th>
+                            <th class="px-2 py-1 text-right">Margin</th>
+                        </tr>
+                    </thead>
+                    <tbody id="profit-item-body"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- FEATURE-054: INGREDIENT REORDER — actionable "buy this" list, par-based.
+             The right inventory signal now that recipe items have no per-drink on-hand. -->
+        <div id="reorder-card" class="hidden bg-white rounded-lg shadow-lg p-6 mb-6">
+            <h3 class="text-lg font-semibold text-gray-700 mb-4">🛒 Ingredients to Reorder (at/below par)</h3>
+            <div id="reorder-body" class="space-y-1"></div>
         </div>
 
         <!-- NET CASH FLOW: promoted to a headline card in ISSUE-121-FU-I (was a
@@ -365,6 +413,25 @@
                 (ncf < 0 ? 'border-rose-500' : 'border-emerald-500');
             document.getElementById('summary-row').classList.remove('hidden');
 
+            // FEATURE-054: profitability (recipe-valued COGS). Gross profit may
+            // be negative on a bad week; color mirrors the NCF card.
+            const prof = data.profitability || {};
+            const gp = parseFloat(prof.gross_profit || '0');
+            const gpEl = document.getElementById('sum-gp');
+            gpEl.textContent = formatCurrency(gp);
+            gpEl.className = 'text-3xl font-bold ' + (gp < 0 ? 'text-rose-600' : 'text-green-700');
+            document.getElementById('sum-cogs').textContent = formatCurrency(parseFloat(prof.cogs || '0'));
+            document.getElementById('sum-gm').textContent =
+                prof.gross_margin_pct != null ? prof.gross_margin_pct.toFixed(1) + '%' : '—';
+            // Caveat the figure when the cost-at-sale snapshot doesn't yet cover
+            // every line (pre-FEATURE-054 history has no snapshot).
+            const cov = prof.costed_line_ratio;
+            document.getElementById('cogs-coverage').textContent =
+                (cov != null && cov < 1)
+                    ? `recipe-valued · ${Math.round(cov * 100)}% of lines costed`
+                    : 'recipe-valued';
+            document.getElementById('profit-row').classList.remove('hidden');
+
             // Daily revenue chart — CSS-width bars (dashboard widget pattern).
             const maxGross = data.days.reduce((m, d) => Math.max(m, parseFloat(d.gross)), 0);
             document.getElementById('daily-chart').innerHTML = data.days.map(d => {
@@ -498,6 +565,35 @@
                     `<p class="text-sm text-gray-600">${itemLink(i.name)}</p>`).join('')
                 : noNotices;
             document.getElementById('notices-card').classList.remove('hidden');
+
+            // FEATURE-054: profit by item — ranked by gross profit.
+            const pbi = data.profit_by_item || [];
+            document.getElementById('profit-item-body').innerHTML = pbi.length
+                ? pbi.map(r => {
+                    const profit = parseFloat(r.profit);
+                    return `
+                    <tr class="border-b last:border-0">
+                        <td class="px-2 py-1 text-gray-800">${escapeHtml(r.name)}</td>
+                        <td class="px-2 py-1 text-right text-gray-600">${r.quantity}</td>
+                        <td class="px-2 py-1 text-right">${formatCurrency(parseFloat(r.revenue))}</td>
+                        <td class="px-2 py-1 text-right text-rose-600">${formatCurrency(parseFloat(r.cost))}</td>
+                        <td class="px-2 py-1 text-right font-medium ${profit < 0 ? 'text-rose-600' : 'text-green-700'}">${formatCurrency(profit)}</td>
+                        <td class="px-2 py-1 text-right text-gray-600">${r.margin_pct != null ? r.margin_pct.toFixed(1) + '%' : '—'}</td>
+                    </tr>`;
+                }).join('')
+                : '<tr><td colspan="6" class="text-center text-gray-400 py-6">No items sold this week.</td></tr>';
+            document.getElementById('profit-item-card').classList.remove('hidden');
+
+            // FEATURE-054: ingredient reorder list (par-based, actionable).
+            const reorder = data.ingredient_reorder || [];
+            document.getElementById('reorder-body').innerHTML = reorder.length
+                ? reorder.map(r => `
+                    <div class="flex items-center justify-between text-sm">
+                        <span class="text-gray-700">${escapeHtml(r.name)}</span>
+                        <span class="text-gray-600">${r.current_stock}${escapeHtml(r.unit || '')} left <span class="text-gray-400">· par ${r.par_level}${escapeHtml(r.unit || '')}</span></span>
+                    </div>`).join('')
+                : '<p class="text-sm text-gray-400">Nothing at or below par — stock looks healthy.</p>';
+            document.getElementById('reorder-card').classList.remove('hidden');
 
             // Net cash flow now rendered in the headline card (ISSUE-121-FU-I, above).
 

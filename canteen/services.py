@@ -598,6 +598,13 @@ def create_pos_transaction(items_data, payment_method, cashier=None, **kwargs):
             if item.zero_rated:
                 zero_rated_subtotal += subtotal
 
+            # FEATURE-054: freeze the effective per-unit COGS at sale time —
+            # the recipe-derived cost for recipe items, else the manual
+            # purchase_price. Read-time reports can't reconstruct this once
+            # ingredient costs drift, so it's snapshotted per line.
+            _recipe_cost = item_recipe_cost(item)
+            _unit_cost = _recipe_cost if _recipe_cost is not None else item.purchase_price
+
             processed_items.append({
                 'item': item,
                 'quantity': quantity,
@@ -605,6 +612,7 @@ def create_pos_transaction(items_data, payment_method, cashier=None, **kwargs):
                 'base_price': base_price,
                 'final_price': final_unit_price,
                 'purchase_price': item.purchase_price,
+                'unit_cost': _unit_cost,
                 'subtotal': subtotal,
                 'resolved_variants': resolved_variants,
             })
@@ -773,6 +781,7 @@ def create_pos_transaction(items_data, payment_method, cashier=None, **kwargs):
                 base_price=entry['base_price'],
                 final_price=entry['final_price'],
                 purchase_price=entry['purchase_price'],
+                unit_cost=entry['unit_cost'],
                 subtotal=entry['subtotal'],
             )
 

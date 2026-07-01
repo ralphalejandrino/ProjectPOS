@@ -2186,6 +2186,91 @@ def _inventory_notices(today):
     }
 
 
+def _weekly_sold_lines(d_from, d_to):
+    """FEATURE-054: sold (non-void, non-seed) line items in the PHT window —
+    the shared basis for COGS and profit-by-item. Same filters as
+    _weekly_top_items."""
+    return PosTransactionItem.objects.filter(
+        pos_transaction__created_at__date__gte=d_from,
+        pos_transaction__created_at__date__lte=d_to,
+        pos_transaction__void=False,
+        pos_transaction__is_seed=False,  # FLAG-047
+    )
+
+
+def _weekly_cogs(d_from, d_to):
+    """FEATURE-054: recipe-valued COGS for the window from the cost-at-sale
+    snapshot (PosTransactionItem.unit_cost), so it stays historically accurate
+    as ingredient costs drift. Returns (cogs, costed_lines, total_lines) —
+    the ratio lets the UI note partial coverage for pre-snapshot history."""
+    cogs = _Dec('0')
+    costed = 0
+    total = 0
+    for l in _weekly_sold_lines(d_from, d_to).values('quantity', 'unit_cost'):
+        total += 1
+        if l['unit_cost'] is not None:
+            cogs += _Dec(str(l['unit_cost'])) * _Dec(str(l['quantity']))
+            costed += 1
+    return cogs, costed, total
+
+
+def _weekly_profit_by_item(d_from, d_to):
+    """FEATURE-054: per-item revenue / COGS / gross profit / margin, ordered by
+    gross profit — shows what actually MAKES money, not just what sells most.
+    Cost uses the per-line cost-at-sale snapshot; lines without one contribute 0
+    cost (overstating their profit until snapshots accumulate)."""
+    agg = {}
+    for l in _weekly_sold_lines(d_from, d_to).values(
+        'item__name', 'quantity', 'subtotal', 'unit_cost'
+    ):
+        a = agg.setdefault(
+            l['item__name'], {'qty': 0, 'revenue': _Dec('0'), 'cost': _Dec('0')}
+        )
+        a['qty'] += l['quantity']
+        a['revenue'] += _Dec(str(l['subtotal']))
+        if l['unit_cost'] is not None:
+            a['cost'] += _Dec(str(l['unit_cost'])) * _Dec(str(l['quantity']))
+    out = []
+    for name, a in agg.items():
+        profit = a['revenue'] - a['cost']
+        margin = (
+            float((profit / a['revenue'] * 100).quantize(_MONEY_Q, rounding=_RHU))
+            if a['revenue'] > 0 else None
+        )
+        out.append({
+            'name': name,
+            'quantity': a['qty'],
+            'revenue': _money(a['revenue']),
+            'cost': _money(a['cost']),
+            'profit': _money(profit),
+            'margin_pct': margin,
+        })
+    out.sort(key=lambda r: _Dec(r['profit']), reverse=True)
+    return out
+
+
+def _ingredient_reorder_list():
+    """FEATURE-054: ingredients at or below par — the owner's actionable
+    'buy this' list. Only ingredients with a par set (par_level > 0) qualify,
+    scarcest first. This is the ingredient-level counterpart to the item
+    low-stock notices, and the right signal now that recipe items have no
+    meaningful per-drink on-hand."""
+    rows = (
+        Ingredient.objects.filter(
+            is_active=True, par_level__gt=0, current_stock__lte=F('par_level')
+        ).select_related('unit').order_by('current_stock', 'name')
+    )
+    return [
+        {
+            'id': i.id, 'name': i.name,
+            'current_stock': float(i.current_stock),
+            'par_level': float(i.par_level),
+            'unit': i.unit.abbreviation if i.unit else '',
+        }
+        for i in rows
+    ]
+
+
 def _weekly_restock_costs(d_from, d_to):
     """ISSUE-121-FU-B: cost (COGS/expense side) of everything restocked within
     the Sat–Fri window.
@@ -2393,6 +2478,27 @@ def _weekly_payload(week_param):
     restock_detail = _weekly_restock_detail(week_start, week_end)
     net_cash_flow = _money(_Dec(_money(totals['net'])) - _Dec(restock_costs['total']))
 
+    # FEATURE-054: recipe-valued COGS + gross profit/margin. This is a
+    # PROFITABILITY view (what the cafe earns after the cost of goods actually
+    # sold), distinct from Net Cash Flow above (a cash-basis drawer figure).
+    cogs, costed_lines, total_lines = _weekly_cogs(week_start, week_end)
+    net_rev = _Dec(_money(totals['net']))
+    gross_profit = net_rev - cogs
+    gross_margin_pct = (
+        float((gross_profit / net_rev * 100).quantize(_MONEY_Q, rounding=_RHU))
+        if net_rev > 0 else None
+    )
+    profitability = {
+        'cogs': _money(cogs),
+        'gross_profit': _money(gross_profit),
+        'gross_margin_pct': gross_margin_pct,
+        # Coverage of the cost-at-sale snapshot across the window's lines
+        # (1.0 once all sales postdate FEATURE-054); lets the UI caveat history.
+        'costed_line_ratio': (
+            round(costed_lines / total_lines, 3) if total_lines else None
+        ),
+    }
+
     payload = {
         'week_start': week_start.strftime('%Y-%m-%d'),
         'week_end': week_end.strftime('%Y-%m-%d'),
@@ -2412,6 +2518,10 @@ def _weekly_payload(week_param):
             'avg_ticket': _avg_ticket(totals['gross'], txn_count),
         },
         'top_items': _weekly_top_items(week_start, week_end),
+        # FEATURE-054: profitability view + owner-determining data.
+        'profitability': profitability,
+        'profit_by_item': _weekly_profit_by_item(week_start, week_end),
+        'ingredient_reorder': _ingredient_reorder_list(),
         # ISSUE-121: owner-facing additions.
         'worst_sellers': _weekly_worst_sellers(week_start, week_end),
         'busiest_hour': _weekly_busiest_hour(week_start, week_end),

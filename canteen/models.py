@@ -641,6 +641,12 @@ class PosTransactionItem(BaseModelWithUUID):
     )
     base_price = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
     final_price = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
+    # FEATURE-054: cost-at-sale snapshot (option B) — the effective per-unit COGS
+    # at the moment of sale: the recipe-derived cost for recipe items, else the
+    # item's manual purchase_price. Frozen here so COGS/margin reporting stays
+    # historically accurate even as ingredient costs drift later. Distinct from
+    # purchase_price, which is the item's manual cost field. Null on legacy rows.
+    unit_cost = models.DecimalField(max_digits=10, decimal_places=4, null=True, blank=True)
     remarks = models.TextField(null=True, blank=True)
 
     def save(self, *args, **kwargs):
