@@ -1856,7 +1856,10 @@ class IngredientViewSet(viewsets.ModelViewSet):
 
 
 class RecipeIngredientViewSet(viewsets.ModelViewSet):
-    queryset = RecipeIngredient.objects.select_related('ingredient','item','variant').all()
+    # BUG-014 / PAGINATION-WARN-2: explicit ordering — the global DRF paginator
+    # (PAGE_SIZE=50) otherwise warns (UnorderedObjectListWarning) and can yield
+    # inconsistent pages on an unordered queryset.
+    queryset = RecipeIngredient.objects.select_related('ingredient','item','variant').order_by('id')
     serializer_class = RecipeIngredientSerializer
     # FEATURE-044: gated by the 'ingredients' page (defaults to manager/admin).
     permission_classes = [HasPageAccess('ingredients')]

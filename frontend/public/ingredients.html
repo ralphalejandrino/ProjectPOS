@@ -1519,11 +1519,11 @@ function updateRestockPreview() {
 async function submitRestockModal() {
   const id  = document.getElementById('restockIngredientId').value;
 
+  // ISSUE-114: `item` here is an INGREDIENT (it has track_depletion, not the
+  // item-only track_inventory field), so the old `item.track_inventory === false`
+  // guard could never fire — dead code. Restocking is always allowed; a counted
+  // ingredient is still restockable. `item` is kept for the package-config diff.
   const item = ingredients.find(i => String(i.id) === String(id));
-  if (item && item.track_inventory === false) {
-    window.toast({message: 'Inventory tracking is disabled for this item.', severity: 'error'});
-    return;
-  }
 
   const notes = document.getElementById('restockNotes').value.trim();
   let payload;
