@@ -385,6 +385,31 @@
             class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
         </div>
       </div>
+      <!-- FEATURE-050: purchasing-unit layer. Optional — lets the manager
+           restock by the package ("2 sacks") instead of counting base units.
+           Leave blank to keep restocking in base units only. -->
+      <div class="border-t border-gray-100 pt-3">
+        <p class="text-xs font-medium text-gray-500 mb-2">Buying in packages? <span class="text-gray-400 font-normal">(optional — e.g. a sack of sugar, a box of cups)</span></p>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">Purchase Unit</label>
+            <select aria-label="Purchase Unit" id="ingredientPurchaseUnit" onchange="updateIngredientUnitSuffixes()"
+              class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300">
+              <option value="">None</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">Base units per package <span class="text-gray-400" data-pkg-conv-suffix></span></label>
+            <input aria-label="Base units per package" type="number" id="ingredientPkgFactor" min="0" step="0.001"
+              class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+          </div>
+        </div>
+        <div class="mt-2">
+          <label class="block text-xs font-medium text-gray-600 mb-1">Last price / package (₱) <span class="text-gray-400 font-normal">— optional, prefills the restock form</span></label>
+          <input aria-label="Last price per package" type="number" id="ingredientPkgPrice" min="0" step="0.01"
+            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+        </div>
+      </div>
       <div class="flex items-center gap-2 pt-1">
         <input type="checkbox" id="ingredientActive" class="rounded" checked />
         <label for="ingredientActive" class="text-sm text-gray-600">Active</label>
@@ -475,16 +500,38 @@
         Ingredient: <span class="font-semibold text-gray-800" id="restockIngredientName">—</span>
         <span class="text-gray-500" id="restockIngredientUnit"></span>
       </div>
-      <!-- ISSUE-113: quantity/cost labels carry the ingredient's unit. -->
-      <div>
-        <label class="block text-xs font-medium text-gray-600 mb-1">Quantity Added <span class="text-gray-400" id="restockQtyUnitLabel"></span> <span class="text-red-500">*</span></label>
-        <input aria-label="Quantity Added" type="number" id="restockQty" min="0" step="0.001"
-          class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+      <!-- FEATURE-050: package-based entry when a purchase unit is configured —
+           "N packages @ ₱P" converts to base units so the manager never counts
+           scoops. Falls back to base-unit entry (ISSUE-113 unit labels). -->
+      <div id="restockPackageFields" class="hidden space-y-3">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">Packages <span class="text-gray-400" id="restockPkgUnitLabel"></span> <span class="text-red-500">*</span></label>
+            <input aria-label="Packages" type="number" id="restockPackages" min="0" step="0.001" oninput="updateRestockPreview()"
+              class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">Price / package (₱)</label>
+            <input aria-label="Price per package" type="number" id="restockPackagePrice" min="0" step="0.01" oninput="updateRestockPreview()"
+              class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+          </div>
+        </div>
+        <p id="restockPreview" class="text-xs text-gray-500"></p>
+        <button type="button" onclick="setRestockMode('base')" class="text-xs text-blue-600 hover:underline">Enter in base units instead</button>
       </div>
-      <div>
-        <label class="block text-xs font-medium text-gray-600 mb-1">Cost (₱) <span class="text-gray-400" id="restockCostUnitLabel">per unit</span></label>
-        <input aria-label="Cost per Unit (₱)" type="number" id="restockCost" min="0" step="0.01"
-          class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+      <div id="restockBaseFields" class="space-y-3">
+        <!-- ISSUE-113: quantity/cost labels carry the ingredient's unit. -->
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">Quantity Added <span class="text-gray-400" id="restockQtyUnitLabel"></span> <span class="text-red-500">*</span></label>
+          <input aria-label="Quantity Added" type="number" id="restockQty" min="0" step="0.001"
+            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">Cost (₱) <span class="text-gray-400" id="restockCostUnitLabel">per unit</span></label>
+          <input aria-label="Cost per Unit (₱)" type="number" id="restockCost" min="0" step="0.01"
+            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+        </div>
+        <button type="button" id="restockToPackageBtn" onclick="setRestockMode('package')" class="hidden text-xs text-blue-600 hover:underline">Enter by the package instead</button>
       </div>
       <div>
         <label class="block text-xs font-medium text-gray-600 mb-1">Notes</label>
@@ -1016,11 +1063,19 @@ function openIngredientModal(id) {
   document.getElementById('ingredientPar').value   = '';
   document.getElementById('ingredientCost').value  = '';
   document.getElementById('ingredientActive').checked = true;
+  // FEATURE-050: reset the purchasing-unit fields.
+  document.getElementById('ingredientPkgFactor').value = '';
+  document.getElementById('ingredientPkgPrice').value  = '';
 
+  const unitOptions = units.filter(u => u.is_active)
+    .map(u => `<option value="${u.id}" data-abbr="${esc(u.abbreviation)}">${esc(u.name)} (${esc(u.abbreviation)})</option>`).join('');
   const unitSel = document.getElementById('ingredientUnit');
-  unitSel.innerHTML = '<option value="">Select unit…</option>' +
-    units.filter(u => u.is_active).map(u => `<option value="${u.id}" data-abbr="${esc(u.abbreviation)}">${esc(u.name)} (${esc(u.abbreviation)})</option>`).join('');
+  unitSel.innerHTML = '<option value="">Select unit…</option>' + unitOptions;
   unitSel.onchange = updateIngredientUnitSuffixes;
+  // FEATURE-050: the purchase unit picks from the same unit list (a package
+  // like "sack"/"box" is just another IngredientUnit).
+  const purSel = document.getElementById('ingredientPurchaseUnit');
+  purSel.innerHTML = '<option value="">None</option>' + unitOptions;
 
   const supSel = document.getElementById('ingredientSupplier');
   supSel.innerHTML = '<option value="">None</option>' +
@@ -1036,6 +1091,10 @@ function openIngredientModal(id) {
       document.getElementById('ingredientCost').value      = ing.cost_per_unit || '';
       document.getElementById('ingredientSupplier').value  = ing.supplier || '';
       document.getElementById('ingredientActive').checked  = ing.is_active !== false;
+      // FEATURE-050: purchasing-unit config.
+      document.getElementById('ingredientPurchaseUnit').value = ing.purchase_unit || '';
+      document.getElementById('ingredientPkgFactor').value    = ing.purchase_to_base_factor || '';
+      document.getElementById('ingredientPkgPrice').value     = ing.last_purchase_price || '';
     }
   }
   updateIngredientUnitSuffixes();
@@ -1055,6 +1114,10 @@ function updateIngredientUnitSuffixes() {
   modal.querySelectorAll('[data-unit-per-suffix]').forEach(el => {
     el.textContent = abbr ? `per ${abbr}` : 'per unit';
   });
+  // FEATURE-050: "Base units per package (g)" mirrors the base unit.
+  modal.querySelectorAll('[data-pkg-conv-suffix]').forEach(el => {
+    el.textContent = abbr ? `(${abbr})` : '';
+  });
 }
 
 async function submitIngredientModal() {
@@ -1072,6 +1135,10 @@ async function submitIngredientModal() {
     cost_per_unit : document.getElementById('ingredientCost').value || 0,
     supplier      : document.getElementById('ingredientSupplier').value || null,
     is_active     : document.getElementById('ingredientActive').checked,
+    // FEATURE-050: purchasing-unit layer (all optional/nullable).
+    purchase_unit           : document.getElementById('ingredientPurchaseUnit').value || null,
+    purchase_to_base_factor : document.getElementById('ingredientPkgFactor').value || null,
+    last_purchase_price     : document.getElementById('ingredientPkgPrice').value || null,
   };
 
   try {
@@ -1217,8 +1284,12 @@ async function submitUnitModal() {
   }
 }
 
+let _restockIng = null;      // FEATURE-050: current ingredient being restocked
+let _restockMode = 'base';   // 'base' | 'package'
+
 function openRestockModal(id) {
   const ing = ingredients.find(i => i.id === id);
+  _restockIng = ing || null;
   document.getElementById('restockIngredientId').value       = id;
   document.getElementById('restockIngredientName').textContent = ing ? ing.name : '';
   // ISSUE-113: surface the ingredient's unit on the header and field labels.
@@ -1228,14 +1299,48 @@ function openRestockModal(id) {
   document.getElementById('restockCostUnitLabel').textContent  = abbr ? `per ${abbr}` : 'per unit';
   document.getElementById('restockQty').value   = '';
   document.getElementById('restockCost').value  = '';
+  document.getElementById('restockPackages').value = '';
+  document.getElementById('restockPackagePrice').value = '';
   document.getElementById('restockNotes').value = '';
+
+  // FEATURE-050: if a purchase unit + conversion is configured, default to
+  // package-based entry and prefill the last known package price.
+  const pkgAbbr = ing?.purchase_unit_detail?.abbreviation || '';
+  const factor  = parseFloat(ing?.purchase_to_base_factor);
+  const hasPackage = !!pkgAbbr && factor > 0;
+  document.getElementById('restockPkgUnitLabel').textContent = pkgAbbr ? `(${pkgAbbr})` : '';
+  document.getElementById('restockToPackageBtn').classList.toggle('hidden', !hasPackage);
+  if (hasPackage && ing.last_purchase_price != null) {
+    document.getElementById('restockPackagePrice').value = ing.last_purchase_price;
+  }
+  setRestockMode(hasPackage ? 'package' : 'base');
   showModal('restockModal');
+}
+
+function setRestockMode(mode) {
+  _restockMode = mode;
+  document.getElementById('restockPackageFields').classList.toggle('hidden', mode !== 'package');
+  document.getElementById('restockBaseFields').classList.toggle('hidden', mode === 'package');
+  if (mode === 'package') updateRestockPreview();
+}
+
+// FEATURE-050: live "= N base units @ ₱X per unit" preview under the package
+// inputs, so the manager sees exactly what the POS will record.
+function updateRestockPreview() {
+  const el = document.getElementById('restockPreview');
+  const factor   = parseFloat(_restockIng?.purchase_to_base_factor);
+  const pkgs     = parseFloat(document.getElementById('restockPackages').value);
+  const price    = parseFloat(document.getElementById('restockPackagePrice').value);
+  const baseAbbr = _restockIng?.unit_detail?.abbreviation || 'units';
+  if (!(factor > 0) || !(pkgs > 0)) { el.textContent = ''; return; }
+  const baseQty = pkgs * factor;
+  let txt = `= ${baseQty.toLocaleString()} ${baseAbbr} added`;
+  if (price > 0) txt += ` · ₱${(price / factor).toFixed(4)} per ${baseAbbr}`;
+  el.textContent = txt;
 }
 
 async function submitRestockModal() {
   const id  = document.getElementById('restockIngredientId').value;
-  const qty = document.getElementById('restockQty').value;
-  if (!qty || parseFloat(qty) <= 0) { window.toast({message: 'Enter a valid quantity', severity: 'error'}); return; }
 
   const item = ingredients.find(i => String(i.id) === String(id));
   if (item && item.track_inventory === false) {
@@ -1243,11 +1348,26 @@ async function submitRestockModal() {
     return;
   }
 
-  const payload = {
-    quantity_added : parseFloat(qty),
-    cost_per_unit  : document.getElementById('restockCost').value || null,
-    notes          : document.getElementById('restockNotes').value.trim(),
-  };
+  const notes = document.getElementById('restockNotes').value.trim();
+  let payload;
+  if (_restockMode === 'package') {
+    // FEATURE-050: "N packages @ ₱P" — the server converts to base units.
+    const pkgs = document.getElementById('restockPackages').value;
+    if (!pkgs || parseFloat(pkgs) <= 0) { window.toast({message: 'Enter a valid number of packages', severity: 'error'}); return; }
+    payload = {
+      packages      : parseFloat(pkgs),
+      package_price : document.getElementById('restockPackagePrice').value || null,
+      notes,
+    };
+  } else {
+    const qty = document.getElementById('restockQty').value;
+    if (!qty || parseFloat(qty) <= 0) { window.toast({message: 'Enter a valid quantity', severity: 'error'}); return; }
+    payload = {
+      quantity_added : parseFloat(qty),
+      cost_per_unit  : document.getElementById('restockCost').value || null,
+      notes,
+    };
+  }
 
   try {
     await apiFetch(`/ingredients/${id}/restock/`, {
