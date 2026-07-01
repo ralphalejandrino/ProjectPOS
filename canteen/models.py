@@ -1,6 +1,6 @@
 import io
 import uuid
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from barcode import Code128
 from barcode.writer import ImageWriter
 from django.core.files.base import ContentFile
@@ -1250,13 +1250,39 @@ class IngredientRestockLog(models.Model):
         ordering = ['-date']
 
     def save(self, *args, **kwargs):
-        # Only increment ingredient stock on initial insert; editing an
-        # existing log must not double-count stock.
+        # Only apply stock/cost effects on initial insert; editing an existing
+        # log must not double-count.
         is_new = self._state.adding
         super().save(*args, **kwargs)
         if is_new:
-            self.ingredient.current_stock += self.quantity_added
-            self.ingredient.save(update_fields=['current_stock'])
+            # FEATURE-051: roll this purchase into the ingredient's weighted
+            # moving-average cost and add the quantity to stock — atomically
+            # under a row lock so a concurrent sale/restock can't clobber the
+            # read-modify-write (the depletion path also locks the same row).
+            from django.db import transaction as _tx
+            with _tx.atomic():
+                ing = Ingredient.objects.select_for_update().get(pk=self.ingredient_id)
+                old_qty = ing.current_stock
+                old_cost = ing.cost_per_unit
+                bought_qty = self.quantity_added
+                new_price = self.cost_per_unit
+                new_qty = old_qty + bought_qty
+                if old_qty <= 0 or new_qty <= 0:
+                    # Oversold/negative/empty prior stock: the old cost applies
+                    # to stock that isn't really there (or the denominator is
+                    # <=0), so the weighted average is meaningless — adopt the
+                    # new purchase price outright.
+                    new_cost = new_price
+                else:
+                    new_cost = (
+                        (old_qty * old_cost + bought_qty * new_price) / new_qty
+                    ).quantize(Decimal('0.0001'), rounding=ROUND_HALF_UP)
+                ing.current_stock = new_qty
+                ing.cost_per_unit = new_cost
+                ing.save(update_fields=['current_stock', 'cost_per_unit'])
+            # Keep the in-memory ingredient consistent for the caller.
+            self.ingredient.current_stock = new_qty
+            self.ingredient.cost_per_unit = new_cost
 
     def __str__(self):
         return f"+{self.quantity_added} {self.ingredient.unit.abbreviation} of {self.ingredient.name}"
