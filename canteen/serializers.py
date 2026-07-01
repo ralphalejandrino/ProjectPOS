@@ -1,7 +1,7 @@
 """
 Clean POS Serializers - No Legacy School Code
 """
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from rest_framework import serializers
 from django.contrib.auth import authenticate
 from django.utils.timezone import localtime
@@ -105,6 +105,16 @@ class ItemSerializer(serializers.ModelSerializer):
     # store them).
     makeable = serializers.SerializerMethodField()
     makeable_status = serializers.SerializerMethodField()
+    # FEATURE-052: recipe-derived cost + live margin. A recipe item's per-unit
+    # cost comes from its ingredients (single source of truth via the weighted-
+    # average ingredient cost, FEATURE-051), NOT the manual purchase_price —
+    # that manual field is used only for pure resale items. effective_cost picks
+    # the right source; effective_margin[_pct] is the true margin off price.
+    recipe_cost = serializers.SerializerMethodField()
+    is_recipe_item = serializers.SerializerMethodField()
+    effective_cost = serializers.SerializerMethodField()
+    effective_margin = serializers.SerializerMethodField()
+    effective_margin_pct = serializers.SerializerMethodField()
 
     def _makeable(self, obj):
         from .services import item_makeable
@@ -115,6 +125,41 @@ class ItemSerializer(serializers.ModelSerializer):
 
     def get_makeable_status(self, obj):
         return self._makeable(obj)[1]
+
+    def _recipe_cost(self, obj):
+        # Memoize per object so the four margin fields sum the recipe only once.
+        if not hasattr(obj, '_frc_cached'):
+            from .services import item_recipe_cost
+            obj._frc_cached = item_recipe_cost(obj)
+        return obj._frc_cached
+
+    def _effective_cost(self, obj):
+        rc = self._recipe_cost(obj)
+        return rc if rc is not None else obj.purchase_price
+
+    def get_recipe_cost(self, obj):
+        rc = self._recipe_cost(obj)
+        return str(rc) if rc is not None else None
+
+    def get_is_recipe_item(self, obj):
+        return self._recipe_cost(obj) is not None
+
+    def get_effective_cost(self, obj):
+        c = self._effective_cost(obj)
+        return str(c) if c is not None else None
+
+    def get_effective_margin(self, obj):
+        c = self._effective_cost(obj)
+        if c is None:
+            return None
+        return str((obj.price - c).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
+
+    def get_effective_margin_pct(self, obj):
+        c = self._effective_cost(obj)
+        if c is None or not obj.price or obj.price <= 0:
+            return None
+        pct = (obj.price - c) / obj.price * Decimal('100')
+        return float(pct.quantize(Decimal('0.1'), rounding=ROUND_HALF_UP))
 
     def get_photo(self, obj):
         request = self.context.get('request')
@@ -151,6 +196,9 @@ class ItemSerializer(serializers.ModelSerializer):
             'photo', 'description', 'sku', 'expiry_date', 'is_active',
             'profit_margin', 'profit_per_unit', 'is_low_stock',
             'effective_variant_groups', 'makeable', 'makeable_status',
+            # FEATURE-052: recipe-derived cost + live margin.
+            'recipe_cost', 'is_recipe_item', 'effective_cost',
+            'effective_margin', 'effective_margin_pct',
             'created_at', 'updated_at'
         ]
 

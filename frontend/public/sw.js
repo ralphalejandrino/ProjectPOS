@@ -75,7 +75,7 @@
 // which could be stale, setting the wrong value (e.g. 10.017 instead of 960).
 // The edit modal now sends the ABSOLUTE new_stock and the server computes the
 // delta under a row lock, so a stale client baseline can't corrupt stock.
-const CACHE_NAME = 'tarsierpos-v115'; // canonical cache version
+const CACHE_NAME = 'tarsierpos-v116'; // canonical cache version
 const ASSETS = [
   'index.html',
   'login.html',

@@ -98,6 +98,34 @@ def item_makeable(item):
     return compute_makeable(base_lines)
 
 
+def item_recipe_cost(item):
+    """FEATURE-052: per-unit COGS of a recipe item, derived from its ingredients.
+
+    cost = sum(quantity_used * ingredient.cost_per_unit) over the item's DIRECT
+    (variant-null) recipe lines — the single source of truth being the
+    ingredient's weighted-average cost (FEATURE-051). Returns None for a
+    non-recipe (pure resale) item so callers fall back to the manual
+    purchase_price. Lines with a missing/non-positive quantity are skipped (they
+    surface separately as makeable_status 'incomplete_recipe').
+
+    Relies on the ``recipe_ingredients__ingredient`` prefetch (ItemViewSet) — no
+    per-item query when prefetched. Filtered in Python to keep the prefetch
+    intact.
+    """
+    base_lines = [
+        line for line in item.recipe_ingredients.all() if line.variant_id is None
+    ]
+    if not base_lines:
+        return None
+    total = Decimal('0')
+    for line in base_lines:
+        q = line.quantity_used
+        if q is None or q <= 0:
+            continue
+        total += q * line.ingredient.cost_per_unit
+    return total.quantize(Decimal('0.0001'), rounding=ROUND_HALF_UP)
+
+
 def _deplete_ingredients(item, variant_option_ids, quantity,
                          transaction=None, performed_by=None):
     """

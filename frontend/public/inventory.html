@@ -556,7 +556,20 @@
 
             tbody.innerHTML = products.map(item => {
                 const stockClass = item.stock < (item.low_stock_threshold ?? globalLowStockThreshold) ? 'text-red-600' : item.stock < 20 ? 'text-orange-600' : 'text-green-600';
-                const marginClass = item.profit_margin == null ? 'text-gray-400' : item.profit_margin > 30 ? 'text-green-600' : item.profit_margin > 15 ? 'text-blue-600' : 'text-orange-600';
+                // FEATURE-052: recipe items derive their cost from ingredients
+                // (single source of truth) and are made to order, so per-drink
+                // on-hand is meaningless — "Can make now" is the primary
+                // availability and Cost/Margin come from the recipe.
+                const isRecipe = item.is_recipe_item === true;
+                const mpct = item.effective_margin_pct;
+                const marginClass = mpct == null ? 'text-gray-400' : mpct > 60 ? 'text-green-600' : mpct > 30 ? 'text-blue-600' : 'text-orange-600';
+                const costCell = item.effective_cost != null
+                    ? `${formatCurrency(parseFloat(item.effective_cost))}${isRecipe ? ' <span class="text-xs text-gray-400" title="Derived from recipe ingredients">(recipe)</span>' : ''}`
+                    : '—';
+                const marginCell = mpct != null ? mpct.toFixed(1) + '%' : 'N/A';
+                const onHandCell = isRecipe
+                    ? '<span class="text-gray-300" title="Made to order — tracked by ingredients, not a per-drink count">n/a</span>'
+                    : `<span class="font-medium ${stockClass}">${item.stock}</span>`;
                 // FEATURE-046: "Can make now" — ingredient-derived availability.
                 // ok → number (0 = red); incomplete_recipe → em-dash + tooltip;
                 // no_recipe (pure good) → plain neutral dash, no makeable concept.
@@ -572,7 +585,9 @@
                 }
                 
                 // Determine if low stock (pilot-003: stock <= 5 = yellow badge)
-                const isLowStock = item.stock < (item.low_stock_threshold || globalLowStockThreshold);
+                // FEATURE-052: on-hand low-stock is only meaningful for pure
+                // resale items; a recipe item's availability is "Can make now".
+                const isLowStock = !isRecipe && item.stock < (item.low_stock_threshold || globalLowStockThreshold);
                 const lowStockBadge = isLowStock ? '<span class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800 border border-yellow-200">Low Stock</span>' : '';
                 
                 return `
@@ -595,10 +610,10 @@
                             <span class="text-xs">${escapeHtml(item.bar_code || '-')}</span>
                         </td>
                         <td class="px-4 py-3 text-sm">${escapeHtml(item.category_name || 'General')}</td>
-                        <td class="px-4 py-3">${formatCurrency(parseFloat(item.purchase_price || 0))}</td>
+                        <td class="px-4 py-3">${costCell}</td>
                         <td class="px-4 py-3 font-medium">${formatCurrency(parseFloat(item.price))}</td>
-                        <td class="px-4 py-3 font-medium ${marginClass}">${item.profit_margin != null ? item.profit_margin.toFixed(1) + '%' : 'N/A'}</td>
-                        <td class="px-4 py-3 font-medium ${stockClass}">${item.stock}</td>
+                        <td class="px-4 py-3 font-medium ${marginClass}">${marginCell}</td>
+                        <td class="px-4 py-3">${onHandCell}</td>
                         <td class="px-4 py-3">${makeableCell}</td>
                         <td class="px-4 py-3">
                             <div class="flex items-center gap-2">
@@ -618,7 +633,9 @@
         function renderLowStockAlerts() {
             const section = document.getElementById('low-stock-section');
             const container = document.getElementById('low-stock-list');
-            const lowStockItems = allProducts.filter(p => p.stock < (p.low_stock_threshold || globalLowStockThreshold));
+            // FEATURE-052: exclude recipe items — their on-hand is n/a; low
+            // availability surfaces via "Can make now", not on-hand alerts.
+            const lowStockItems = allProducts.filter(p => p.is_recipe_item !== true && p.stock < (p.low_stock_threshold || globalLowStockThreshold));
             
             if (lowStockItems.length === 0) {
                 section.classList.add('hidden');
