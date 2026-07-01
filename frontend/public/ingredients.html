@@ -63,6 +63,7 @@
     <button onclick="switchTab('suppliers')"   id="tab-btn-suppliers"   class="px-5 py-3 text-sm border-b-2 whitespace-nowrap transition-colors">🏭 Suppliers</button>
     <button onclick="switchTab('units')"       id="tab-btn-units"       class="px-5 py-3 text-sm border-b-2 whitespace-nowrap transition-colors">📏 Units</button>
     <button onclick="switchTab('restock')"     id="tab-btn-restock"     class="px-5 py-3 text-sm border-b-2 whitespace-nowrap transition-colors">📋 Restock Log</button>
+    <button onclick="switchTab('count')"       id="tab-btn-count"       class="px-5 py-3 text-sm border-b-2 whitespace-nowrap transition-colors">🧮 Weekly Count</button>
     <button onclick="switchTab('recipes')"     id="tab-btn-recipes"     class="px-5 py-3 text-sm border-b-2 whitespace-nowrap transition-colors">📖 Recipe Builder</button>
   </div>
 
@@ -231,6 +232,43 @@
           <tr><td colspan="7" class="text-center py-10 text-gray-400">Select an ingredient or click Refresh.</td></tr>
         </tbody>
       </table>
+    </div>
+  </div>
+
+  <!-- ══════════════ TAB: WEEKLY COUNT (FEATURE-055) ══════════════ -->
+  <div id="tab-count" class="tab-content hidden">
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+      <div class="flex items-start justify-between flex-wrap gap-3 mb-4">
+        <div>
+          <h2 class="text-lg font-semibold text-gray-700">Weekly Count &amp; Reconcile</h2>
+          <p class="text-gray-500 text-sm mt-0.5">A close-of-week ritual — count the flagged items, enter what's physically there. Variance vs expected is recorded as waste. Counted-type ingredients and anything at/below par are flagged.</p>
+        </div>
+        <button onclick="loadCountTab()"
+          class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm transition">↻ Refresh list</button>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="text-left text-gray-500 border-b border-gray-100">
+            <tr>
+              <th class="px-4 py-2">Ingredient</th>
+              <th class="px-4 py-2 text-right">Expected</th>
+              <th class="px-4 py-2 text-right">Counted</th>
+              <th class="px-4 py-2 text-right">Variance</th>
+            </tr>
+          </thead>
+          <tbody id="countTableBody">
+            <tr><td colspan="4" class="text-center py-10 text-gray-400">Click "Refresh list" to load flagged items.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="flex justify-end mt-4">
+        <button id="countSubmitBtn" onclick="submitCount()"
+          class="hidden px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition">Record Count</button>
+      </div>
+      <div id="countResults" class="hidden mt-5 border-t border-gray-100 pt-4">
+        <h3 class="text-sm font-semibold text-gray-700 mb-2">Count recorded — variance (waste) report</h3>
+        <div id="countResultsBody" class="space-y-1"></div>
+      </div>
     </div>
   </div>
 
@@ -701,8 +739,8 @@ async function seedPresetUnits() {
 // Nav toggle + logout handled by components/nav.js (FEATURE-029)
 
 // ─── Tabs ─────────────────────────────────────────────────
-const TAB_IDS = ['ingredients','suppliers','units','restock','recipes'];
-const tabsLoaded = { ingredients: true, suppliers: false, units: false, restock: false, recipes: false };
+const TAB_IDS = ['ingredients','suppliers','units','restock','count','recipes'];
+const tabsLoaded = { ingredients: true, suppliers: false, units: false, restock: false, count: false, recipes: false };
 
 function switchTab(tab) {
   TAB_IDS.forEach(t => {
@@ -719,7 +757,89 @@ function switchTab(tab) {
   if (tab === 'suppliers' && !tabsLoaded.suppliers) { renderSuppliers(); tabsLoaded.suppliers = true; }
   if (tab === 'units'     && !tabsLoaded.units)     { renderUnits();     tabsLoaded.units     = true; }
   if (tab === 'restock'   && !tabsLoaded.restock)   { loadRestockLog();  tabsLoaded.restock   = true; }
+  if (tab === 'count'     && !tabsLoaded.count)     { loadCountTab();    tabsLoaded.count     = true; }
   if (tab === 'recipes'   && !tabsLoaded.recipes)   { loadMenuItems();   tabsLoaded.recipes   = true; }
+}
+
+// ─── Weekly Count / Reconcile (FEATURE-055) ──────────────
+// Flagged for count = counted-type ingredients (always need a physical count)
+// plus anything at/below its par level. Expected = current_stock; the manager
+// enters the counted amount and variance is shown live before recording.
+function loadCountTab() {
+  const flagged = ingredients.filter(i =>
+    i.track_depletion === false || (parseFloat(i.par_level) > 0 && i.is_low_stock)
+  );
+  const tbody = document.getElementById('countTableBody');
+  const submitBtn = document.getElementById('countSubmitBtn');
+  document.getElementById('countResults').classList.add('hidden');
+  if (!flagged.length) {
+    tbody.innerHTML = `<tr><td colspan="4" class="text-center py-10 text-gray-400">Nothing flagged for counting — counted-type items and anything at/below par appear here.</td></tr>`;
+    submitBtn.classList.add('hidden');
+    return;
+  }
+  submitBtn.classList.remove('hidden');
+  tbody.innerHTML = flagged.map(i => {
+    const abbr = esc(i.unit_detail?.abbreviation || '');
+    const expected = parseFloat(i.current_stock || 0);
+    return `
+      <tr class="border-b border-gray-50" data-count-id="${i.id}" data-expected="${expected}">
+        <td class="px-4 py-3 font-medium text-gray-800">${esc(i.name)}${i.track_depletion === false ? ' <span class="px-1.5 py-0.5 rounded text-xs bg-purple-100 text-purple-700">counted</span>' : ''}</td>
+        <td class="px-4 py-3 text-right font-mono text-gray-500">${expected.toFixed(3)} ${abbr}</td>
+        <td class="px-4 py-3 text-right">
+          <input type="number" min="0" step="0.001" aria-label="Counted ${esc(i.name)}" oninput="updateCountVariance(${i.id})" style="width:7rem"
+            class="border border-gray-200 rounded-lg px-2 py-1 text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-300" />
+        </td>
+        <td class="px-4 py-3 text-right font-mono text-gray-400" id="countVar-${i.id}">—</td>
+      </tr>`;
+  }).join('');
+}
+
+function updateCountVariance(id) {
+  const row = document.querySelector(`tr[data-count-id="${id}"]`);
+  if (!row) return;
+  const expected = parseFloat(row.dataset.expected);
+  const input = row.querySelector('input');
+  const cell = document.getElementById('countVar-' + id);
+  if (input.value === '' || isNaN(parseFloat(input.value))) { cell.textContent = '—'; cell.className = 'px-4 py-3 text-right font-mono text-gray-400'; return; }
+  const variance = parseFloat(input.value) - expected;
+  const sign = variance > 0 ? '+' : '';
+  cell.textContent = `${sign}${variance.toFixed(3)}`;
+  cell.className = 'px-4 py-3 text-right font-mono ' + (variance < 0 ? 'text-red-600' : variance > 0 ? 'text-emerald-600' : 'text-gray-400');
+}
+
+async function submitCount() {
+  const rows = Array.from(document.querySelectorAll('#countTableBody tr[data-count-id]'));
+  const counts = [];
+  for (const row of rows) {
+    const input = row.querySelector('input');
+    if (input.value === '' || isNaN(parseFloat(input.value))) continue;  // skip un-counted lines
+    if (parseFloat(input.value) < 0) { window.toast({message: 'Counts cannot be negative', severity: 'error'}); return; }
+    counts.push({ id: parseInt(row.dataset.countId, 10), counted_stock: parseFloat(input.value) });
+  }
+  if (!counts.length) { window.toast({message: 'Enter at least one counted amount', severity: 'error'}); return; }
+  try {
+    const res = await apiFetch('/ingredients/reconcile/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ counts, note: 'Weekly count' }),
+    });
+    window.toast({message: 'Count recorded', severity: 'success'});
+    // Show the variance/waste report.
+    const body = document.getElementById('countResultsBody');
+    body.innerHTML = (res.results || []).map(r => {
+      const cls = r.variance < 0 ? 'text-red-600' : r.variance > 0 ? 'text-emerald-600' : 'text-gray-500';
+      const sign = r.variance > 0 ? '+' : '';
+      return `<div class="flex items-center justify-between text-sm">
+          <span class="text-gray-700">${esc(r.name)}</span>
+          <span class="${cls} font-mono">${sign}${r.variance.toFixed(3)} ${esc(r.unit || '')} <span class="text-gray-400">(counted ${r.counted}, was ${r.expected})</span></span>
+        </div>`;
+    }).join('');
+    document.getElementById('countResults').classList.remove('hidden');
+    await refreshIngredients();
+    loadCountTab();
+  } catch (e) {
+    window.toast({message: 'Failed: ' + e.message, severity: 'error'});
+  }
 }
 
 // ─── Stats ────────────────────────────────────────────────

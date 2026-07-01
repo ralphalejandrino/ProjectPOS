@@ -1794,6 +1794,66 @@ class IngredientViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(low, many=True)
         return Response(serializer.data)
 
+    @action(detail=False, methods=['post'])
+    def reconcile(self, request):
+        """FEATURE-055: weekly par-based physical count / reconcile.
+
+        A boundary ritual (open/close), not a during-service task: the manager
+        enters the ABSOLUTE counted amount for each flagged ingredient. For each,
+        the server locks the row, computes variance = counted − expected (the
+        locked current_stock), sets stock to the counted value, and writes an
+        IngredientLog(action='adjustment') tagged as a weekly count. Negative
+        variance = shrinkage/waste. Absolute-value entry (like `adjust`) so a
+        stale client baseline can't corrupt the result. Atomic across the batch.
+
+        Body: { counts: [ { id, counted_stock }, ... ], note?: str }
+        Returns per-line variance so the UI can show the waste report.
+        """
+        from decimal import Decimal, InvalidOperation
+        counts = request.data.get('counts')
+        if not isinstance(counts, list) or not counts:
+            return Response({'error': 'counts must be a non-empty list.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        base_note = (request.data.get('note') or 'Weekly count').strip()
+        results = []
+        with db_transaction.atomic():
+            for entry in counts:
+                iid = entry.get('id')
+                try:
+                    counted = Decimal(str(entry.get('counted_stock')))
+                except (InvalidOperation, TypeError, ValueError):
+                    return Response(
+                        {'error': f'counted_stock must be a number (ingredient {iid}).'},
+                        status=status.HTTP_400_BAD_REQUEST)
+                if counted < 0:
+                    return Response(
+                        {'error': f'counted_stock cannot be negative (ingredient {iid}).'},
+                        status=status.HTTP_400_BAD_REQUEST)
+                try:
+                    ingredient = Ingredient.objects.select_for_update().get(pk=iid)
+                except Ingredient.DoesNotExist:
+                    return Response({'error': f'ingredient {iid} not found.'},
+                                    status=status.HTTP_400_BAD_REQUEST)
+                before = ingredient.current_stock
+                variance = counted - before
+                if variance != 0:
+                    ingredient.current_stock = counted
+                    ingredient.save(update_fields=['current_stock', 'updated_at'])
+                    IngredientLog.objects.create(
+                        ingredient=ingredient, action='adjustment',
+                        quantity_change=variance, stock_before=before,
+                        stock_after=counted, performed_by=request.user,
+                        notes=f'{base_note}: counted {counted}, expected {before}, '
+                              f'variance {variance}',
+                    )
+                results.append({
+                    'id': ingredient.id, 'name': ingredient.name,
+                    'expected': float(before), 'counted': float(counted),
+                    'variance': float(variance),
+                    'unit': ingredient.unit.abbreviation if ingredient.unit else '',
+                })
+        return Response({'results': results})
+
 
 class RecipeIngredientViewSet(viewsets.ModelViewSet):
     queryset = RecipeIngredient.objects.select_related('ingredient','item','variant').all()
