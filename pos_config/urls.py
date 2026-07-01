@@ -25,3 +25,22 @@ urlpatterns = [
 
 # Serve media files in all environments (LAN-only SQLite deployment — no nginx)
 urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+
+# Dev-only: serve the static PWA frontend (frontend/public) at the SAME origin
+# as the API so `manage.py runserver` can present the whole app at
+# localhost:8000. The frontend calls the API via relative paths (config.js:
+# API_BASE='/api/canteen'), so it must share the API's origin. In production
+# nginx serves frontend/public and proxies /api to gunicorn — this block is
+# DEBUG-gated and never active there. Registered last so /api, /admin, /media
+# always match first.
+if settings.DEBUG:
+    from django.urls import re_path
+    from django.views.static import serve as _serve_frontend
+
+    _FRONTEND_ROOT = settings.BASE_DIR / 'frontend' / 'public'
+    urlpatterns += [
+        re_path(r'^$', _serve_frontend,
+                {'path': 'index.html', 'document_root': _FRONTEND_ROOT}),
+        re_path(r'^(?P<path>.+)$', _serve_frontend,
+                {'document_root': _FRONTEND_ROOT}),
+    ]
