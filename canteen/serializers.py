@@ -1,6 +1,7 @@
 """
 Clean POS Serializers - No Legacy School Code
 """
+from decimal import Decimal
 from rest_framework import serializers
 from django.contrib.auth import authenticate
 from django.utils.timezone import localtime
@@ -435,6 +436,8 @@ class SupplierSerializer(serializers.ModelSerializer):
 
 class IngredientSerializer(serializers.ModelSerializer):
     unit_detail = IngredientUnitSerializer(source='unit', read_only=True)
+    # FEATURE-050: purchase (package) unit detail for the restock UI.
+    purchase_unit_detail = IngredientUnitSerializer(source='purchase_unit', read_only=True)
     supplier_detail = SupplierSerializer(source='supplier', read_only=True)
     is_low_stock = serializers.ReadOnlyField()
 
@@ -443,7 +446,10 @@ class IngredientSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'name', 'unit', 'unit_detail', 'cost_per_unit',
             'current_stock', 'par_level', 'supplier', 'supplier_detail',
-            'is_active', 'is_low_stock', 'track_depletion', 'updated_at'
+            'is_active', 'is_low_stock', 'track_depletion', 'updated_at',
+            # FEATURE-050: purchasing-unit layer.
+            'purchase_unit', 'purchase_unit_detail', 'purchase_to_base_factor',
+            'last_purchase_price',
         ]
         read_only_fields = ['updated_at']
 
@@ -462,14 +468,34 @@ class IngredientSerializer(serializers.ModelSerializer):
 class IngredientRestockLogSerializer(serializers.ModelSerializer):
     ingredient_name = serializers.CharField(source='ingredient.name', read_only=True)
     recorded_by_name = serializers.CharField(source='recorded_by.username', read_only=True)
+    # FEATURE-050: package-based restock entry. When the manager buys whole
+    # packages ("2 sacks @ ₱1,250"), she enters ``packages`` (+ optional
+    # ``package_price``) and the POS converts to base units + per-base-unit cost
+    # via the ingredient's purchase_to_base_factor — she never divides a sack
+    # into grams. Both are write-only; the legacy base-unit path
+    # (quantity_added [+ cost_per_unit]) still works unchanged.
+    packages = serializers.DecimalField(
+        max_digits=12, decimal_places=4, write_only=True, required=False,
+    )
+    package_price = serializers.DecimalField(
+        max_digits=12, decimal_places=2, write_only=True, required=False,
+    )
 
     class Meta:
         model = IngredientRestockLog
         fields = [
             'id', 'ingredient', 'ingredient_name', 'quantity_added',
-            'cost_per_unit', 'date', 'notes', 'recorded_by', 'recorded_by_name'
+            'cost_per_unit', 'date', 'notes', 'recorded_by', 'recorded_by_name',
+            'packages', 'package_price',
         ]
         read_only_fields = ['ingredient', 'recorded_by', 'date']
+        # FEATURE-050: quantity_added/cost_per_unit are no longer client-required
+        # because they can be derived from packages. validate() enforces that one
+        # of the two entry modes is fully provided.
+        extra_kwargs = {
+            'quantity_added': {'required': False},
+            'cost_per_unit': {'required': False},
+        }
 
     def validate_quantity_added(self, value):
         # ISSUE-113: restock must add stock; the model save() increments
@@ -480,6 +506,71 @@ class IngredientRestockLogSerializer(serializers.ModelSerializer):
                 "(in the ingredient's unit)."
             )
         return value
+
+    def validate_packages(self, value):
+        if value <= 0:
+            raise serializers.ValidationError(
+                'Number of packages must be greater than 0.'
+            )
+        return value
+
+    def validate(self, attrs):
+        # FEATURE-050: resolve the entry mode. Package mode wins when
+        # ``packages`` is present; otherwise fall back to the base-unit path.
+        ingredient = self.context.get('ingredient')
+        packages = attrs.get('packages')
+
+        if packages is not None:
+            if ingredient is None or not ingredient.purchase_to_base_factor:
+                raise serializers.ValidationError(
+                    'This ingredient has no purchase unit / conversion set. Add '
+                    'a purchase unit and how many base units it holds before '
+                    'restocking by the package.'
+                )
+            factor = ingredient.purchase_to_base_factor
+            attrs['quantity_added'] = packages * factor
+
+            package_price = attrs.get('package_price')
+            if package_price is None:
+                package_price = ingredient.last_purchase_price
+            if package_price is None:
+                raise serializers.ValidationError(
+                    'Enter the price per package (no previous price on file to '
+                    'reuse).'
+                )
+            # Store the per-base-unit cost on the log — that is what the cost
+            # math and the weekly restock report read. FEATURE-051 rolls this
+            # into a weighted-average cost_per_unit on the ingredient.
+            attrs['cost_per_unit'] = (
+                Decimal(package_price) / Decimal(factor)
+            ).quantize(Decimal('0.0001'))
+            attrs['package_price'] = package_price
+        else:
+            if attrs.get('quantity_added') is None:
+                raise serializers.ValidationError(
+                    'Provide either "packages" (with a purchase unit set on the '
+                    'ingredient) or "quantity_added" in the base unit.'
+                )
+            if attrs.get('cost_per_unit') is None:
+                # Default to the ingredient's current known cost.
+                if ingredient is None:
+                    raise serializers.ValidationError(
+                        '"cost_per_unit" is required.'
+                    )
+                attrs['cost_per_unit'] = ingredient.cost_per_unit
+        return attrs
+
+    def create(self, validated_data):
+        # ``packages``/``package_price`` are entry-only, not model fields.
+        packages = validated_data.pop('packages', None)
+        package_price = validated_data.pop('package_price', None)
+        log = super().create(validated_data)
+        # Remember the latest package price so the next restock can prefill it.
+        if packages is not None and package_price is not None:
+            ing = log.ingredient
+            ing.last_purchase_price = package_price
+            ing.save(update_fields=['last_purchase_price'])
+        return log
 
 
 class RecipeIngredientSerializer(serializers.ModelSerializer):

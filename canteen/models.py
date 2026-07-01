@@ -1198,6 +1198,27 @@ class Ingredient(models.Model):
     par_level = models.DecimalField(max_digits=10, decimal_places=4, default=0)
     supplier = models.ForeignKey(Supplier, null=True, blank=True, on_delete=models.SET_NULL)
     is_active = models.BooleanField(default=True)
+    # FEATURE-050: purchasing-unit layer. Recipes consume the base ``unit``
+    # (g/ml/pcs), but the manager buys in packages (a box/sack/bottle) — she
+    # should never have to divide a sack into grams by hand. ``purchase_unit``
+    # names the package, ``purchase_to_base_factor`` is how many base units one
+    # package holds (e.g. 1 sack = 25000 g → factor 25000), and
+    # ``last_purchase_price`` remembers the most recent price PER PACKAGE so the
+    # restock form can prefill it. All nullable: an ingredient without a
+    # purchase unit still restocks in base units exactly as before (backward
+    # compatible; nothing is required).
+    purchase_unit = models.ForeignKey(
+        IngredientUnit, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='purchased_ingredients',
+    )
+    purchase_to_base_factor = models.DecimalField(
+        max_digits=12, decimal_places=4, null=True, blank=True,
+        validators=[MinValueValidator(Decimal('0.0001'))],
+    )
+    last_purchase_price = models.DecimalField(
+        max_digits=12, decimal_places=2, null=True, blank=True,
+        validators=[MinValueValidator(Decimal('0'))],
+    )
     # FLAG-046: depletion gate independent of Item.track_inventory. Ingredient
     # stock is only depleted on sale/void when this is True.
     track_depletion = models.BooleanField(default=True)

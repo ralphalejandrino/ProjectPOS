@@ -1702,7 +1702,11 @@ class IngredientViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def restock(self, request, pk=None):
         ingredient = self.get_object()
-        serializer = IngredientRestockLogSerializer(data=request.data)
+        # FEATURE-050: pass the ingredient in context so package-based entry can
+        # read its purchase_to_base_factor / last_purchase_price for conversion.
+        serializer = IngredientRestockLogSerializer(
+            data=request.data, context={'ingredient': ingredient}
+        )
         if serializer.is_valid():
             serializer.save(ingredient=ingredient, recorded_by=request.user)
             return Response(serializer.data, status=201)
