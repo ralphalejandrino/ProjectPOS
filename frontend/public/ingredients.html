@@ -385,6 +385,20 @@
             class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
         </div>
       </div>
+      <!-- FEATURE-053: metered vs counted. Metered ingredients are auto-deducted
+           per recipe on every sale; counted ingredients (tea bags, garnishes)
+           are tracked by physical count only — we don't fake per-sale precision
+           we can't measure. Either way the per-serving cost still feeds recipe
+           cost. Maps to Ingredient.track_depletion. -->
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">Type</label>
+        <select aria-label="Type" id="ingredientType"
+          class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300">
+          <option value="metered">Metered — auto-deducted per recipe (milk, beans, syrup)</option>
+          <option value="counted">Counted — physical count only (tea bags, garnishes)</option>
+        </select>
+        <p class="text-xs text-gray-400 mt-1">Counted items aren't deducted per sale — you set stock by counting. Their per-serving cost still counts toward recipe cost.</p>
+      </div>
       <!-- FEATURE-050: purchasing-unit layer. Optional — lets the manager
            restock by the package ("2 sacks") instead of counting base units.
            Leave blank to keep restocking in base units only. -->
@@ -734,9 +748,14 @@ function renderIngredients(list) {
       : `<span class="px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">OK</span>`;
     const unitAbbr = i.unit_detail?.abbreviation || i.unit_detail?.name || '—';
     const cost     = i.cost_per_unit != null ? formatCurrency(parseFloat(i.cost_per_unit)) : '—';
+    // FEATURE-053: flag counted (physical-count-only) ingredients so it's clear
+    // they aren't auto-deducted per sale.
+    const countedChip = i.track_depletion === false
+      ? ` <span class="px-1.5 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-700 align-middle" title="Counted — physical count only, not auto-deducted per sale">counted</span>`
+      : '';
     return `
       <tr class="${low ? 'low-stock-row' : ''} border-b border-gray-50 hover:bg-gray-50 transition">
-        <td class="px-4 py-3 font-medium text-gray-800">${esc(i.name)}</td>
+        <td class="px-4 py-3 font-medium text-gray-800">${esc(i.name)}${countedChip}</td>
         <td class="px-4 py-3 text-gray-500">${esc(unitAbbr)}</td>
         <td class="px-4 py-3 text-right font-mono text-gray-700">${parseFloat(i.current_stock || 0).toFixed(3)}</td>
         <td class="px-4 py-3 text-right font-mono text-gray-500">${parseFloat(i.par_level || 0).toFixed(3)}</td>
@@ -1080,6 +1099,7 @@ function openIngredientModal(id) {
   document.getElementById('ingredientPar').value   = '';
   document.getElementById('ingredientCost').value  = '';
   document.getElementById('ingredientActive').checked = true;
+  document.getElementById('ingredientType').value = 'metered';  // FEATURE-053
   // FEATURE-050: reset the purchasing-unit fields.
   document.getElementById('ingredientPkgFactor').value = '';
   document.getElementById('ingredientPkgPrice').value  = '';
@@ -1108,6 +1128,7 @@ function openIngredientModal(id) {
       document.getElementById('ingredientCost').value      = ing.cost_per_unit || '';
       document.getElementById('ingredientSupplier').value  = ing.supplier || '';
       document.getElementById('ingredientActive').checked  = ing.is_active !== false;
+      document.getElementById('ingredientType').value = ing.track_depletion === false ? 'counted' : 'metered';  // FEATURE-053
       // FEATURE-050: purchasing-unit config.
       document.getElementById('ingredientPurchaseUnit').value = ing.purchase_unit || '';
       document.getElementById('ingredientPkgFactor').value    = ing.purchase_to_base_factor || '';
@@ -1152,6 +1173,8 @@ async function submitIngredientModal() {
     cost_per_unit : document.getElementById('ingredientCost').value || 0,
     supplier      : document.getElementById('ingredientSupplier').value || null,
     is_active     : document.getElementById('ingredientActive').checked,
+    // FEATURE-053: metered (auto-deducted) vs counted (physical count only).
+    track_depletion : document.getElementById('ingredientType').value === 'metered',
     // FEATURE-050: purchasing-unit layer (all optional/nullable).
     purchase_unit           : document.getElementById('ingredientPurchaseUnit').value || null,
     purchase_to_base_factor : document.getElementById('ingredientPkgFactor').value || null,
