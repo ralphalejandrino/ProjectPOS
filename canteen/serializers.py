@@ -482,8 +482,47 @@ class SupplierSerializer(serializers.ModelSerializer):
         fields = ['id', 'name', 'contact_person', 'phone', 'address', 'notes', 'is_active']
 
 
+class PreparationComponentSerializer(serializers.ModelSerializer):
+    """FEATURE-056: one component line of a preparation's batch recipe."""
+    component_name = serializers.CharField(source='component.name', read_only=True)
+    component_unit = serializers.CharField(
+        source='component.unit.abbreviation', read_only=True)
+    component_cost = serializers.DecimalField(
+        source='component.cost_per_unit', max_digits=10, decimal_places=4,
+        read_only=True)
+
+    class Meta:
+        from .models import PreparationComponent
+        model = PreparationComponent
+        fields = ['id', 'component', 'component_name', 'component_unit',
+                  'component_cost', 'quantity_used']
+
+
 class IngredientSerializer(serializers.ModelSerializer):
     unit_detail = IngredientUnitSerializer(source='unit', read_only=True)
+    # FEATURE-056: preparation (sub-recipe / BOM) surface.
+    components = PreparationComponentSerializer(many=True, read_only=True)
+    batch_cost_preview = serializers.SerializerMethodField()
+    batch_unit_cost_preview = serializers.SerializerMethodField()
+
+    def _batch_cost(self, obj):
+        if not obj.is_preparation:
+            return None
+        total = Decimal('0')
+        for c in obj.components.all():
+            total += (c.quantity_used or Decimal('0')) * c.component.cost_per_unit
+        return total.quantize(Decimal('0.0001'), rounding=ROUND_HALF_UP)
+
+    def get_batch_cost_preview(self, obj):
+        c = self._batch_cost(obj)
+        return str(c) if c is not None else None
+
+    def get_batch_unit_cost_preview(self, obj):
+        c = self._batch_cost(obj)
+        if c is None or not obj.batch_yield or obj.batch_yield <= 0:
+            return None
+        return str((c / obj.batch_yield).quantize(
+            Decimal('0.0001'), rounding=ROUND_HALF_UP))
     # FEATURE-050: purchase (package) unit detail for the restock UI.
     purchase_unit_detail = IngredientUnitSerializer(source='purchase_unit', read_only=True)
     supplier_detail = SupplierSerializer(source='supplier', read_only=True)
@@ -498,6 +537,9 @@ class IngredientSerializer(serializers.ModelSerializer):
             # FEATURE-050: purchasing-unit layer.
             'purchase_unit', 'purchase_unit_detail', 'purchase_to_base_factor',
             'last_purchase_price',
+            # FEATURE-056: preparation (sub-recipe / BOM).
+            'is_preparation', 'batch_yield', 'components',
+            'batch_cost_preview', 'batch_unit_cost_preview',
         ]
         read_only_fields = ['updated_at']
 

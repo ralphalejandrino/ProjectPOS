@@ -126,6 +126,118 @@ def item_recipe_cost(item):
     return total.quantize(Decimal('0.0001'), rounding=ROUND_HALF_UP)
 
 
+def produce_batch(preparation, num_batches, performed_by=None, notes=''):
+    """FEATURE-056: 'prep a batch' — make ``num_batches`` of a preparation.
+
+    A preparation is an Ingredient (is_preparation) built from other ingredients
+    (PreparationComponent). Producing:
+      1. deducts each component: quantity_used * num_batches,
+      2. adds batch_yield * num_batches to the preparation's stock,
+      3. rolls the batch cost into the preparation's weighted-average
+         cost_per_unit using the SAME formula as a restock
+         (IngredientRestockLog.save) so downstream drink COGS stays a single
+         source of truth.
+
+    batch unit cost = Σ(component.quantity_used * component.cost_per_unit)
+                      / preparation.batch_yield.
+
+    Components are ordinary Ingredients, so a raw material shared between a
+    direct drink recipe and a batch keeps ONE stock and ONE cost — no
+    duplication, no double-count. The prep is depleted (once) when a drink using
+    it is sold; components are depleted (once) here at production time.
+
+    All writes happen under row locks (deterministic pk order) so a concurrent
+    sale/restock cannot clobber the read-modify-write. Stock may go negative —
+    the owner-investigate signal (ISSUE-069), never blocked.
+    """
+    from django.db import transaction as _tx
+    from .models import Ingredient, PreparationComponent, IngredientLog
+
+    num_batches = Decimal(str(num_batches))
+    if num_batches <= 0:
+        raise DRFValidationError("Number of batches must be greater than zero.")
+    if not preparation.is_preparation:
+        raise DRFValidationError(f"{preparation.name} is not a preparation.")
+    if not preparation.batch_yield or preparation.batch_yield <= 0:
+        raise DRFValidationError(
+            "Set a batch yield greater than zero before producing a batch."
+        )
+
+    with _tx.atomic():
+        prep = Ingredient.objects.select_for_update().get(pk=preparation.pk)
+        components = list(
+            PreparationComponent.objects.filter(preparation=prep)
+            .select_related('component')
+        )
+        if not components:
+            raise DRFValidationError(
+                "Add at least one component before producing a batch."
+            )
+
+        # Lock component rows in a deterministic order (pk) to avoid deadlocks
+        # with the sale-depletion path (which also locks ingredient rows).
+        comp_ids = sorted(c.component_id for c in components)
+        locked = {
+            i.pk: i for i in
+            Ingredient.objects.select_for_update().filter(pk__in=comp_ids)
+        }
+
+        # Batch cost from the CURRENT (locked) component weighted-avg costs.
+        batch_cost = Decimal('0')
+        for c in components:
+            batch_cost += c.quantity_used * locked[c.component_id].cost_per_unit
+
+        # 1. Deplete components (explicit production consumption — deducted even
+        #    for 'counted' components since this is a deliberate make event).
+        for c in components:
+            comp = locked[c.component_id]
+            delta = -(c.quantity_used * num_batches)
+            before = comp.current_stock
+            after = before + delta
+            comp.current_stock = after
+            comp.save(update_fields=['current_stock', 'updated_at'])
+            IngredientLog.objects.create(
+                ingredient=comp, action='production', quantity_change=delta,
+                stock_before=before, stock_after=after,
+                performed_by=performed_by,
+                notes=(notes or f"Batch of {prep.name}")[:255],
+            )
+
+        # 2. + 3. Add yield and roll the weighted-average cost into the prep.
+        produced = prep.batch_yield * num_batches
+        unit_cost = (batch_cost / prep.batch_yield).quantize(
+            Decimal('0.0001'), rounding=ROUND_HALF_UP
+        )
+        old_qty = prep.current_stock
+        old_cost = prep.cost_per_unit
+        new_qty = old_qty + produced
+        if old_qty <= 0 or new_qty <= 0:
+            new_cost = unit_cost
+        else:
+            new_cost = (
+                (old_qty * old_cost + produced * unit_cost) / new_qty
+            ).quantize(Decimal('0.0001'), rounding=ROUND_HALF_UP)
+        before = prep.current_stock
+        prep.current_stock = new_qty
+        prep.cost_per_unit = new_cost
+        prep.save(update_fields=['current_stock', 'cost_per_unit', 'updated_at'])
+        IngredientLog.objects.create(
+            ingredient=prep, action='production', quantity_change=produced,
+            stock_before=before, stock_after=new_qty, performed_by=performed_by,
+            notes=(notes or f"Produced {num_batches} batch(es)")[:255],
+        )
+
+    return {
+        'preparation': prep.name,
+        'batches': str(num_batches),
+        'produced_qty': str(produced),
+        'batch_cost': str(batch_cost.quantize(Decimal('0.0001'), rounding=ROUND_HALF_UP)),
+        'unit_cost': str(unit_cost),
+        'new_stock': str(new_qty),
+        'new_cost_per_unit': str(new_cost),
+    }
+
+
 def _deplete_ingredients(item, variant_option_ids, quantity,
                          transaction=None, performed_by=None):
     """

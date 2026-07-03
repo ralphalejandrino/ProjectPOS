@@ -8,13 +8,14 @@ from django.shortcuts import get_object_or_404
 from django.http import Http404
 from .services import (
     create_pos_transaction, _restore_ingredients, refund_transaction,
-    close_shift_and_finalize_z, stock_movements_for_shift,
+    close_shift_and_finalize_z, stock_movements_for_shift, produce_batch,
 )
 from .models import (
     ItemCategory, Item, ItemLog, PosTransaction, PosTransactionItem, Shift,
     VariantGroup, VariantOption, CategoryVariantGroup, ProductVariantGroup,
     TransactionItemVariant, BusinessProfile, RecipeIngredient, Ingredient,
     IngredientUnit, Supplier, IngredientRestockLog, ZReport, IngredientLog,
+    PreparationComponent,
 )
 from .serializers import (
     ItemCategorySerializer,
@@ -1571,6 +1572,7 @@ def get_business_profile(request):
         'pwd_discount_rate': float(profile.pwd_discount_rate),
         'promo_discount_enabled': profile.promo_discount_enabled,
         'track_inventory': profile.track_inventory,
+        'ingredient_management_enabled': profile.ingredient_management_enabled,
         # FEATURE-011-B: BIR identity (display-only; Session C/D consume these)
         'machine_identification_number': profile.machine_identification_number,
         'machine_serial_number': profile.machine_serial_number,
@@ -1593,7 +1595,7 @@ def get_business_profile(request):
 def update_business_profile(request):
     from .models import BusinessProfile
     profile = BusinessProfile.get_instance()
-    fields = ['business_name', 'tagline', 'contact_number', 'email', 'address', 'tin', 'receipt_header', 'receipt_footer', 'low_stock_threshold', 'printer_ip', 'printer_port', 'printer_mode', 'paper_width', 'printer_font', 'color_scheme', 'logo', 'vat_enabled', 'vat_rate', 'vat_inclusive', 'currency', 'sc_discount_enabled', 'sc_discount_rate', 'pwd_discount_enabled', 'pwd_discount_rate', 'promo_discount_enabled', 'track_inventory',
+    fields = ['business_name', 'tagline', 'contact_number', 'email', 'address', 'tin', 'receipt_header', 'receipt_footer', 'low_stock_threshold', 'printer_ip', 'printer_port', 'printer_mode', 'paper_width', 'printer_font', 'color_scheme', 'logo', 'vat_enabled', 'vat_rate', 'vat_inclusive', 'currency', 'sc_discount_enabled', 'sc_discount_rate', 'pwd_discount_enabled', 'pwd_discount_rate', 'promo_discount_enabled', 'track_inventory', 'ingredient_management_enabled',
               # FEATURE-011-B: BIR identity fields
               'machine_identification_number', 'machine_serial_number',
               'pos_accreditation_number', 'pos_permit_number',
@@ -1718,6 +1720,68 @@ class IngredientViewSet(viewsets.ModelViewSet):
         logs = ingredient.restock_logs.all().order_by('-date')[:50]
         serializer = IngredientRestockLogSerializer(logs, many=True)
         return Response(serializer.data)
+
+    @action(detail=True, methods=['post'])
+    def set_components(self, request, pk=None):
+        """FEATURE-056: replace a preparation's component (BOM) list.
+
+        Body: { components: [ { component: <ingredient_id>, quantity_used: <dec> }, ... ] }
+        Marks the ingredient as a preparation and swaps its component set
+        atomically. Rejects self-reference and non-positive quantities. Editing
+        the BOM does NOT move any stock — only produce_batch does that.
+        """
+        from decimal import Decimal, InvalidOperation
+        prep = self.get_object()
+        rows = request.data.get('components', [])
+        if not isinstance(rows, list) or not rows:
+            return Response({'error': 'Provide at least one component.'}, status=400)
+        cleaned = []
+        for r in rows:
+            cid = r.get('component')
+            if str(cid) == str(prep.pk):
+                return Response(
+                    {'error': 'A preparation cannot contain itself.'}, status=400)
+            try:
+                qty = Decimal(str(r.get('quantity_used')))
+            except (InvalidOperation, TypeError, ValueError):
+                return Response({'error': 'quantity_used must be a number.'}, status=400)
+            if qty <= 0:
+                return Response(
+                    {'error': 'Each component quantity must be greater than zero.'},
+                    status=400)
+            if not Ingredient.objects.filter(pk=cid, is_active=True).exists():
+                return Response({'error': f'Unknown component {cid}.'}, status=400)
+            cleaned.append((cid, qty))
+        with db_transaction.atomic():
+            if not prep.is_preparation:
+                prep.is_preparation = True
+                prep.save(update_fields=['is_preparation'])
+            PreparationComponent.objects.filter(preparation=prep).delete()
+            PreparationComponent.objects.bulk_create([
+                PreparationComponent(preparation=prep, component_id=cid, quantity_used=qty)
+                for cid, qty in cleaned
+            ])
+        return Response(self.get_serializer(prep).data, status=200)
+
+    @action(detail=True, methods=['post'])
+    def produce_batch(self, request, pk=None):
+        """FEATURE-056: 'prep a batch' — deduct components, add yield, roll cost.
+
+        Body: { num_batches: <dec>, notes: <optional str> }
+        """
+        prep = self.get_object()
+        try:
+            summary = produce_batch(
+                prep, request.data.get('num_batches', 0),
+                performed_by=request.user, notes=request.data.get('notes', ''),
+            )
+        except ValidationError as e:
+            detail = e.detail
+            msg = detail[0] if isinstance(detail, list) else detail
+            return Response({'error': str(msg)}, status=400)
+        prep.refresh_from_db()
+        return Response(
+            {**summary, 'ingredient': self.get_serializer(prep).data}, status=200)
 
     @action(detail=True, methods=['post'])
     def adjust(self, request, pk=None):

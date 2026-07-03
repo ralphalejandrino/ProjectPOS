@@ -280,6 +280,19 @@
                                     after:transition-all peer-checked:after:translate-x-full"></div>
                     </label>
                 </div>
+                <div class="flex items-center justify-between mt-4">
+                    <div>
+                        <p class="text-sm font-medium text-gray-700">Ingredient &amp; recipe management</p>
+                        <p class="text-xs text-gray-500 mt-0.5">Turn off for shops that only sell finished goods (e.g. retail) — hides ingredients, recipes &amp; COGS. Item stock still works.</p>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input aria-label="Ingredient and recipe management" type="checkbox" id="ingredient-management" class="sr-only peer">
+                        <div class="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:bg-blue-600
+                                    after:content-[''] after:absolute after:top-[2px] after:left-[2px]
+                                    after:bg-white after:rounded-full after:h-5 after:w-5
+                                    after:transition-all peer-checked:after:translate-x-full"></div>
+                    </label>
+                </div>
                 <button onclick="saveAppearanceSettings()"
                         class="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700">
                     Save Appearance Settings
@@ -952,6 +965,8 @@
                 // Appearance tab — Inventory Tracking
                 const trackEl = document.getElementById('track-inventory');
                 if (trackEl) trackEl.checked = data.track_inventory !== false;
+                const ingMgmtEl = document.getElementById('ingredient-management');
+                if (ingMgmtEl) ingMgmtEl.checked = data.ingredient_management_enabled !== false;
             } catch (e) {
                 console.error('Failed to load business profile:', e);
             }
@@ -990,6 +1005,7 @@
         async function saveAppearanceSettings() {
             const payload = {
                 track_inventory: document.getElementById('track-inventory').checked,
+                ingredient_management_enabled: document.getElementById('ingredient-management').checked,
             };
             try {
                 const resp = await authenticatedFetch(`${API_BASE}/business/update/`, {

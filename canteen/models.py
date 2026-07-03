@@ -933,6 +933,13 @@ class BusinessProfile(models.Model):
     # Migration 0003
     discounts_enabled = models.BooleanField(default=False, verbose_name='Discounts Enabled')
     track_inventory = models.BooleanField(default=True, verbose_name='Track Inventory')
+    # FEATURE-057: hide the whole ingredient/recipe/COGS system for businesses
+    # that only sell finished goods (e.g. a shoe or apparel shop). Pure UI/read
+    # gate — item-level stock (Item.stock) and manual cost/margin keep working;
+    # no sale/costing math changes. Default on (café/restaurant default).
+    ingredient_management_enabled = models.BooleanField(
+        default=True, verbose_name='Ingredient & Recipe Management'
+    )
     vat_enabled = models.BooleanField(default=False, verbose_name='VAT Enabled')
     vat_rate = models.DecimalField(max_digits=5, decimal_places=2, default=12.0, verbose_name='VAT Rate (%)')
     vat_inclusive = models.BooleanField(default=True, verbose_name='VAT Inclusive Pricing')
@@ -1228,6 +1235,18 @@ class Ingredient(models.Model):
     # FLAG-046: depletion gate independent of Item.track_inventory. Ingredient
     # stock is only depleted on sale/void when this is True.
     track_depletion = models.BooleanField(default=True)
+    # FEATURE-056 (sub-recipe / preparation / BOM): an ingredient that is
+    # ITSELF made in-house from other ingredients (e.g. simple syrup, cold-brew
+    # concentrate). Its component list lives in PreparationComponent; a "prep a
+    # batch" action (services.produce_batch) deducts the components and rolls
+    # the batch cost into this ingredient's weighted-average cost_per_unit —
+    # exactly like a restock, so the cost flows up into any menu recipe that
+    # uses it. batch_yield = how many base units one batch produces.
+    is_preparation = models.BooleanField(default=False)
+    batch_yield = models.DecimalField(
+        max_digits=12, decimal_places=4, null=True, blank=True,
+        validators=[MinValueValidator(Decimal('0.0001'))],
+    )
     # FLAG-048: surfaces last-touched time for stock/audit reconciliation.
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -1331,6 +1350,43 @@ class RecipeIngredient(models.Model):
         return f"{self.ingredient.name} x{self.quantity_used} for {self.item or self.variant}"
 
 
+class PreparationComponent(models.Model):
+    """FEATURE-056: one component consumed to produce a batch of a preparation.
+
+    The ``preparation`` is itself an Ingredient (is_preparation=True); each row
+    says one batch needs ``quantity_used`` of ``component`` (in the component's
+    base unit). services.produce_batch() sums component_cost = Σ(quantity_used *
+    component.cost_per_unit), then rolls (component_cost / preparation.batch_yield)
+    into the preparation's weighted-average cost_per_unit and adds the yield to
+    its stock. Components are ordinary Ingredients, so a raw material shared
+    between a direct drink recipe and a batch keeps ONE stock and ONE cost — no
+    duplication, no double-count.
+    """
+    preparation = models.ForeignKey(
+        Ingredient, on_delete=models.CASCADE, related_name='components'
+    )
+    component = models.ForeignKey(
+        Ingredient, on_delete=models.PROTECT, related_name='used_in_preparations'
+    )
+    quantity_used = models.DecimalField(max_digits=12, decimal_places=4)
+
+    class Meta:
+        constraints = [
+            # A preparation can never be a component of itself.
+            models.CheckConstraint(
+                check=~models.Q(preparation=models.F('component')),
+                name='prep_not_self_component',
+            ),
+            models.UniqueConstraint(
+                fields=['preparation', 'component'],
+                name='uniq_preparation_component',
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.quantity_used} {self.component.name} → {self.preparation.name}"
+
+
 class IngredientLog(models.Model):
     """FEATURE-009: append-only ledger of every ingredient stock movement.
 
@@ -1347,6 +1403,8 @@ class IngredientLog(models.Model):
         ('refund', 'Refund'),  # FEATURE-015: ingredient restore on customer refund
         ('adjustment', 'Adjustment'),
         ('restock', 'Restock'),
+        ('production', 'Production'),  # FEATURE-056: prep-a-batch (both the
+        # component depletion and the preparation's yield increment)
     ]
 
     ingredient = models.ForeignKey(

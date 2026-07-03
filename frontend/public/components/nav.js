@@ -36,15 +36,32 @@
     return p ? (p.role || null) : null;
   }
 
+  // FEATURE-057: hide the Ingredients page when ingredient/recipe management is
+  // turned off (retail-only businesses). Reads the cached business profile;
+  // defaults to enabled so cafés are unaffected.
+  function ingredientMgmtEnabled() {
+    try {
+      const d = JSON.parse(localStorage.getItem('biz_profile') || '{}');
+      return d.ingredient_management_enabled !== false;
+    } catch (e) { return true; }
+  }
+
   function visibleLinks(role) {
     // FEATURE-044: drive nav off the effective page set (role default + per-user
     // override). LINKS[].roles stays as the documented default + fallback.
+    let links;
     if (typeof getAllowedPages === 'function') {
       const pages = getAllowedPages();
-      return LINKS.filter(l => pages.includes(l.key));
+      links = LINKS.filter(l => pages.includes(l.key));
+    } else if (!role) {
+      links = LINKS.slice();
+    } else {
+      links = LINKS.filter(l => l.roles.includes(role));
     }
-    if (!role) return LINKS;
-    return LINKS.filter(l => l.roles.includes(role));
+    if (!ingredientMgmtEnabled()) {
+      links = links.filter(l => l.key !== 'ingredients');
+    }
+    return links;
   }
 
   function applyCachedBranding() {
