@@ -299,6 +299,7 @@ const PaymentSystem = {
         window.cart.items = [];
         window.cart.total = 0;
         window.cart.discountAmount = 0;
+        window.cart.vatExemptAmount = 0;
         window.cart.discountType = '';
         window.cart.discountIdNumber = '';
         window.cart.discountLabel = '';

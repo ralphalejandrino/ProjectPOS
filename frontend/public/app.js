@@ -26,7 +26,11 @@ function getCartTotal() {
         const quantity = parseInt(item.quantity) || 0;
         return sum + (price * quantity);
     }, 0);
-    return Math.max(0, subtotal - (window.cart.discountAmount || 0));
+    // BUG: SC/PWD are VAT-exempt — the amount due removes BOTH the discount
+    // AND the VAT portion (vatExemptAmount), matching the backend's final_total.
+    // Omitting vatExemptAmount here made split payments fail the exact-match
+    // check and silently over-collected on non-split SC/PWD sales.
+    return Math.max(0, subtotal - (window.cart.discountAmount || 0) - (window.cart.vatExemptAmount || 0));
 }
 window.getCartTotal = getCartTotal;
 
@@ -36,6 +40,7 @@ function clearCartState() {
     window.cart.items = [];
     window.cart.total = 0;
     window.cart.discountAmount = 0;
+    window.cart.vatExemptAmount = 0;
     window.cart.discountType = null;
     window.cart.discountIdNumber = '';
     window.cart.discountLabel = null;
@@ -616,16 +621,21 @@ function applyModalDiscount(prefix) {
 
     let discountAmount = 0;
     let discountLabel = '';
+    // SC/PWD are VAT-exempt: the VAT portion is removed from the amount due in
+    // addition to the discount (mirrors backend final_total). 0 for promo/none.
+    let vatExempt = 0;
 
     if (type === 'sc') {
         const rate = parseFloat(profile.sc_discount_rate) || 20;
         const netSubtotal = subtotal / (1 + vatRate);
         discountAmount = netSubtotal * (rate / 100);
+        vatExempt = vatRate > 0 ? (subtotal - netSubtotal) : 0;
         discountLabel = 'SC Discount (' + rate + '%)';
     } else if (type === 'pwd') {
         const rate = parseFloat(profile.pwd_discount_rate) || 20;
         const netSubtotal = subtotal / (1 + vatRate);
         discountAmount = netSubtotal * (rate / 100);
+        vatExempt = vatRate > 0 ? (subtotal - netSubtotal) : 0;
         discountLabel = 'PWD Discount (' + rate + '%)';
     } else if (type === 'promo') {
         const pct = parseFloat(document.getElementById(prefix + '-promo-pct').value) || 0;
@@ -636,6 +646,7 @@ function applyModalDiscount(prefix) {
     const discountId = document.getElementById(prefix + '-discount-id')?.value || '';
 
     window.cart.discountAmount = discountAmount;
+    window.cart.vatExemptAmount = vatExempt;   // set BEFORE updateCart so cart.total is correct
     window.cart.discountType = type;
     window.cart.discountIdNumber = discountId;
     window.cart.discountLabel = discountLabel;
@@ -643,7 +654,7 @@ function applyModalDiscount(prefix) {
     // Recompute cart.total so calculateChange() stays accurate
     updateCart();
 
-    const newTotal = Math.max(0, subtotal - discountAmount);
+    const newTotal = Math.max(0, subtotal - discountAmount - vatExempt);
 
     // Update the modal total display
     if (prefix === 'cash') {
@@ -656,7 +667,9 @@ function applyModalDiscount(prefix) {
 
     const display = document.getElementById(prefix + '-discount-display');
     if (display) {
-        display.textContent = discountLabel + ': ' + formatCurrency(-discountAmount);
+        let txt = discountLabel + ': ' + formatCurrency(-discountAmount);
+        if (vatExempt > 0) txt += '  ·  VAT-exempt: ' + formatCurrency(-vatExempt);
+        display.textContent = txt;
         display.classList.remove('hidden');
     }
 
@@ -667,6 +680,7 @@ window.applyModalDiscount = applyModalDiscount;
 
 function clearModalDiscount(prefix) {
     window.cart.discountAmount = 0;
+    window.cart.vatExemptAmount = 0;
     window.cart.discountType = '';
     window.cart.discountIdNumber = '';
     window.cart.discountLabel = '';
