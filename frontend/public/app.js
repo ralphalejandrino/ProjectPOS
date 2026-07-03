@@ -179,7 +179,7 @@ function displayProducts(products) {
         card.innerHTML = `
             <div class="relative w-full h-40">
                 ${product.photo
-                    ? `<img src="${escapeHtml(product.photo)}" alt="${escapeHtml(product.name)}" class="w-full h-full object-contain bg-white" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                    ? `<img src="${escapeHtml(product.photo)}" alt="${escapeHtml(product.name)}" class="w-full h-full object-cover" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
                        <div class="w-full h-full bg-gray-100 items-center justify-center text-5xl" style="display:none">📦</div>`
                     : `<div class="w-full h-full bg-gray-100 flex items-center justify-center text-5xl">📦</div>`
                 }
