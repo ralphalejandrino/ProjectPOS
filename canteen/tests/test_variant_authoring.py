@@ -79,3 +79,20 @@ class ItemVariantsEndpointTests(APITestCase):
         resp = self.client.get(f'/api/canteen/items/{self.item.id}/')
         groups = {g['group']['name'] for g in resp.data['effective_variant_groups']}
         self.assertEqual(groups, {'Size', 'Ice'})
+
+    def test_disabling_inherited_group_on_one_item_does_not_affect_siblings(self):
+        # PROD regression: a variant group assigned to a whole category (e.g.
+        # "Fries Flavor" on Food) is inherited by every item. Disabling it on ONE
+        # item (a waffle) via a ProductVariantGroup(enabled=False) override must
+        # drop it from that item ONLY — its category siblings (the fries) keep it.
+        from canteen.services import resolve_effective_variant_groups
+        sibling = Item.objects.create(
+            name='Fries', price=Decimal('50.00'), stock=100, category=self.cat
+        )
+        ProductVariantGroup.objects.create(
+            product=self.item, group=self.ice, enabled=False
+        )
+        item_groups = {r['group'].name for r in resolve_effective_variant_groups(self.item)}
+        sib_groups = {r['group'].name for r in resolve_effective_variant_groups(sibling)}
+        self.assertEqual(item_groups, {'Size'})           # disabled group gone here
+        self.assertEqual(sib_groups, {'Size', 'Ice'})     # sibling untouched

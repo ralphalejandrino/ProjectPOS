@@ -173,6 +173,7 @@
                 <button onclick="addCashAmount(500)" class="touch-target-pos bg-gray-100 hover:bg-gray-200 py-2 rounded font-medium text-sm" data-amount="500">500</button>
                 <button onclick="addCashAmount(1000)" class="touch-target-pos bg-gray-100 hover:bg-gray-200 py-2 rounded font-medium text-sm" data-amount="1000">1000</button>
             </div>
+            <button type="button" onclick="setExactCash()" class="touch-target-pos w-full py-2 rounded font-semibold text-sm mb-4" style="background:#EAF2F8; color:#1B4F72; border:1px solid #1B4F72;">Exact amount — no change</button>
             <script>
                 (function(){
                     document.querySelectorAll('#cash-quick-buttons button[data-amount]').forEach(btn => {
@@ -417,6 +418,17 @@
             const input = document.getElementById('cash-received');
             const current = parseFloat(input.value) || 0;
             input.value = (current + amount).toFixed(2);
+            input._oskBuf = input.value;   // keep the on-screen-keyboard shadow buffer in sync
+            calculateChange();
+        }
+
+        // One-tap exact-cash fallback: sets received to the amount due so a sale
+        // can always be completed even if on-screen-keyboard input hiccups.
+        function setExactCash() {
+            const input = document.getElementById('cash-received');
+            if (!input) return;
+            input.value = cashDueAmount().toFixed(2);
+            input._oskBuf = input.value;
             calculateChange();
         }
 
