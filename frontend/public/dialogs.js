@@ -189,7 +189,15 @@
         el._modalOpen = true;
         prevFocus = document.activeElement;
         const f = firstFocusable(el);
-        if (f) setTimeout(() => f.focus(), 0);
+        // On a touch kiosk (on-screen keyboard active) do NOT auto-focus the
+        // first field: focusing a text/number input pops the OSK over the modal
+        // and buries lower content — e.g. the item editor's Variant Groups
+        // section and Save button, which the manager then can't reach. Modals
+        // that genuinely need immediate typing (the cash modal) focus their own
+        // field explicitly, so those still bring the pad up. Physical-keyboard
+        // users (no osk-enabled) keep the accessibility focus.
+        const oskKiosk = document.body.classList.contains('osk-enabled');
+        if (f && !oskKiosk) setTimeout(() => f.focus(), 0);
       } else if (!visible && el._modalOpen) {
         el._modalOpen = false;
         if (prevFocus && prevFocus.focus) prevFocus.focus();
