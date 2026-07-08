@@ -255,7 +255,7 @@
                     <!-- Variant Groups (Step 7) -->
                     <div class="mt-4">
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Variant Groups</label>
-                        <p class="text-xs text-gray-400 mb-2">Override category-level variant group settings for this product.</p>
+                        <p class="text-xs text-gray-400 mb-2">Check a group to show it on this item. Groups tagged <span style="font-size:10px;text-transform:uppercase;letter-spacing:.04em;background:#eff6ff;color:#2563eb;padding:1px 6px;border-radius:4px;">from category</span> are inherited by every item in the category — <strong>uncheck</strong> one to hide it on this item only (e.g. turn off &ldquo;Fries Flavor&rdquo; for a waffle).</p>
                         <div id="product-variant-groups" class="flex flex-col gap-2 max-h-48 overflow-y-auto border border-gray-100 rounded-lg p-2">
                             <p class="text-xs text-gray-400 text-center py-2">Save product first to manage variant groups.</p>
                         </div>
@@ -742,7 +742,7 @@
             document.getElementById('product-threshold').value = product.low_stock_threshold ?? 0;
             document.getElementById('product-expiry').value = product.expiry_date || '';
             document.getElementById('product-description').value = product.description || '';
-            loadProductVariantGroups(product.id);
+            loadProductVariantGroups(product.id, product.category);
             loadStockHistory(product.id);
 
             document.getElementById('product-modal').classList.remove('hidden');
@@ -1303,7 +1303,7 @@
 
         // ── Product Variant Groups (Step 7) ─────────────────────────────────
 
-        async function loadProductVariantGroups(productId) {
+        async function loadProductVariantGroups(productId, categoryId) {
             const container = document.getElementById('product-variant-groups');
             if (!productId) {
                 container.innerHTML = '<p class="text-xs text-gray-400 text-center py-2">Save product first to manage variant groups.</p>';
@@ -1311,10 +1311,16 @@
             }
             container.innerHTML = '<p class="text-xs text-gray-400 text-center py-2">Loading...</p>';
             try {
-                const [groupsRes, overridesRes] = await Promise.all([
+                const reqs = [
                     authenticatedFetch(`${API_BASE}/variant-groups/`),
                     authenticatedFetch(`${API_BASE}/items/${productId}/variant-groups/`)
-                ]);
+                ];
+                // Category assignments tell us which groups are INHERITED by this
+                // item (e.g. "Fries Flavor" assigned to the whole Food category is
+                // inherited by waffles). Unchecking an inherited group disables it
+                // for this item only.
+                if (categoryId) reqs.push(authenticatedFetch(`${API_BASE}/categories/${categoryId}/variant-groups/`));
+                const [groupsRes, overridesRes, catRes] = await Promise.all(reqs);
                 const groupsData = await groupsRes.json();
                 const allGroups = groupsData.results !== undefined ? groupsData.results : groupsData;
                 let overrides = [];
@@ -1322,24 +1328,40 @@
                     const oData = await overridesRes.json();
                     overrides = oData.results !== undefined ? oData.results : oData;
                 }
+                let catAssigned = [];
+                if (catRes && catRes.ok) {
+                    const cData = await catRes.json();
+                    catAssigned = cData.results !== undefined ? cData.results : cData;
+                }
                 const overrideMap = {};
                 overrides.forEach(o => { overrideMap[String(o.group.id)] = o; });
+                const inheritedIds = new Set(catAssigned.map(a => String(a.group.id)));
                 if (!allGroups.length) {
                     container.innerHTML = '<p class="text-xs text-gray-400 text-center py-2">No variant groups defined.</p>';
                     return;
                 }
                 container.innerHTML = allGroups.map(g => {
-                    const ov = overrideMap[String(g.id)];
-                    const enabled = ov ? ov.enabled !== false : true;
-                    const required = ov ? (ov.is_required_override !== null && ov.is_required_override !== undefined ? ov.is_required_override : g.is_required) : g.is_required;
+                    const gid = String(g.id);
+                    const ov = overrideMap[gid];
+                    const inherited = inheritedIds.has(gid);
+                    // Checkbox = "show this group on this item". An explicit override
+                    // wins; otherwise inherited groups are on and all others are off
+                    // (the old code defaulted EVERY group on, which silently added
+                    // unrelated groups on save).
+                    const enabled = ov ? ov.enabled !== false : inherited;
+                    const reqOverride = (ov && ov.is_required_override !== null && ov.is_required_override !== undefined)
+                        ? ov.is_required_override : null;
+                    const badge = inherited
+                        ? ' <span style="font-size:10px;text-transform:uppercase;letter-spacing:.04em;background:#eff6ff;color:#2563eb;padding:1px 6px;border-radius:4px;white-space:nowrap;">from category</span>'
+                        : '';
                     return `
-                    <div class="flex items-center gap-2 p-2 border border-gray-100 rounded">
-                        <input aria-label="Enable variant group" type="checkbox" class="prod-vg-enabled w-4 h-4 rounded" value="${g.id}" ${enabled ? 'checked' : ''}>
-                        <span class="flex-1 text-sm text-gray-700">${escapeHtml(g.name)}</span>
+                    <div class="flex items-center gap-2 p-2 border border-gray-100 rounded" data-group-row="${g.id}" data-inherited="${inherited}">
+                        <input aria-label="Show variant group on this item" type="checkbox" class="prod-vg-enabled w-4 h-4 rounded" value="${g.id}" ${enabled ? 'checked' : ''}>
+                        <span class="flex-1 text-sm text-gray-700">${escapeHtml(g.name)}${badge}</span>
                         <select aria-label="Required variant override" class="prod-vg-required text-xs border border-gray-200 rounded px-1 py-0.5" data-group="${g.id}">
-                            <option value="inherit" ${ov ? '' : 'selected'}>Default</option>
-                            <option value="required" ${(ov && ov.is_required_override === true) ? 'selected' : ''}>Required</option>
-                            <option value="optional" ${(ov && ov.is_required_override === false) ? 'selected' : ''}>Optional</option>
+                            <option value="inherit" ${reqOverride === null ? 'selected' : ''}>Default</option>
+                            <option value="required" ${reqOverride === true ? 'selected' : ''}>Required</option>
+                            <option value="optional" ${reqOverride === false ? 'selected' : ''}>Optional</option>
                         </select>
                     </div>`;
                 }).join('');
@@ -1350,10 +1372,10 @@
 
         async function saveProductVariantGroups(productId) {
             if (!productId) return;
-            const enabledEls = document.querySelectorAll('.prod-vg-enabled');
-            if (!enabledEls.length) return;
+            const rows = document.querySelectorAll('#product-variant-groups [data-group-row]');
+            if (!rows.length) return;
             try {
-                // Step 1: fetch current assignments so we can delete them
+                // Step 1: clear existing overrides so we can rewrite the minimal set.
                 const existingRes = await authenticatedFetch(`${API_BASE}/items/${productId}/variant-groups/`);
                 if (existingRes.ok) {
                     const existingData = await existingRes.json();
@@ -1364,22 +1386,36 @@
                         });
                     }
                 }
-                // Step 2: re-create one assignment per group with correct field names
-                for (const el of enabledEls) {
-                    const reqEl = document.querySelector(`.prod-vg-required[data-group="${el.value}"]`);
+                // Step 2: write ONLY meaningful overrides (previously wrote a row for
+                // EVERY group in the system, bloating data and silently attaching
+                // unrelated groups). A ProductVariantGroup row is needed only when
+                // the item's setting DIFFERS from pure category inheritance:
+                //   inherited group  -> row iff disabled OR required-override set
+                //   non-inherited    -> row iff enabled (product-specific addition)
+                for (const row of rows) {
+                    const gid = row.getAttribute('data-group-row');
+                    const inherited = row.getAttribute('data-inherited') === 'true';
+                    const enabledEl = row.querySelector('.prod-vg-enabled');
+                    const reqEl = row.querySelector('.prod-vg-required');
+                    const enabled = !!(enabledEl && enabledEl.checked);
+                    const reqVal = reqEl ? reqEl.value : 'inherit';
+                    const isRequiredOverride = reqVal === 'required' ? true : reqVal === 'optional' ? false : null;
+                    const needsRow = inherited
+                        ? (!enabled || isRequiredOverride !== null)
+                        : enabled;
+                    if (!needsRow) continue;
                     await authenticatedFetch(`${API_BASE}/items/${productId}/variant-groups/`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
-                            group_id: el.value,
-                            enabled: el.checked,
-                            is_required_override: reqEl
-                                    ? (reqEl.value === 'required' ? true : reqEl.value === 'optional' ? false : null)
-                                    : null,
+                            group_id: gid,
+                            enabled: enabled,
+                            is_required_override: isRequiredOverride,
                         })
                     });
                 }
             } catch (e) {
+                console.error('saveProductVariantGroups failed', e);
             }
         }
 

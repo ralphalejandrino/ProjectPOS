@@ -80,7 +80,11 @@
     let prefs = {};
     try { prefs = JSON.parse(localStorage.getItem('clock_prefs') || '{}'); } catch (e) {}
     const use12 = prefs.format !== '24h';
-    const tz = prefs.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+    // Fall back to Asia/Manila (matching config.js formatTS/formatDT), NOT the
+    // browser/OS-resolved zone. On the kiosk, Chromium can start before the OS
+    // timezone is applied and cache the wrong zone until reboot, making the
+    // header clock drift from the rest of the UI ("timezone changed on its own").
+    const tz = prefs.timezone || 'Asia/Manila';
     const el = document.getElementById('live-clock');
     if (el) {
       el.textContent = new Date().toLocaleTimeString('en-PH', {

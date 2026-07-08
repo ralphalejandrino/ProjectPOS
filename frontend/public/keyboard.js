@@ -196,10 +196,26 @@
     b.className = 'osk-key touch-target-pos' + (cls ? ' ' + cls : '');
     b.textContent = label;
     if (ariaLabel) b.setAttribute('aria-label', ariaLabel);
-    b.addEventListener('click', function (e) {
-      e.preventDefault();
-      onTap();
-    });
+    // Activate on pointerdown, NOT click. The OSK keeps focus on the field by
+    // calling preventDefault() on pointerdown (see ensureRoot + below) — but on
+    // a touchscreen that preventDefault SUPPRESSES the synthesized click, so a
+    // click-bound key never fired and digits didn't type (the cash-modal bug:
+    // taps left "Cash Received" empty, then mis-taps closed the modal / crashed
+    // the kiosk compositor to a white screen). pointerdown fires for touch,
+    // mouse and pen alike; preventDefault here both retains focus and cancels
+    // the redundant compat click, so onTap runs exactly once per tap. The click
+    // fallback covers environments without Pointer Events (e.g. jsdom).
+    if (window.PointerEvent) {
+      b.addEventListener('pointerdown', function (e) {
+        e.preventDefault();
+        onTap();
+      });
+    } else {
+      b.addEventListener('click', function (e) {
+        e.preventDefault();
+        onTap();
+      });
+    }
     return b;
   }
 
@@ -313,7 +329,10 @@
     document.body.classList.add('osk-open');
     // Don't let the keyboard cover the field.
     setTimeout(function () {
-      try { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) {}
+      // Instant (not 'smooth') scroll: an animated scroll of a position:fixed
+      // modal on the low-end kiosk panel churns the compositor and was a path to
+      // the white-screen crash. A jump is fine here.
+      try { el.scrollIntoView({ block: 'center' }); } catch (e) {}
     }, 0);
   }
 

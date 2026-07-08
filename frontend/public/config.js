@@ -436,6 +436,26 @@ function applyLogoToHeader(logoUrl) {
     window.addEventListener('offline', syncNetworkBanner);
     if (!navigator.onLine) syncNetworkBanner();
 
+    // 2b) Global error net. A runtime error on the cashier hot path used to die
+    // silently (no console visible on a kiosk). Surface it as a toast and log it
+    // so a recurrence is diagnosable instead of a mystery "screen went white".
+    // This does NOT catch a GPU/compositor crash (nothing JS can), but it clears
+    // every silent-JS-error path and gives us a breadcrumb.
+    function reportClientError(kind, detail) {
+        try { console.error('[client-error]', kind, detail); } catch (e) {}
+        try {
+            if (typeof window.toast === 'function') {
+                window.toast({ message: 'Something glitched — if the screen misbehaves, reload.', severity: 'warning' });
+            }
+        } catch (e) {}
+    }
+    window.addEventListener('error', (e) => {
+        reportClientError('error', (e && (e.message || (e.error && e.error.message))) || 'unknown');
+    });
+    window.addEventListener('unhandledrejection', (e) => {
+        reportClientError('unhandledrejection', (e && e.reason && (e.reason.message || e.reason)) || 'unknown');
+    });
+
     // 3) Service Worker registration + update notification.
     if ('serviceWorker' in navigator) {
         // A new SW that called skipWaiting takes control → controllerchange.

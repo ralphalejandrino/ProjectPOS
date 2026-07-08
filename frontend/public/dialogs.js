@@ -174,6 +174,11 @@
 
     el.addEventListener('click', (e) => {
       if (el.classList.contains('hidden')) return;
+      // Opt-out: a payment/data-entry modal (data-modal-no-backdrop-close) must
+      // NOT close on a stray backdrop tap — on the touch kiosk that silently
+      // discarded an in-progress cash entry. Such modals close only via their
+      // explicit Cancel/close controls (Escape still works).
+      if (el.hasAttribute('data-modal-no-backdrop-close')) return;
       if (e.target === el) close();
     });
 

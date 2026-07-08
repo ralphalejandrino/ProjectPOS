@@ -75,7 +75,7 @@
 // which could be stale, setting the wrong value (e.g. 10.017 instead of 960).
 // The edit modal now sends the ABSOLUTE new_stock and the server computes the
 // delta under a row lock, so a stale client baseline can't corrupt stock.
-const CACHE_NAME = 'tarsierpos-v126'; // canonical cache version
+const CACHE_NAME = 'tarsierpos-v127'; // canonical cache version
 const ASSETS = [
   'index.html',
   'login.html',
@@ -130,18 +130,43 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  if (event.request.url.includes('/api/') || event.request.url.includes('/canteen/')) {
-    event.respondWith(fetch(event.request));
+  const req = event.request;
+  if (req.url.includes('/api/') || req.url.includes('/canteen/')) {
+    event.respondWith(fetch(req));
     return;
   }
+
+  // Network-first for PAGE NAVIGATIONS. Cache-first used to serve a stale
+  // index.html: a mid-session SW activation (skipWaiting + clients.claim) could
+  // hand an already-loaded OLD page fresh cached JS on its next fetch, giving a
+  // markup/JS mismatch that renders blank (white screen). Serving fresh HTML
+  // while online removes that class of failure; we still fall back to cache when
+  // offline so the POS keeps working with no network.
+  const isNav = req.mode === 'navigate' ||
+    (req.headers.get('accept') || '').includes('text/html');
+  if (isNav) {
+    event.respondWith(
+      fetch(req).then((response) => {
+        if (response && response.status === 200 && response.type === 'basic') {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(req, copy));
+        }
+        return response;
+      }).catch(() =>
+        caches.match(req).then((cached) => cached || caches.match('index.html'))
+      )
+    );
+    return;
+  }
+
+  // Cache-first for static assets (JS/CSS/images) — busted by CACHE_NAME bumps.
   event.respondWith(
-    caches.match(event.request).then((cached) => {
+    caches.match(req).then((cached) => {
       if (cached) return cached;
-      return fetch(event.request).then((response) => {
-        // Cache successful same-origin responses (images, JS, CSS, HTML)
+      return fetch(req).then((response) => {
         if (response && response.status === 200 && response.type === 'basic') {
           const responseToCache = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseToCache));
+          caches.open(CACHE_NAME).then((cache) => cache.put(req, responseToCache));
         }
         return response;
       });
