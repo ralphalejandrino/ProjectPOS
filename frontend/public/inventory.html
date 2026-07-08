@@ -1355,7 +1355,7 @@
                         ? ' <span style="font-size:10px;text-transform:uppercase;letter-spacing:.04em;background:#eff6ff;color:#2563eb;padding:1px 6px;border-radius:4px;white-space:nowrap;">from category</span>'
                         : '';
                     return `
-                    <div class="flex items-center gap-2 p-2 border border-gray-100 rounded" data-group-row="${g.id}" data-inherited="${inherited}">
+                    <div class="flex items-center gap-2 p-2 border border-gray-100 rounded" data-group-row="${g.id}" data-inherited="${inherited}" data-initial-enabled="${enabled}">
                         <input aria-label="Show variant group on this item" type="checkbox" class="prod-vg-enabled w-4 h-4 rounded" value="${g.id}" ${enabled ? 'checked' : ''}>
                         <span class="flex-1 text-sm text-gray-700">${escapeHtml(g.name)}${badge}</span>
                         <select aria-label="Required variant override" class="prod-vg-required text-xs border border-gray-200 rounded px-1 py-0.5" data-group="${g.id}">
@@ -1389,20 +1389,31 @@
                 // Step 2: write ONLY meaningful overrides (previously wrote a row for
                 // EVERY group in the system, bloating data and silently attaching
                 // unrelated groups). A ProductVariantGroup row is needed only when
-                // the item's setting DIFFERS from pure category inheritance:
-                //   inherited group  -> row iff disabled OR required-override set
-                //   non-inherited    -> row iff enabled (product-specific addition)
+                // the item's setting DIFFERS from pure category inheritance.
+                //
+                // The DISABLE path must NOT depend on re-deriving `inherited` here:
+                // if that derivation ever goes wrong (paginated/incomplete category
+                // fetch, category-id mismatch, race) an unchecked inherited group
+                // would silently write no row and the group reappears at the
+                // register. Instead we trust the row's LOAD-time effective state
+                // (`data-initial-enabled`): a group that was ON at load and is now
+                // unchecked is an explicit disable and ALWAYS gets an enabled=false
+                // row. Still minimal — groups that were off and stay off write
+                // nothing, so unrelated groups are not attached.
+                //   checked   -> row iff non-inherited (addition) OR required-override set
+                //   unchecked -> row iff it was effective at load OR looks inherited
                 for (const row of rows) {
                     const gid = row.getAttribute('data-group-row');
                     const inherited = row.getAttribute('data-inherited') === 'true';
+                    const initialEnabled = row.getAttribute('data-initial-enabled') === 'true';
                     const enabledEl = row.querySelector('.prod-vg-enabled');
                     const reqEl = row.querySelector('.prod-vg-required');
                     const enabled = !!(enabledEl && enabledEl.checked);
                     const reqVal = reqEl ? reqEl.value : 'inherit';
                     const isRequiredOverride = reqVal === 'required' ? true : reqVal === 'optional' ? false : null;
-                    const needsRow = inherited
-                        ? (!enabled || isRequiredOverride !== null)
-                        : enabled;
+                    const needsRow = enabled
+                        ? (!inherited || isRequiredOverride !== null)
+                        : (initialEnabled || inherited);
                     if (!needsRow) continue;
                     await authenticatedFetch(`${API_BASE}/items/${productId}/variant-groups/`, {
                         method: 'POST',

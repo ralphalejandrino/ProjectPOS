@@ -526,9 +526,17 @@ class CategoryVariantGroupViewSet(viewsets.ModelViewSet):
     serializer_class = CategoryVariantGroupSerializer
     # FEATURE-044: variant management gated by 'inventory' page.
     permission_classes = [HasPageAccess('inventory')]
+    # Read whole by inventory.html to derive which groups an item inherits from
+    # its category (loadProductVariantGroups) — exempt from the global
+    # PAGE_SIZE=50 paginator, like VariantGroupViewSet (BUG-015). Otherwise a
+    # 51st category assignment silently drops out of inheritance detection and
+    # an unchecked inherited group fails to persist its disable.
+    pagination_class = None
 
     def get_queryset(self):
-        return CategoryVariantGroup.objects.filter(category_id=self.kwargs['category_pk']).select_related('group')
+        return (CategoryVariantGroup.objects
+                .filter(category_id=self.kwargs['category_pk'])
+                .select_related('group').order_by('id'))
 
     def perform_create(self, serializer):
         category = get_object_or_404(ItemCategory, pk=self.kwargs['category_pk'])
@@ -541,6 +549,11 @@ class ProductVariantGroupViewSet(viewsets.ModelViewSet):
     serializer_class = ProductVariantGroupSerializer
     # FEATURE-044: variant management gated by 'inventory' page.
     permission_classes = [HasPageAccess('inventory')]
+    # Read whole by inventory.html: loadProductVariantGroups builds the override
+    # map from this list and saveProductVariantGroups sweeps it to DELETE stale
+    # overrides. Under the global PAGE_SIZE=50 paginator a >50-override item
+    # would leave rows undeleted; exempt it (BUG-015 rationale).
+    pagination_class = None
 
     def get_queryset(self):
         return ProductVariantGroup.objects.filter(product_id=self.kwargs['product_pk']).select_related('group').order_by('id')
