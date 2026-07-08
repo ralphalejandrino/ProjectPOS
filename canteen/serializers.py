@@ -204,23 +204,31 @@ class ItemSerializer(serializers.ModelSerializer):
 
 
 class ItemUpdateSerializer(serializers.ModelSerializer):
-    """Handles PUT/PATCH with writable photo ImageField."""
+    """Handles PUT/PATCH with writable photo ImageField.
+
+    `id` is returned (read-only) so the caller can act on the saved row — the
+    inventory editor chains `saveProductVariantGroups(savedItem.id)` after the
+    PATCH, and without an id in the response that call was silently skipped
+    (variant enable/disable never persisted).
+    """
     class Meta:
         model = Item
         fields = [
-            'name', 'category', 'price', 'purchase_price', 'stock',
+            'id', 'name', 'category', 'price', 'purchase_price', 'stock',
             'low_stock_threshold', 'bar_code', 'photo', 'description',
             'sku', 'expiry_date', 'is_active'
         ]
+        read_only_fields = ['id']
 
 class ItemCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Item
         fields = [
-            'name', 'category', 'price', 'purchase_price', 'stock',
+            'id', 'name', 'category', 'price', 'purchase_price', 'stock',
             'low_stock_threshold', 'bar_code', 'photo', 'description',
             'sku', 'expiry_date', 'is_active'
         ]
+        read_only_fields = ['id']
 
 
 class ItemLogSerializer(serializers.ModelSerializer):

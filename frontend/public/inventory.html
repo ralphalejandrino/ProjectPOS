@@ -817,7 +817,13 @@
                 
                 if (response.ok) {
                     const savedItem = await response.json();
-                    await saveProductVariantGroups(savedItem.id);
+                    // Use the saved row's id; fall back to the form's product id
+                    // (the real id on an edit). The PATCH/POST response historically
+                    // omitted `id`, so `savedItem.id` was undefined and the chained
+                    // saveProductVariantGroups() bailed at `if (!productId) return` —
+                    // variant enable/disable never persisted. Backend now returns id;
+                    // the `|| id` keeps it working even against an un-updated backend.
+                    await saveProductVariantGroups(savedItem.id || id);
                     closeProductModal();
                     await loadProducts();
                     await loadAnalytics();

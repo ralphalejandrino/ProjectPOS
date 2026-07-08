@@ -420,6 +420,10 @@
             input.value = (current + amount).toFixed(2);
             input._oskBuf = input.value;   // keep the on-screen-keyboard shadow buffer in sync
             calculateChange();
+            // Tapping a quick-cash chip moves focus to the button, which fires the
+            // on-screen keyboard's focusout->hide. Return focus to the field so the
+            // pad stays up (it kept vanishing between taps on the touch kiosk).
+            input.focus();
         }
 
         // One-tap exact-cash fallback: sets received to the amount due so a sale
@@ -430,6 +434,7 @@
             input.value = cashDueAmount().toFixed(2);
             input._oskBuf = input.value;
             calculateChange();
+            input.focus();   // keep the on-screen keyboard from hiding on the button tap
         }
 
         function calculateChange() {

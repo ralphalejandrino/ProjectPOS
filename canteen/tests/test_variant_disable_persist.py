@@ -99,3 +99,40 @@ class VariantDisablePersistTests(APITestCase):
                             initial_enabled=False, enabled=False)
         self.assertFalse(
             ProductVariantGroup.objects.filter(product=self.waffle, group=other).exists())
+
+    def test_item_patch_and_post_return_id(self):
+        # THE actual root cause of the "still not persisting" report: saveProduct
+        # chains saveProductVariantGroups(savedItem.id). The update/create response
+        # omitted `id`, so that call received undefined and bailed at
+        # `if (!productId) return` — the variant save never ran on edit. Pin that
+        # both responses now carry `id`.
+        patch = self.client.patch(
+            f'/api/canteen/items/{self.waffle.id}/', {'price': '130'}, format='json')
+        self.assertEqual(patch.status_code, 200)
+        self.assertIn('id', patch.data, "PATCH /items must return id for the chained variant save")
+        self.assertEqual(str(patch.data['id']), str(self.waffle.id))
+
+        post = self.client.post('/api/canteen/items/', {
+            'name': 'New Waffle', 'price': '90', 'stock': 3, 'category': str(self.food.id),
+        }, format='json')
+        self.assertIn(post.status_code, (200, 201))
+        self.assertIn('id', post.data, "POST /items must return id so new-product variants can be saved")
+
+    def test_full_edit_flow_persists_disable_using_response_id(self):
+        # End-to-end mirror of saveProduct: PATCH the item, take the id FROM the
+        # response (as the frontend's savedItem.id), then run the variant save
+        # with it. Proves the disable persists through the real chained flow.
+        patch = self.client.patch(
+            f'/api/canteen/items/{self.waffle.id}/', {'price': '130'}, format='json')
+        saved_id = patch.data.get('id')
+        self.assertTrue(saved_id, "no id in PATCH response -> variant save would be skipped")
+        st = self._load()
+        # save against the response id (not a pre-known id)
+        for a in self._rows(self.client.get(
+                f'/api/canteen/items/{saved_id}/variant-groups/')):
+            self.client.delete(f'/api/canteen/items/{saved_id}/variant-groups/{a["id"]}/')
+        self.client.post(
+            f'/api/canteen/items/{saved_id}/variant-groups/',
+            {'group_id': st['gid'], 'enabled': False, 'is_required_override': None},
+            format='json')
+        self.assertNotIn('Fries Flavor', self._effective())
