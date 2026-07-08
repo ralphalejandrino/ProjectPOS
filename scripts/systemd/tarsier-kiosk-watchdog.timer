@@ -1,0 +1,10 @@
+[Unit]
+Description=Run the TarsierPOS kiosk blank-screen watchdog every 15s
+
+[Timer]
+OnBootSec=45s
+OnUnitActiveSec=15s
+AccuracySec=5s
+
+[Install]
+WantedBy=timers.target

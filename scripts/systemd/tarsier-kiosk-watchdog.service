@@ -1,0 +1,17 @@
+[Unit]
+Description=TarsierPOS kiosk blank-screen watchdog (self-heal white screen)
+# Companion to kiosk-run.sh. Detects a uniform/dead kiosk screen and kills
+# Chromium so the launcher relaunches a fresh POS. Runs as root (needs to pkill
+# the kiosk browser); binary is the root-owned /usr/local/sbin copy, never the
+# user-writable repo path (netguard/watchdog model). NEVER reboots.
+After=graphical.target
+
+[Service]
+Type=oneshot
+SyslogIdentifier=tarsier-kiosk-watchdog
+# The watchdog screenshots the kiosk X display. Point these at the autologin
+# kiosk user (posadmin on pos-01); adjust XAUTHORITY if the box differs
+# (check: `ls -l /home/<kioskuser>/.Xauthority` or the running Xorg -auth path).
+Environment=KIOSK_WD_DISPLAY=:0
+Environment=KIOSK_WD_XAUTHORITY=/home/posadmin/.Xauthority
+ExecStart=/usr/local/sbin/tarsier-kiosk-watchdog
