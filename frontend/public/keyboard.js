@@ -343,12 +343,29 @@
     document.body.classList.remove('osk-open');
   }
 
+  // Keep the numeric pad up while focus moves to another control (quick-cash
+  // chips, "Exact amount", Split/Discount, or a mis-tap when the "insufficient
+  // cash" banner re-lays-out the modal) inside the SAME modal as the active
+  // field. On a touch kiosk the pad is the only way to type digits, and it was
+  // vanishing the instant any non-field control was tapped — the manager's
+  // "keypad disappears" report. Scoped to pad mode + same [data-modal], so
+  // text-entry modals (e.g. the inventory editor) still dismiss the keyboard on
+  // an outside tap, keeping their Save button reachable. OSK keys always type
+  // into `target` (not document.activeElement), so typing works even while a
+  // button holds focus. When the modal closes, its field is hidden and focus
+  // falls to <body> → the pad hides via the body branch below (no lingering).
+  function keepOpenFor(el) {
+    if (mode !== 'pad' || !target || !target.closest || !el) return false;
+    var modal = target.closest('[data-modal]');
+    return !!(modal && modal.contains(el));
+  }
+
   // ── Wiring ──────────────────────────────────────────────────────────
   document.addEventListener('focusin', function (e) {
     var el = e.target;
     if (isEligible(el)) {
       show(el);
-    } else if (root && !root.hidden && !root.contains(el)) {
+    } else if (root && !root.hidden && !root.contains(el) && !keepOpenFor(el)) {
       hide();
     }
   });
@@ -359,7 +376,8 @@
       var a = document.activeElement;
       if (!a || a === document.body) { hide(); return; }
       if (root && root.contains(a)) return;   // shouldn't happen (keys aren't focusable)
-      if (!isEligible(a)) hide();
+      if (isEligible(a) || keepOpenFor(a)) return;
+      hide();
     }, 0);
   });
 
