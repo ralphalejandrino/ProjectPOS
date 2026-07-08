@@ -343,21 +343,38 @@
     document.body.classList.remove('osk-open');
   }
 
-  // Keep the numeric pad up while focus moves to another control (quick-cash
-  // chips, "Exact amount", Split/Discount, or a mis-tap when the "insufficient
-  // cash" banner re-lays-out the modal) inside the SAME modal as the active
-  // field. On a touch kiosk the pad is the only way to type digits, and it was
-  // vanishing the instant any non-field control was tapped — the manager's
-  // "keypad disappears" report. Scoped to pad mode + same [data-modal], so
-  // text-entry modals (e.g. the inventory editor) still dismiss the keyboard on
-  // an outside tap, keeping their Save button reachable. OSK keys always type
-  // into `target` (not document.activeElement), so typing works even while a
-  // button holds focus. When the modal closes, its field is hidden and focus
-  // falls to <body> → the pad hides via the body branch below (no lingering).
-  function keepOpenFor(el) {
-    if (mode !== 'pad' || !target || !target.closest || !el) return false;
+  // Keep the numeric pad up as long as the field's MODAL is still open — the
+  // pad is the only way to type digits on a touch kiosk and it kept vanishing
+  // mid cash-entry. The trigger: on a real touchscreen a tap on a quick-cash
+  // chip / Exact / empty modal chrome often does NOT move focus to a button —
+  // focus falls to <body> — and the old handlers hid the pad the instant
+  // activeElement was <body> or any non-field. So gate on "is my target field
+  // still in an OPEN [data-modal]" rather than on where focus landed. OSK keys
+  // type into `target` (not document.activeElement), so typing keeps working
+  // while focus sits on a button or <body>.
+  //
+  // Scoped to numeric-pad mode, so text-entry modals (e.g. the inventory
+  // editor) still dismiss on an outside tap, keeping their Save button
+  // reachable. When the modal is closed (Complete/Cancel → display:none) the
+  // check goes false and the pad hides — no lingering.
+  function targetModalOpen() {
+    if (mode !== 'pad' || !target || !target.closest) return false;
     var modal = target.closest('[data-modal]');
-    return !!(modal && modal.contains(el));
+    if (!modal) return false;
+    var s = window.getComputedStyle(modal);
+    return s.display !== 'none' && s.visibility !== 'hidden';
+  }
+
+  // Should the pad stay up now that focus moved to `a`?  Keep it while the
+  // field's modal is still open, UNLESS focus landed on a real control OUTSIDE
+  // that modal (then the user genuinely left). `a` is null/<body> when a touch
+  // tap didn't focus anything — the common kiosk case for a button/chip tap —
+  // and that must keep the pad, not hide it.
+  function shouldStayOpen(a) {
+    if (!targetModalOpen()) return false;
+    if (!a || a === document.body) return true;
+    var modal = target.closest('[data-modal]');
+    return !!(modal && modal.contains(a));
   }
 
   // ── Wiring ──────────────────────────────────────────────────────────
@@ -365,7 +382,7 @@
     var el = e.target;
     if (isEligible(el)) {
       show(el);
-    } else if (root && !root.hidden && !root.contains(el) && !keepOpenFor(el)) {
+    } else if (root && !root.hidden && !root.contains(el) && !shouldStayOpen(el)) {
       hide();
     }
   });
@@ -374,9 +391,9 @@
     // Defer: focus may be moving to another field or (suppressed) to a key.
     setTimeout(function () {
       var a = document.activeElement;
-      if (!a || a === document.body) { hide(); return; }
-      if (root && root.contains(a)) return;   // shouldn't happen (keys aren't focusable)
-      if (isEligible(a) || keepOpenFor(a)) return;
+      if (root && a && root.contains(a)) return;  // keys aren't focusable; guard anyway
+      if (isEligible(a)) return;                  // moving to another field; focusin retargets
+      if (shouldStayOpen(a)) return;              // pad stays while the field's modal is open
       hide();
     }, 0);
   });
