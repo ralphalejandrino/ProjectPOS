@@ -42,16 +42,26 @@ nothing (never a false kill).
    ```bash
    sudo apt-get install -y imagemagick        # provides `import` + `convert`
    ```
-2. **Launcher** — install root-owned and point the kiosk X startup at it:
-   ```bash
-   sudo install -m 0755 -o root -g root scripts/kiosk/kiosk-run.sh /usr/local/bin/kiosk-run.sh
-   ```
-   In the autologin kiosk user's `~/.xinitrc`, keep the display setup (xrandr /
-   setxkbmap / unclutter) and replace the single `chromium --kiosk … https://localhost`
-   line with:
-   ```
-   exec /usr/local/bin/kiosk-run.sh
-   ```
+2. **Launcher.** `kiosk-run.sh` mirrors the proven pos-01 flags (incl.
+   `--ignore-certificate-errors`, snap chromium path) plus `--disable-gpu`.
+
+   - **New box:** install it and point the kiosk X startup at it:
+     ```bash
+     sudo install -m 0755 -o root -g root scripts/kiosk/kiosk-run.sh /usr/local/bin/kiosk-run.sh
+     ```
+     In the autologin kiosk user's `~/.xinitrc`, keep the display setup (xrandr /
+     setxkbmap / unclutter) and replace the single `chromium --kiosk … https://localhost`
+     line with `exec /usr/local/bin/kiosk-run.sh`.
+
+   - **Existing box that already has its own `while true; do chromium …; done`
+     loop** (this is how pos-01 is set up): don't swap in the script — just
+     add `--disable-gpu` to the existing chromium line, which keeps every
+     box-specific flag you already rely on:
+     ```bash
+     cp ~/.xinitrc ~/.xinitrc.bak-$(date +%Y%m%d-%H%M%S)
+     sed -i 's|chromium --kiosk|chromium --disable-gpu --kiosk|' ~/.xinitrc
+     ```
+     Then install the watchdog (step 3) and reboot.
 3. **Watchdog** — root-owned copy + timer:
    ```bash
    sudo install -m 0755 -o root -g root scripts/kiosk/tarsier-kiosk-watchdog.sh /usr/local/sbin/tarsier-kiosk-watchdog
