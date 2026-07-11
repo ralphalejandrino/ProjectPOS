@@ -23,6 +23,26 @@
     .low-stock-row { background-color: #fef2f2; }
     .spinner { border: 3px solid #e5e7eb; border-top-color: #2563eb; border-radius: 50%; width: 28px; height: 28px; animation: spin 0.7s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
+    /* Kiosk: when the on-screen keypad is up (body.osk-open) it is fixed to the
+       bottom and covered the vertically-centered ingredient editor's Save button,
+       so a manager could type a new cost but never tap Save — the edit was lost.
+       Top-align the panel and cap its height to the space above the keypad, with
+       the body scrolling, so the header + Save footer stay visible above the OSK.
+       Scoped to this page's tall editor; desktop (no osk-open) is unaffected. */
+    body.osk-open #modalBackdrop { align-items: flex-start; }
+    body.osk-open #ingredientModal {
+      margin-top: 0.75rem;
+      max-height: calc(100vh - 19rem); /* 19rem = the OSK reserve, matches body.osk-open padding */
+      display: flex;
+      flex-direction: column;
+    }
+    body.osk-open #ingredientModal > .border-b,
+    body.osk-open #ingredientModal > .border-t { flex: 0 0 auto; }
+    body.osk-open #ingredientModal > .overflow-y-auto {
+      flex: 1 1 auto;
+      min-height: 0;
+      max-height: none; /* let the panel cap govern instead of the fixed max-h-[70vh] */
+    }
   </style>
   <!-- config.js MUST load before the inline FLAG-028 guard below, which calls
        guardPage() (defined in config.js). Matches dashboard/inventory ordering. -->
