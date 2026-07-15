@@ -1827,9 +1827,14 @@ function closeModal() {
   closeAllModals();
   document.getElementById('modalBackdrop').classList.add('hidden');
 }
-document.getElementById('modalBackdrop').addEventListener('click', e => {
-  if (e.target === e.currentTarget) closeModal();
-});
+// Backdrop-click-to-close is handled by dialogs.js (attachModalBehavior), which
+// honours data-modal-no-backdrop-close on #modalBackdrop. The old page-local
+// handler that used to live here did NOT check that opt-out, so on the touch
+// kiosk a slightly-missed tap beside the narrow Restock modal (max-w-md, 2-col
+// grid → backdrop sits right next to the fields) landed on the dimmed backdrop
+// and closed the whole modal mid-entry — the manager "restock disappears on
+// tap" report. Removed; dialogs.js is the single, opt-out-aware close path
+// (× / Cancel / Escape still close explicitly).
 
 // ─── Refresh helpers ──────────────────────────────────────
 async function refreshIngredients() {
