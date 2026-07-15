@@ -353,12 +353,20 @@
   // type into `target` (not document.activeElement), so typing keeps working
   // while focus sits on a button or <body>.
   //
-  // Scoped to numeric-pad mode, so text-entry modals (e.g. the inventory
-  // editor) still dismiss on an outside tap, keeping their Save button
-  // reachable. When the modal is closed (Complete/Cancel → display:none) the
-  // check goes false and the pad hides — no lingering.
+  // Scoped to numeric-pad mode, so ordinary text-entry modals (e.g. the
+  // inventory editor) still dismiss on an outside tap, keeping their Save
+  // button reachable. A TEXT field can opt back INTO this persistence with
+  // [data-osk-sticky] — used for the GCash/Maya reference number, which the
+  // cashier reads off the customer's phone and types over several taps; on the
+  // touch kiosk a stray tap dropped focus to <body> and the QWERTY vanished
+  // mid-entry (mode !== 'pad', so the body-fallback below never fired), forcing
+  // a re-tap of the field for every interruption. Sticky text fields sit in a
+  // payment modal whose Confirm stays reachable above the keyboard, so keeping
+  // the board up costs nothing. When the modal closes (Complete/Cancel →
+  // display:none) the check goes false and the keyboard hides — no lingering.
   function targetModalOpen() {
-    if (mode !== 'pad' || !target || !target.closest) return false;
+    if (!target || !target.closest) return false;
+    if (mode !== 'pad' && !(target.matches && target.matches('[data-osk-sticky]'))) return false;
     var modal = target.closest('[data-modal]');
     if (!modal) return false;
     var s = window.getComputedStyle(modal);

@@ -24,24 +24,27 @@
     .spinner { border: 3px solid #e5e7eb; border-top-color: #2563eb; border-radius: 50%; width: 28px; height: 28px; animation: spin 0.7s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
     /* Kiosk: when the on-screen keypad is up (body.osk-open) it is fixed to the
-       bottom and covered the vertically-centered ingredient editor's Save button,
-       so a manager could type a new cost but never tap Save — the edit was lost.
-       Top-align the panel and cap its height to the space above the keypad, with
-       the body scrolling, so the header + Save footer stay visible above the OSK.
-       Scoped to this page's tall editor; desktop (no osk-open) is unaffected. */
+       bottom and covered the vertically-centered modal's Save/Confirm button, so
+       a manager could type a value but never tap the action — the edit was lost.
+       Top-align the OPEN panel and cap its height to the space above the keypad,
+       with the body scrolling, so the header + action footer stay above the OSK.
+       Applies to every editor on this page (ingredient / supplier / unit /
+       restock — restock is why the manager couldn't confirm a restock on the
+       kiosk). Scoped to the currently-open panel via :not(.hidden) so the hidden
+       sibling panels keep their display:none; desktop (no osk-open) is unaffected. */
     body.osk-open #modalBackdrop { align-items: flex-start; }
-    body.osk-open #ingredientModal {
+    body.osk-open .modal-panel:not(.hidden) {
       margin-top: 0.75rem;
       max-height: calc(100vh - 19rem); /* 19rem = the OSK reserve, matches body.osk-open padding */
       display: flex;
       flex-direction: column;
     }
-    body.osk-open #ingredientModal > .border-b,
-    body.osk-open #ingredientModal > .border-t { flex: 0 0 auto; }
-    body.osk-open #ingredientModal > .overflow-y-auto {
+    body.osk-open .modal-panel:not(.hidden) > .border-b,
+    body.osk-open .modal-panel:not(.hidden) > .border-t { flex: 0 0 auto; }
+    body.osk-open .modal-panel:not(.hidden) > .overflow-y-auto {
       flex: 1 1 auto;
       min-height: 0;
-      max-height: none; /* let the panel cap govern instead of the fixed max-h-[70vh] */
+      max-height: none; /* let the panel cap govern instead of any fixed max-h */
     }
   </style>
   <!-- config.js MUST load before the inline FLAG-028 guard below, which calls
@@ -522,7 +525,7 @@
       <h2 class="font-semibold text-gray-800" id="supplierModalTitle">Add Supplier</h2>
       <button aria-label="Close" onclick="closeModal()" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
     </div>
-    <div class="px-6 py-4 space-y-3">
+    <div class="px-6 py-4 space-y-3 overflow-y-auto">
       <input type="hidden" id="supplierId" />
       <div>
         <label class="block text-xs font-medium text-gray-600 mb-1">Name <span class="text-red-500">*</span></label>
@@ -564,7 +567,7 @@
       <h2 class="font-semibold text-gray-800" id="unitModalTitle">Add Unit</h2>
       <button aria-label="Close" onclick="closeModal()" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
     </div>
-    <div class="px-6 py-4 space-y-3">
+    <div class="px-6 py-4 space-y-3 overflow-y-auto">
       <input type="hidden" id="unitId" />
       <div>
         <label class="block text-xs font-medium text-gray-600 mb-1">Name <span class="text-red-500">*</span></label>
@@ -589,7 +592,7 @@
       <h2 class="font-semibold text-gray-800">Restock Ingredient</h2>
       <button aria-label="Close" onclick="closeModal()" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
     </div>
-    <div class="px-6 py-4 space-y-3">
+    <div class="px-6 py-4 space-y-3 overflow-y-auto">
       <input type="hidden" id="restockIngredientId" />
       <div class="bg-gray-50 rounded-lg px-3 py-2 text-sm text-gray-600">
         Ingredient: <span class="font-semibold text-gray-800" id="restockIngredientName">—</span>
