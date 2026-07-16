@@ -349,7 +349,7 @@ function showVariantPicker(item) {
             const priceLabel = pm > 0 ? `+${formatCurrency(pm)}` : pm < 0 ? `-${formatCurrency(Math.abs(pm))}` : '';
             const row = document.createElement('label');
             row.className = 'flex items-center gap-2 cursor-pointer text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200';
-            row.innerHTML = `<input type="${inputType}" name="${inputName}" value="${opt.id}" data-group="${g.id}" data-price="${opt.price_modifier}" class="variant-input"> ${escapeHtml(opt.name)}${priceLabel ? ' <span class="text-indigo-500">' + escapeHtml(priceLabel) + '</span>' : ''}`;
+            row.innerHTML = `<input type="${inputType}" name="${inputName}" value="${opt.id}" data-group="${g.id}" data-price="${opt.price_modifier}" class="variant-input"> ${escapeHtml(opt.name)}${priceLabel ? ' <span class="font-medium text-blue-600">' + escapeHtml(priceLabel) + '</span>' : ''}`;
             opts.appendChild(row);
         });
         section.appendChild(opts);

@@ -151,9 +151,15 @@
 
     <!-- MODAL: CASH PAYMENT -->
     <div id="cash-modal" data-modal data-modal-close="closeCashModal" data-modal-no-backdrop-close class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center" style="z-index: var(--z-modal);">
-        <div class="bg-white rounded-lg shadow-2xl p-8 max-w-md w-full mx-4">
-            <h3 class="text-2xl font-bold mb-6 text-gray-800">Cash Payment</h3>
-
+        <div class="modal-card" style="max-width: 28rem;">
+            <div class="modal-card__head">
+                <h3 class="modal-card__title">Cash Payment</h3>
+                <div class="modal-card__actions">
+                    <button onclick="closeCashModal()" class="modal-btn modal-btn--secondary">Cancel</button>
+                    <button id="btn-complete-cash" onclick="completeCashSale()" class="modal-btn modal-btn--primary">Complete Sale</button>
+                </div>
+            </div>
+            <div class="modal-card__body">
             <div class="mb-6">
                 <label class="block text-sm font-medium text-gray-700 mb-2">Total Amount:</label>
                 <div class="text-3xl font-bold text-blue-600" id="cash-total">0.00</div>
@@ -263,13 +269,6 @@
                 🏷️ Apply Discount
             </button>
 
-            <div class="flex space-x-3 mt-4">
-                <button onclick="closeCashModal()" class="flex-1 bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 rounded-lg transition">
-                    Cancel
-                </button>
-                <button id="btn-complete-cash" onclick="completeCashSale()" class="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg transition">
-                    Complete Sale
-                </button>
             </div>
         </div>
     </div>
@@ -281,49 +280,49 @@
 
     <!-- MODAL: OPEN SHIFT (ISSUE-107) -->
     <div id="shift-modal" data-modal data-modal-close="closeShiftModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center" style="z-index: var(--z-modal);">
-        <div class="bg-white rounded-lg shadow-2xl p-8 max-w-md w-full mx-4">
-            <h3 class="text-2xl font-bold mb-2 text-gray-800">Open Shift</h3>
+        <div class="modal-card" style="max-width: 28rem;">
+            <div class="modal-card__head">
+                <h3 class="modal-card__title">Open Shift</h3>
+                <div class="modal-card__actions">
+                    <button onclick="window.closeShiftModal()" class="modal-btn modal-btn--secondary">Cancel</button>
+                    <button id="confirm-open-shift-btn" onclick="openShift()" class="modal-btn modal-btn--primary">Open Shift</button>
+                </div>
+            </div>
+            <div class="modal-card__body">
             <p class="text-gray-600 mb-4 text-sm">Enter the opening cash float in the drawer to start ringing sales.</p>
             <label class="block text-sm font-medium text-gray-700 mb-1" for="opening-cash-input">Opening cash (₱)</label>
             <input type="number" id="opening-cash-input" min="0" step="0.01" placeholder="0.00" required
                    class="w-full border border-gray-300 rounded-lg px-3 py-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-400 mb-2">
             <p id="shift-modal-error" class="hidden text-red-600 text-sm mb-2"></p>
-            <div class="flex space-x-3 mt-4">
-                <button onclick="window.closeShiftModal()" class="touch-target-pos flex-1 bg-gray-500 hover:bg-gray-600 text-white font-bold rounded-lg transition">
-                    Cancel
-                </button>
-                <button id="confirm-open-shift-btn" onclick="openShift()" class="touch-target-pos flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition">
-                    Open Shift
-                </button>
             </div>
         </div>
     </div>
 
     <!-- MODAL: PAYMENT PROCESSING -->
     <div id="payment-modal" data-modal="payment-modal" data-modal-close="closePaymentSuccessModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center" style="z-index: var(--z-modal);">
-        <div class="bg-white rounded-lg shadow-2xl p-8 max-w-md w-full mx-4">
-            <h3 class="text-2xl font-bold mb-6 text-gray-800 payment-method">Processing...</h3>
-            <div class="payment-message text-center py-8">
-                <div class="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600 mx-auto mb-4"></div>
-                <p class="text-gray-600">Please wait...</p>
+        <div class="modal-card" style="max-width: 28rem;">
+            <div class="modal-card__body text-center">
+                <h3 class="text-2xl font-bold mb-6 text-gray-800 payment-method">Processing...</h3>
+                <div class="payment-message py-8">
+                    <div class="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600 mx-auto mb-4"></div>
+                    <p class="text-gray-600">Please wait...</p>
+                </div>
             </div>
         </div>
     </div>
 
     <!-- MODAL: VARIANT PICKER (Step 8) -->
     <div id="variant-modal" data-modal class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden" style="z-index: var(--z-modal);">
-      <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-96 max-w-full flex flex-col" style="max-height:85vh;">
-        <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
-          <h3 id="variant-modal-title" class="text-lg font-semibold text-gray-800 dark:text-white"></h3>
-        </div>
-        <div id="variant-modal-groups" class="flex flex-col gap-4 overflow-y-auto flex-1 px-6 py-4"></div>
-        <div class="flex items-center justify-between px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex-shrink-0">
-          <span class="text-sm text-gray-500 dark:text-gray-400">Total: <span id="variant-modal-price" class="font-semibold text-gray-800 dark:text-white"></span></span>
-          <div class="flex gap-2">
-            <button onclick="closeVariantModal()" class="touch-target-pos py-2 px-4 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition text-sm">Cancel</button>
-            <button onclick="confirmVariantSelection()" class="touch-target-pos py-2 px-4 bg-green-500 hover:bg-green-600 text-white rounded-lg transition text-sm">Add to Cart</button>
+      <div class="modal-card" style="max-width: 32rem;">
+        <div class="modal-card__head">
+          <h3 class="modal-card__title" id="variant-modal-title"></h3>
+          <div class="modal-card__actions">
+            <span class="text-sm text-gray-500 dark:text-gray-400 mr-1">Total: <span id="variant-modal-price" class="font-semibold text-gray-800 dark:text-white"></span></span>
+            <button onclick="closeVariantModal()" class="modal-btn modal-btn--secondary">Cancel</button>
+            <button onclick="confirmVariantSelection()" class="modal-btn modal-btn--primary">Add to Cart</button>
           </div>
         </div>
+        <div id="variant-modal-groups" class="modal-card__body flex flex-col gap-4"></div>
       </div>
     </div>
 
@@ -1057,26 +1056,31 @@
 
     <!-- MODAL: NO SALE CONFIRMATION -->
     <div id="no-sale-modal" data-modal class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center" style="z-index: var(--z-modal);">
-        <div class="bg-white rounded-lg shadow-2xl p-6 max-w-sm w-full mx-4">
-            <h3 class="text-lg font-bold mb-2 text-gray-800">Open Cash Drawer</h3>
-            <p class="text-gray-600 mb-6 text-sm">This will open the cash drawer without processing a transaction. Continue?</p>
-            <div class="flex gap-3">
-                <button onclick="document.getElementById('no-sale-modal').classList.add('hidden')"
-                        class="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 text-sm font-medium transition">
-                    Cancel
-                </button>
-                <button onclick="confirmNoSale()"
-                        class="flex-1 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 text-sm font-medium transition">
-                    Open Drawer
-                </button>
+        <div class="modal-card" style="max-width: 28rem;">
+            <div class="modal-card__head">
+                <h3 class="modal-card__title">Open Cash Drawer</h3>
+                <div class="modal-card__actions">
+                    <button onclick="document.getElementById('no-sale-modal').classList.add('hidden')" class="modal-btn modal-btn--secondary">Cancel</button>
+                    <button onclick="confirmNoSale()" class="modal-btn modal-btn--primary">Open Drawer</button>
+                </div>
+            </div>
+            <div class="modal-card__body">
+                <p class="text-gray-600 text-sm">This will open the cash drawer without processing a transaction. Continue?</p>
             </div>
         </div>
     </div>
 
     <!-- MODAL: GCASH PAYMENT -->
     <div id="gcash-modal" data-modal data-modal-close="closeGCashModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center" style="z-index: var(--z-modal);">
-        <div class="bg-white rounded-xl shadow-2xl p-6 w-80 text-center">
-            <h3 class="text-xl font-bold mb-4">GCash Payment</h3>
+        <div class="modal-card" style="max-width: 28rem;">
+            <div class="modal-card__head">
+                <h3 class="modal-card__title">GCash Payment</h3>
+                <div class="modal-card__actions">
+                    <button onclick="closeGCashModal()" class="modal-btn modal-btn--secondary">Cancel</button>
+                    <button id="btn-confirm-gcash" onclick="completeGCashSale()" class="modal-btn modal-btn--primary">Confirm</button>
+                </div>
+            </div>
+            <div class="modal-card__body text-center">
             <p class="text-gray-600 mb-3">Ask customer to scan:</p>
             <div id="gcash-qr-container" class="mb-4">
                 <img id="gcash-qr-display" src="" alt="GCash QR" class="w-48 h-48 object-contain mx-auto border rounded hidden">
@@ -1136,17 +1140,21 @@
                 🏷️ Apply Discount
             </button>
 
-            <div class="flex gap-2">
-                <button onclick="closeGCashModal()" class="flex-1 bg-gray-200 text-gray-700 py-2 rounded-lg">Cancel</button>
-                <button id="btn-confirm-gcash" onclick="completeGCashSale()" class="flex-1 text-white py-2 rounded-lg font-bold" style="background-color:#1973fa">Confirm</button>
             </div>
         </div>
     </div>
 
     <!-- MODAL: MAYA PAYMENT -->
     <div id="maya-modal" data-modal data-modal-close="closeMayaModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center" style="z-index: var(--z-modal);">
-        <div class="bg-white rounded-xl shadow-2xl p-6 w-80 text-center">
-            <h3 class="text-xl font-bold mb-4">Maya Payment</h3>
+        <div class="modal-card" style="max-width: 28rem;">
+            <div class="modal-card__head">
+                <h3 class="modal-card__title">Maya Payment</h3>
+                <div class="modal-card__actions">
+                    <button onclick="closeMayaModal()" class="modal-btn modal-btn--secondary">Cancel</button>
+                    <button id="btn-confirm-maya" onclick="completeMayaSale()" class="modal-btn modal-btn--primary">Confirm</button>
+                </div>
+            </div>
+            <div class="modal-card__body text-center">
             <p class="text-gray-600 mb-3">Ask customer to scan:</p>
             <div id="maya-qr-container" class="mb-4">
                 <img id="maya-qr-display" src="" alt="Maya QR" class="w-48 h-48 object-contain mx-auto border rounded hidden">
@@ -1206,9 +1214,6 @@
                 🏷️ Apply Discount
             </button>
 
-            <div class="flex gap-2">
-                <button onclick="closeMayaModal()" class="flex-1 bg-gray-200 text-gray-700 py-2 rounded-lg">Cancel</button>
-                <button id="btn-confirm-maya" onclick="completeMayaSale()" class="flex-1 text-gray-900 py-2 rounded-lg font-bold" style="background-color:#2ff19e">Confirm</button>
             </div>
         </div>
     </div>

@@ -75,7 +75,34 @@
 // which could be stale, setting the wrong value (e.g. 10.017 instead of 960).
 // The edit modal now sends the ABSOLUTE new_stock and the server computes the
 // delta under a row lock, so a stale client baseline can't corrupt stock.
-const CACHE_NAME = 'tarsierpos-v137'; // canonical cache version
+// v138: kiosk modal consistency — promoted the "lift the modal above the
+// on-screen keyboard" rule from ingredients.html into shared-styles.css as one
+// global rule ([data-modal] + its visible card), so EVERY modal's Save/Confirm
+// stays tappable on the touch kiosk instead of being fixed one modal at a time
+// (proven-buried before: zreport Close-Shift + inventory product editor). Also
+// registered two orphan modals with the shared dialog system (zreport close-modal,
+// ingredients prepBatch — the latter converted from inline display: toggling to
+// .hidden) and removed dashboard's page-local backdrop-close handlers (the
+// restock-vanish class) in favour of the shared, opt-out-aware close.
+// v139: unified every data-entry modal onto one standard card (shared-styles.css
+// .modal-card): pinned header with the title + actions (Cancel/primary) at the
+// TOP-RIGHT and a single scrolling body — no bottom footer, so the actions sit as
+// far as possible from the on-screen keyboard and stay visible on any screen. One
+// contract across inventory / ingredients / POS payment / shift / z-report /
+// settings / dashboard modals; removed the page-local pinned-footer CSS it replaced.
+// v140: folded the remaining non-editor modals onto the same .modal-card standard
+// (payment spinner, settings success, no-sale confirm, dashboard transaction-detail
+// viewer, POS variant picker) so the whole modal surface is one consistent style.
+// v141: modal polish — consistent frosted backdrop blur behind EVERY modal, and
+// unified the management-list controls (category rows, variant-group + option rows)
+// onto shared compact/row-action button styles so they match the rest of the UI.
+// v142: consolidated variant-group OPTIONS into the group's Edit modal (removed the
+// inline "Options" expander in the Manage Variant Groups list) so options are edited
+// in their own modal like everything else; new-group save stays open in edit mode.
+// v143: stacked modals no longer compound the backdrop blur — any modal that
+// follows another open modal drops its own blur, so exactly one frosted layer
+// shows regardless of stack depth (triple-stack: Manage Variants → Edit → Add Option).
+const CACHE_NAME = 'tarsierpos-v143'; // canonical cache version
 const ASSETS = [
   'index.html',
   'login.html',

@@ -23,29 +23,9 @@
     .low-stock-row { background-color: #fef2f2; }
     .spinner { border: 3px solid #e5e7eb; border-top-color: #2563eb; border-radius: 50%; width: 28px; height: 28px; animation: spin 0.7s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
-    /* Kiosk: when the on-screen keypad is up (body.osk-open) it is fixed to the
-       bottom and covered the vertically-centered modal's Save/Confirm button, so
-       a manager could type a value but never tap the action — the edit was lost.
-       Top-align the OPEN panel and cap its height to the space above the keypad,
-       with the body scrolling, so the header + action footer stay above the OSK.
-       Applies to every editor on this page (ingredient / supplier / unit /
-       restock — restock is why the manager couldn't confirm a restock on the
-       kiosk). Scoped to the currently-open panel via :not(.hidden) so the hidden
-       sibling panels keep their display:none; desktop (no osk-open) is unaffected. */
-    body.osk-open #modalBackdrop { align-items: flex-start; }
-    body.osk-open .modal-panel:not(.hidden) {
-      margin-top: 0.75rem;
-      max-height: calc(100vh - 19rem); /* 19rem = the OSK reserve, matches body.osk-open padding */
-      display: flex;
-      flex-direction: column;
-    }
-    body.osk-open .modal-panel:not(.hidden) > .border-b,
-    body.osk-open .modal-panel:not(.hidden) > .border-t { flex: 0 0 auto; }
-    body.osk-open .modal-panel:not(.hidden) > .overflow-y-auto {
-      flex: 1 1 auto;
-      min-height: 0;
-      max-height: none; /* let the panel cap govern instead of any fixed max-h */
-    }
+    /* Kiosk modal lift is now the shared .modal-card standard in shared-styles.css
+       (pinned header with top-right actions + scrolling body). The old page-local
+       pinned-footer rule was removed when these panels adopted .modal-card. */
   </style>
   <!-- config.js MUST load before the inline FLAG-028 guard below, which calls
        guardPage() (defined in config.js). Matches dashboard/inventory ordering. -->
@@ -399,12 +379,15 @@
   class="fixed inset-0 bg-black/40 modal-backdrop hidden flex items-center justify-center p-4" style="z-index: var(--z-modal);">
 
   <!-- ── INGREDIENT MODAL ── -->
-  <div id="ingredientModal" class="modal-panel hidden bg-white rounded-2xl shadow-2xl w-full max-w-lg">
-    <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-      <h2 class="font-semibold text-gray-800" id="ingredientModalTitle">Add Ingredient</h2>
-      <button aria-label="Close" onclick="closeModal()" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+  <div id="ingredientModal" class="modal-panel modal-card hidden max-w-lg">
+    <div class="modal-card__head">
+      <h2 class="modal-card__title" id="ingredientModalTitle">Add Ingredient</h2>
+      <div class="modal-card__actions">
+        <button onclick="closeModal()" class="modal-btn modal-btn--secondary">Cancel</button>
+        <button onclick="submitIngredientModal()" class="modal-btn modal-btn--primary">Save</button>
+      </div>
     </div>
-    <div class="px-6 py-4 space-y-3 max-h-[70vh] overflow-y-auto">
+    <div class="modal-card__body space-y-3">
       <input type="hidden" id="ingredientId" />
       <div>
         <label class="block text-xs font-medium text-gray-600 mb-1">Name <span class="text-red-500">*</span></label>
@@ -513,19 +496,18 @@
         <label for="ingredientActive" class="text-sm text-gray-600">Active</label>
       </div>
     </div>
-    <div class="flex justify-end gap-2 px-6 py-4 border-t border-gray-100">
-      <button onclick="closeModal()" class="px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600 text-sm transition">Cancel</button>
-      <button onclick="submitIngredientModal()" class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition">Save</button>
-    </div>
   </div>
 
   <!-- ── SUPPLIER MODAL ── -->
-  <div id="supplierModal" class="modal-panel hidden bg-white rounded-2xl shadow-2xl w-full max-w-lg">
-    <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-      <h2 class="font-semibold text-gray-800" id="supplierModalTitle">Add Supplier</h2>
-      <button aria-label="Close" onclick="closeModal()" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+  <div id="supplierModal" class="modal-panel modal-card hidden max-w-lg">
+    <div class="modal-card__head">
+      <h2 class="modal-card__title" id="supplierModalTitle">Add Supplier</h2>
+      <div class="modal-card__actions">
+        <button onclick="closeModal()" class="modal-btn modal-btn--secondary">Cancel</button>
+        <button onclick="submitSupplierModal()" class="modal-btn modal-btn--primary">Save</button>
+      </div>
     </div>
-    <div class="px-6 py-4 space-y-3 overflow-y-auto">
+    <div class="modal-card__body space-y-3">
       <input type="hidden" id="supplierId" />
       <div>
         <label class="block text-xs font-medium text-gray-600 mb-1">Name <span class="text-red-500">*</span></label>
@@ -555,19 +537,18 @@
           class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none"></textarea>
       </div>
     </div>
-    <div class="flex justify-end gap-2 px-6 py-4 border-t border-gray-100">
-      <button onclick="closeModal()" class="px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600 text-sm transition">Cancel</button>
-      <button onclick="submitSupplierModal()" class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition">Save</button>
-    </div>
   </div>
 
   <!-- ── UNIT MODAL ── -->
-  <div id="unitModal" class="modal-panel hidden bg-white rounded-2xl shadow-2xl w-full max-w-sm">
-    <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-      <h2 class="font-semibold text-gray-800" id="unitModalTitle">Add Unit</h2>
-      <button aria-label="Close" onclick="closeModal()" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+  <div id="unitModal" class="modal-panel modal-card hidden max-w-sm">
+    <div class="modal-card__head">
+      <h2 class="modal-card__title" id="unitModalTitle">Add Unit</h2>
+      <div class="modal-card__actions">
+        <button onclick="closeModal()" class="modal-btn modal-btn--secondary">Cancel</button>
+        <button onclick="submitUnitModal()" class="modal-btn modal-btn--primary">Save</button>
+      </div>
     </div>
-    <div class="px-6 py-4 space-y-3 overflow-y-auto">
+    <div class="modal-card__body space-y-3">
       <input type="hidden" id="unitId" />
       <div>
         <label class="block text-xs font-medium text-gray-600 mb-1">Name <span class="text-red-500">*</span></label>
@@ -580,19 +561,18 @@
           class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
       </div>
     </div>
-    <div class="flex justify-end gap-2 px-6 py-4 border-t border-gray-100">
-      <button onclick="closeModal()" class="px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600 text-sm transition">Cancel</button>
-      <button onclick="submitUnitModal()" class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition">Save</button>
-    </div>
   </div>
 
   <!-- ── RESTOCK MODAL ── -->
-  <div id="restockModal" class="modal-panel hidden bg-white rounded-2xl shadow-2xl w-full max-w-md">
-    <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-      <h2 class="font-semibold text-gray-800">Restock Ingredient</h2>
-      <button aria-label="Close" onclick="closeModal()" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+  <div id="restockModal" class="modal-panel modal-card hidden max-w-md">
+    <div class="modal-card__head">
+      <h2 class="modal-card__title">Restock Ingredient</h2>
+      <div class="modal-card__actions">
+        <button onclick="closeModal()" class="modal-btn modal-btn--secondary">Cancel</button>
+        <button onclick="submitRestockModal()" class="modal-btn modal-btn--primary">Confirm Restock</button>
+      </div>
     </div>
-    <div class="px-6 py-4 space-y-3 overflow-y-auto">
+    <div class="modal-card__body space-y-3">
       <input type="hidden" id="restockIngredientId" />
       <div class="bg-gray-50 rounded-lg px-3 py-2 text-sm text-gray-600">
         Ingredient: <span class="font-semibold text-gray-800" id="restockIngredientName">—</span>
@@ -653,10 +633,6 @@
         <textarea aria-label="Notes" id="restockNotes" rows="2"
           class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none"></textarea>
       </div>
-    </div>
-    <div class="flex justify-end gap-2 px-6 py-4 border-t border-gray-100">
-      <button onclick="closeModal()" class="px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600 text-sm transition">Cancel</button>
-      <button onclick="submitRestockModal()" class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition">Confirm Restock</button>
     </div>
   </div>
 
@@ -1497,10 +1473,10 @@ function promptPrepBatch(id) {
     `${ing.name} — one batch makes ${parseFloat(ing.batch_yield || 0)} ${unit} at ${uc}/${unit || 'unit'}`;
   document.getElementById('prepBatchCount').value = '1';
   updatePrepBatchPreview();
-  document.getElementById('prepBatchModal').style.display = 'flex';
+  document.getElementById('prepBatchModal').classList.remove('hidden');
 }
 function closePrepBatchModal() {
-  document.getElementById('prepBatchModal').style.display = 'none';
+  document.getElementById('prepBatchModal').classList.add('hidden');
   _prepBatchId = null;
 }
 function updatePrepBatchPreview() {
@@ -1889,17 +1865,21 @@ checkAuth();
   }
 </script>
   <!-- FEATURE-056: prep-a-batch modal (standalone overlay) -->
-  <div id="prepBatchModal" class="fixed inset-0 bg-black bg-opacity-50 items-center justify-center z-50" style="display:none;">
-    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6">
-      <h2 class="font-semibold text-gray-800 text-lg mb-1">Prep a batch</h2>
-      <p id="prepBatchName" class="text-sm text-gray-500 mb-4"></p>
-      <label class="block text-xs font-medium text-gray-600 mb-1">Number of batches</label>
-      <input type="number" id="prepBatchCount" min="1" step="1" value="1" oninput="updatePrepBatchPreview()"
-        class="w-full border border-gray-300 px-3 py-2 rounded-lg text-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
-      <p id="prepBatchPreview" class="text-xs text-gray-500 mt-2"></p>
-      <div class="flex justify-end gap-2 mt-5">
-        <button onclick="closePrepBatchModal()" class="px-4 py-2 rounded-lg text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 transition">Cancel</button>
-        <button onclick="confirmPrepBatch()" id="prepBatchConfirmBtn" class="px-4 py-2 rounded-lg text-sm bg-blue-600 hover:bg-blue-700 text-white font-medium transition">Produce</button>
+  <div id="prepBatchModal" data-modal data-modal-close="closePrepBatchModal" data-modal-no-backdrop-close class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center" style="z-index: var(--z-modal);">
+    <div class="modal-card" style="max-width: 24rem;">
+      <div class="modal-card__head">
+        <h2 class="modal-card__title">Prep a batch</h2>
+        <div class="modal-card__actions">
+          <button onclick="closePrepBatchModal()" class="modal-btn modal-btn--secondary">Cancel</button>
+          <button onclick="confirmPrepBatch()" id="prepBatchConfirmBtn" class="modal-btn modal-btn--primary">Produce</button>
+        </div>
+      </div>
+      <div class="modal-card__body">
+        <p id="prepBatchName" class="text-sm text-gray-500 mb-4"></p>
+        <label class="block text-xs font-medium text-gray-600 mb-1">Number of batches</label>
+        <input type="number" id="prepBatchCount" min="1" step="1" value="1" oninput="updatePrepBatchPreview()"
+          class="w-full border border-gray-300 px-3 py-2 rounded-lg text-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        <p id="prepBatchPreview" class="text-xs text-gray-500 mt-2"></p>
       </div>
     </div>
   </div>

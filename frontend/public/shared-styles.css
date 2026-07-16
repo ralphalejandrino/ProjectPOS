@@ -727,6 +727,132 @@ body {
 /* Lift bottom-pinned content above the keyboard while it's open. */
 body.osk-open { padding-bottom: 19rem; }
 
+/* ===== Kiosk: lift modal cards above the on-screen keyboard =====================
+   The OSK is fixed to the bottom ~19rem. A vertically-centred modal's primary
+   Save/Confirm button used to sit UNDER it on the touch kiosk, so a user could
+   type a value but never tap the action — the edit was silently lost. This kept
+   surfacing one modal at a time (ingredient cost -> restock -> product editor ->
+   shift-close ...) because the lift lived in a single page's <style>. Promoting
+   it here fixes the whole class at once and keeps every page consistent.
+
+   Mechanism: while the keyboard is up (body.osk-open) top-align each open modal
+   and cap its card to the space above the keyboard, letting the card scroll, so
+   the action stays on-screen and tappable. Keyed on [data-modal] + its visible
+   direct-child card, so EVERY registered modal inherits it with no per-modal
+   markup. Only bites when the keyboard is actually open (i.e. a field is focused
+   inside that modal); desktop / non-touch is completely unaffected.
+   (ingredients.html adds a pinned header/footer refinement on top of this.) */
+body.osk-open [data-modal] { align-items: flex-start; }
+/* Safety net for any modal NOT yet on the .modal-card standard: cap its card and
+   let it scroll so the action stays reachable. Scoped :not(.modal-card) so it
+   doesn't fight the card contract below (which manages its own scroll). */
+body.osk-open [data-modal] > *:not(.hidden):not(.modal-card) {
+  margin-top: 0.75rem;
+  max-height: calc(100vh - 19rem) !important;
+  overflow-y: auto;
+}
+
+/* ===== Standard modal card (canonical layout for every data-entry modal) ========
+   ONE structure for all editors so the UI is consistent everywhere:
+     .modal-card            flex column, capped, rounded, elevated
+       .modal-card__head    PINNED — title (left) + actions (Cancel + primary, right)
+       .modal-card__body    the ONLY scrolling region
+   Actions live at the TOP so they are always visible and as far as possible from
+   the bottom on-screen keyboard; nothing is pinned at the bottom. On the touch
+   kiosk the card is capped to the space above the keyboard; on desktop it just
+   caps at 90vh. Deployed on 14" monitors (1366×768 / 1920×1080) so the body has
+   ample room — the scroll only engages on genuinely long forms. */
+.modal-card {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-height: 90vh;
+  overflow: hidden;                 /* only the body scrolls */
+  background: var(--color-surface, #fff);
+  border-radius: var(--radius-lg, 12px);
+  box-shadow: var(--shadow-modal, 0 25px 50px -12px rgba(0,0,0,.5));
+  margin: 0 1rem;
+}
+/* A hidden card must stay hidden — .modal-card sets display:flex, so this guard is
+   needed for panels toggled via .hidden (e.g. the ingredients editor stack). */
+.modal-card.hidden { display: none; }
+.modal-card__head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0.875rem 1.25rem;
+  border-bottom: 1px solid var(--color-border, #e5e7eb);
+}
+.modal-card__title {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--color-ink, #1f2937);
+  margin: 0;
+  /* Take the space left of the actions and WRAP if the title is long, rather than
+     truncating with an ellipsis — no modal title should ever be cut off. */
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.modal-card__actions { display: flex; align-items: center; gap: 0.5rem; flex: 0 0 auto; }
+.modal-card__body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 1.25rem; }
+/* Uniform action-button geometry (colour stays per-modal / semantic). */
+.modal-btn {
+  padding: 0.5625rem 1.125rem;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 0.875rem;
+  line-height: 1.1;
+  border: 0;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.15s, opacity 0.15s;
+}
+.modal-btn:active { transform: translateY(1px); }
+.modal-btn--secondary { background: var(--color-surface-alt, #eef2f6); color: var(--color-ink, #374151); }
+.modal-btn--secondary:hover { background: var(--color-border, #e2e8f0); }
+.modal-btn--primary { background: var(--color-primary, #2563eb); color: #fff; }
+.modal-btn--primary:hover { background: var(--color-primary-hover, #1d4ed8); }
+.modal-btn--danger  { background: var(--color-danger, #dc2626); color: #fff; }
+.modal-btn--warn    { background: #ea580c; color: #fff; }
+/* Kiosk: cap the card to the space above the on-screen keyboard. */
+body.osk-open .modal-card { max-height: calc(100vh - 19rem); }
+
+/* Frosted backdrop behind EVERY modal — consistent across the whole app. The
+   dim (bg-black/opacity) comes from each backdrop's utility classes; this adds
+   the blur so the page recedes uniformly. Only applies while shown. */
+[data-modal]:not(.hidden) { -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); }
+/* Stacked modals (e.g. Manage Variants → Edit Group → Add Option) must NOT
+   compound the blur. Any open modal that FOLLOWS another open modal drops its
+   own backdrop blur, so at most ONE frosted layer is ever applied. */
+[data-modal]:not(.hidden) ~ [data-modal]:not(.hidden) {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/* Compact action button for dense list rows inside management modals. */
+.modal-btn--sm { padding: 0.3125rem 0.6875rem; font-size: 0.75rem; border-radius: 6px; }
+
+/* Subtle icon/text button for inline row actions (edit, options, delete) so the
+   management lists read as one system instead of a mix of coloured mini-buttons. */
+.row-action {
+  display: inline-flex; align-items: center; gap: 0.25rem;
+  padding: 0.3125rem 0.5rem; border-radius: 6px; border: 0; cursor: pointer;
+  font-size: 0.8125rem; font-weight: 600; line-height: 1; white-space: nowrap;
+  background: transparent; color: var(--color-ink-subtle, #64748b);
+  transition: background-color 0.12s, color 0.12s;
+}
+.row-action:hover { background: var(--color-surface-alt, #f1f5f9); color: var(--color-ink, #1f2937); }
+.row-action--primary { color: var(--color-primary, #2563eb); }
+.row-action--primary:hover { background: #eff6ff; color: var(--color-primary-hover, #1d4ed8); }
+.row-action--danger { color: var(--color-danger, #dc2626); }
+.row-action--danger:hover { background: #fef2f2; color: var(--color-danger, #dc2626); }
+.dark .row-action:hover { background: #374151; color: #f9fafb; }
+.dark .row-action--primary:hover { background: #1e3a5f; }
+.dark .row-action--danger:hover { background: #422; }
+
 /* Dark mode — match the dark surfaces used elsewhere */
 .dark .osk { background: #1f2937; border-top-color: #374151; }
 .dark .osk-key { background: #374151; color: #f9fafb; border-color: #4b5563; }

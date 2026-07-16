@@ -766,8 +766,14 @@
 
     <!-- MANAGE ACCOUNT MODAL (FEATURE-041 — consolidated per-user actions) -->
     <div id="manage-user-modal" data-modal data-modal-close="closeManageUser" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center" style="z-index: var(--z-modal);">
-        <div class="bg-white rounded-lg shadow-2xl p-8 max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <h3 class="text-2xl font-bold mb-1 text-gray-800">⚙️ Manage Account</h3>
+        <div class="modal-card" style="max-width: 28rem;">
+            <div class="modal-card__head">
+                <h3 class="modal-card__title">⚙️ Manage Account</h3>
+                <div class="modal-card__actions">
+                    <button type="button" onclick="closeManageUser()" class="modal-btn modal-btn--secondary">Close</button>
+                </div>
+            </div>
+            <div class="modal-card__body">
             <p class="text-gray-600 mb-4 text-sm"><span id="manage-username-label" class="font-semibold"></span><span id="manage-role-badge"></span></p>
 
             <!-- Identity: username + display name -->
@@ -829,21 +835,22 @@
                 </div>
             </div>
 
-            <button type="button" onclick="closeManageUser()"
-                class="touch-target-pos w-full mt-4 bg-gray-500 hover:bg-gray-600 text-white font-bold rounded-lg transition">Close</button>
+            </div>
         </div>
     </div>
 
     <!-- SUCCESS MODAL -->
     <div id="success-modal" data-modal data-modal-close="closeSuccessModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center" style="z-index: var(--z-modal);">
-        <div class="bg-white rounded-lg shadow-2xl p-8 max-w-md w-full mx-4">
-            <div class="text-center">
+        <div class="modal-card" style="max-width: 28rem;">
+            <div class="modal-card__head">
+                <h3 class="modal-card__title">Settings Saved!</h3>
+                <div class="modal-card__actions">
+                    <button onclick="closeSuccessModal()" class="modal-btn modal-btn--primary">OK</button>
+                </div>
+            </div>
+            <div class="modal-card__body text-center">
                 <div class="text-6xl mb-4">✅</div>
-                <h3 class="text-2xl font-bold mb-2 text-gray-800">Settings Saved!</h3>
-                <p class="text-gray-600 mb-6">Your changes have been saved successfully.</p>
-                <button onclick="closeSuccessModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg font-bold transition">
-                    OK
-                </button>
+                <p class="text-gray-600">Your changes have been saved successfully.</p>
             </div>
         </div>
     </div>
