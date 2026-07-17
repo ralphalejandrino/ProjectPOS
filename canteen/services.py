@@ -608,9 +608,31 @@ def create_pos_transaction(items_data, payment_method, cashier=None, **kwargs):
             raise DRFValidationError(
                 "No open shift. Open a shift before ringing sales."
             )
+        # #8 shift-span countermeasure: a shift must not span calendar days
+        # (PROD trades 11:00-22:00, so a shift always opens and closes the same
+        # PHT day). A shift left open from a previous day mis-dates its Z
+        # (business_date = shift OPEN date) and muddies drawer reconciliation.
+        # Block further sales until it is closed, so the cashier finalizes
+        # yesterday's Z with a real cash count and opens a fresh shift.
+        from django.utils import timezone as _dj_tz
+        _opened_day = _dj_tz.localdate(_enforced_shift.opened_at)
+        if _opened_day < _dj_tz.localdate():
+            raise DRFValidationError(
+                "This shift has been open since %s. Close it (finalize the "
+                "Z-report with a cash count) and open a new shift before "
+                "ringing today's sales." % _opened_day.strftime('%b %d')
+            )
         from .models import BusinessProfile
         _bp = BusinessProfile.objects.first()
         _track_inventory = not _bp or _bp.track_inventory
+        # #3 depletion fix: ingredient depletion for RECIPE items is gated on
+        # ingredient management (the recipes/ingredients feature), NOT on
+        # track_inventory (which governs item.stock for pure RESALE goods).
+        # These were previously coupled under one flag, so with track_inventory
+        # off NO sale depleted any ingredient. A recipe item is limited by its
+        # ingredients, so it must never be blocked or decremented on item.stock
+        # (recipe items carry stock=0) — it depletes its ingredients instead.
+        _ingredient_mgmt = not _bp or _bp.ingredient_management_enabled
 
         # Calculate total and validate stock up front
         total = Decimal('0.00')
@@ -627,7 +649,10 @@ def create_pos_transaction(items_data, payment_method, cashier=None, **kwargs):
             # Select item for update to prevent race conditions
             item = Item.objects.select_for_update().get(id=item_id)
 
-            if _track_inventory and item.stock < quantity:
+            is_recipe_item = item.recipe_ingredients.exists()
+            # Only pure resale items (no recipe) are limited by item.stock; a
+            # recipe item is limited by its ingredients, checked at depletion.
+            if _track_inventory and not is_recipe_item and item.stock < quantity:
                 raise ValidationError(f"Insufficient stock for: {item.name}")
 
             # Resolve variant selections for this item
@@ -719,6 +744,7 @@ def create_pos_transaction(items_data, payment_method, cashier=None, **kwargs):
 
             processed_items.append({
                 'item': item,
+                'is_recipe_item': is_recipe_item,
                 'quantity': quantity,
                 'unit_price': final_unit_price,   # backward compat: unit_price = final_price
                 'base_price': base_price,
@@ -906,7 +932,8 @@ def create_pos_transaction(items_data, payment_method, cashier=None, **kwargs):
                     price_modifier=rv['option'].price_modifier,
                 )
 
-            if _track_inventory:
+            # Resale items (no recipe): decrement tracked item.stock.
+            if _track_inventory and not entry['is_recipe_item']:
                 # Atomic check-and-decrement — single UPDATE WHERE, SQLite safe
                 updated = Item.objects.filter(
                     pk=item.pk,
@@ -917,8 +944,11 @@ def create_pos_transaction(items_data, payment_method, cashier=None, **kwargs):
                         f"Insufficient stock for: {item.name} (sold out during checkout)"
                     )
 
-                # Ingredient depletion + ledger (ISSUE-069). Attributed to the
-                # ringing cashier and linked to this transaction.
+            # Recipe items: deplete ingredients + write the ledger (ISSUE-069),
+            # gated on ingredient management, independent of track_inventory so a
+            # recipe sale always records real consumption. Attributed to the
+            # ringing cashier and linked to this transaction.
+            if _ingredient_mgmt and entry['is_recipe_item']:
                 variant_option_ids = [
                     rv.get('option_id') for rv in entry.get('resolved_variants', [])
                     if rv.get('option_id')
@@ -1011,7 +1041,9 @@ def refund_transaction(original_id, performed_by):
     # ledger only.
     from .models import BusinessProfile
     _bp = BusinessProfile.objects.first()
-    if not _bp or _bp.track_inventory:
+    # Gated on ingredient management (mirrors the sale-path depletion), not
+    # track_inventory; item.stock is intentionally left untouched here.
+    if not _bp or _bp.ingredient_management_enabled:
         for item_entry in original.items.all():
             _restore_ingredients(
                 item_entry.item, item_entry, item_entry.quantity,

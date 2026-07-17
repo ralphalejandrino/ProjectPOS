@@ -255,19 +255,18 @@ class PosTransactionViewSet(viewsets.ViewSet):
                     return Response({'error': 'This transaction has already been voided or refunded.'},
                                     status=status.HTTP_400_BAD_REQUEST)
 
-                # Reverse stock for each item in the transaction (only if inventory tracking is enabled)
+                # Reverse stock for each item, mirroring the sale path (#3):
+                # resale items restore item.stock (track_inventory); recipe
+                # items restore ingredients (ingredient management). Previously
+                # both were coupled to track_inventory.
                 _bp = BusinessProfile.get_instance()
-                if not _bp or _bp.track_inventory:
-                    for item_entry in transaction.items.all():
+                _track_inv = (not _bp or _bp.track_inventory)
+                _ing_mgmt = (not _bp or _bp.ingredient_management_enabled)
+                for item_entry in transaction.items.all():
+                    is_recipe_item = item_entry.item.recipe_ingredients.exists()
+                    if _track_inv and not is_recipe_item:
                         Item.objects.filter(pk=item_entry.item.pk).update(
                             stock=F('stock') + item_entry.quantity
-                        )
-                        # Ingredient stock restore + ledger (ISSUE-069):
-                        # mirrors the sale depletion in reverse (action='void'),
-                        # attributed to the voiding user and linked to the txn.
-                        _restore_ingredients(
-                            item_entry.item, item_entry, item_entry.quantity,
-                            transaction=transaction, performed_by=request.user,
                         )
                         refreshed = Item.objects.get(pk=item_entry.item.pk)
                         ItemLog.objects.create(
@@ -277,6 +276,14 @@ class PosTransactionViewSet(viewsets.ViewSet):
                             action='return',
                             remarks=f"Void reversal — OR#{transaction.transaction_no} (ID: {transaction.pk})",
                             created_by=request.user,
+                        )
+                    # Ingredient stock restore + ledger (ISSUE-069): mirrors the
+                    # sale depletion in reverse (action='void'), attributed to
+                    # the voiding user and linked to the txn.
+                    if _ing_mgmt and is_recipe_item:
+                        _restore_ingredients(
+                            item_entry.item, item_entry, item_entry.quantity,
+                            transaction=transaction, performed_by=request.user,
                         )
 
                 transaction.void = True

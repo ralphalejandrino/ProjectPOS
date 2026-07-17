@@ -213,5 +213,10 @@ class MakeableNonGatingTests(APITestCase):
             cashier=self.cashier, cash_received=Decimal('100.00'),
         )
         self.assertIsNotNone(txn)            # ...yet the sale still goes through
+        # #3 depletion fix: a recipe item is NOT decremented from item.stock —
+        # it depletes its ingredients (which may go negative). item.stock is
+        # left untouched; the ingredient carries the real consumption.
         item.refresh_from_db()
-        self.assertEqual(item.stock, 4)      # stored stock decremented as normal
+        self.assertEqual(item.stock, 5)
+        ing.refresh_from_db()
+        self.assertEqual(ing.current_stock, Decimal('-2.0000'))  # 2 used * qty 1
