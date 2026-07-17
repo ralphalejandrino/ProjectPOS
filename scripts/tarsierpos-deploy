@@ -1,0 +1,220 @@
+#!/bin/bash
+# tarsierpos-deploy — canonical ON-BOX deploy for the PROD register (pos-01).
+#
+# Root-owned. Run as:   sudo /usr/local/sbin/tarsierpos-deploy [OPTIONS]
+#
+# The canonical copy is version-controlled at scripts/tarsierpos-deploy in the
+# repo. NEVER edit the installed /usr/local/sbin copy in place — edit the repo
+# copy, review, and re-install. This script IS Phase 3 of the tarsierpos-deploy
+# SKILL; if it and the skill ever disagree, the skill + disk win, then fix both.
+#
+# It runs privileged steps as root (snapshot, systemctl, kiosk relaunch) and
+# drops to the app user `tarsier` for every git/Django operation, so it can be
+# granted to `posadmin` with ONE scoped sudoers line and no broad sudo:
+#     posadmin ALL=(root) NOPASSWD: /usr/local/sbin/tarsierpos-deploy
+#
+# Safety improvements over the hand-run block:
+#   * ABORTS if a shift is open (drawer risk) unless --force.
+#   * Consistent snapshot via SQLite online-backup API (correct for WAL mode).
+#   * FAIL LOUD: any failure exits non-zero with a rollback hint — never a
+#     silent success.
+#
+# Options:
+#   --verify-only  Run only the read-only health/verify block. Changes nothing.
+#   --dry-run      Fetch + show what WOULD deploy (SHAs, changed files, pending
+#                  migrations, frontend-only vs backend). Changes nothing.
+#   --force        Skip the open-shift guard. Use only when you have confirmed
+#                  no shift is open, or the shift-state query cannot run.
+#   --help         Show this header.
+
+set -uo pipefail
+
+# ---- verified ground truth for pos-01 (see the tarsierpos-deploy SKILL) --
+REPO=/opt/tarsierpos/TarsierPOS
+BACKUPS=/opt/tarsierpos/backups
+APP_USER=tarsier
+SVC=tarsierpos.service
+PY=venv/bin/python
+LOG=/opt/tarsierpos/backups/deploy.log
+URL_ROOT='https://localhost/'
+URL_QL='https://localhost/api/canteen/users/quick-login/'
+
+MODE=deploy
+FORCE=0
+for a in "$@"; do
+  case "$a" in
+    --verify-only) MODE=verify ;;
+    --dry-run)     MODE=dryrun ;;
+    --force)       FORCE=1 ;;
+    --help|-h)     sed -n '2,26p' "$0"; exit 0 ;;
+    *) echo "unknown option: $a" >&2; exit 2 ;;
+  esac
+done
+
+ts()  { date '+%Y-%m-%d %H:%M:%S'; }
+log() { echo "[$(ts)] $*" | tee -a "$LOG"; }
+die() { echo "[$(ts)] FATAL: $*" | tee -a "$LOG" >&2; exit 1; }
+
+[ "$(id -u)" -eq 0 ] || die "must run as root (use: sudo $0)"
+mkdir -p "$BACKUPS" 2>/dev/null || true
+touch "$LOG" 2>/dev/null || LOG=/tmp/tarsierpos-deploy.log
+
+# run a command string in the repo as the app user (we are root -> no password)
+as_app() { sudo -u "$APP_USER" -H bash -c "cd $REPO && $*"; }
+
+# ---- read-only verification (Phase 4) --------------------------------------
+verify() {
+  local expected="${1:-}" head svc root ql kiosk ok=0
+  head=$(cat "$REPO/.git/refs/heads/main" 2>/dev/null)
+  svc=$(systemctl is-active "$SVC" 2>/dev/null)
+  root=$(curl -sk -o /dev/null -w '%{http_code}' "$URL_ROOT" 2>/dev/null)
+  ql=$(curl -sk -o /dev/null -w '%{http_code}' "$URL_QL" 2>/dev/null)
+  kiosk=$(pgrep -c chrome); true          # comm is 'chrome'; -c exits 1 on zero
+  echo "  HEAD        : ${head:-?}"
+  [ -n "$expected" ] && echo "  expected    : $expected"
+  echo "  service     : ${svc:-?}"
+  echo "  root        : ${root:-?}"
+  echo "  quick-login : ${ql:-?}"
+  echo "  kiosk procs : ${kiosk:-0}  (comm 'chrome'; healthy ~12)"
+  [ "$svc" = active ] || { echo "  X service not active";  ok=1; }
+  [ "$root" = 200 ]   || { echo "  X root != 200";         ok=1; }
+  [ "$ql" = 200 ]     || { echo "  X quick-login != 200";  ok=1; }
+  [ "${kiosk:-0}" -gt 0 ] 2>/dev/null || { echo "  X no kiosk procs"; ok=1; }
+  if [ -n "$expected" ] && [ "$head" != "$expected" ]; then
+    echo "  X HEAD != expected SHA"; ok=1
+  fi
+  return $ok
+}
+
+if [ "$MODE" = verify ]; then
+  log "VERIFY-ONLY on $(hostname)"
+  verify; rc=$?
+  [ $rc -eq 0 ] && log "verify: PASS" || log "verify: FAIL"
+  exit $rc
+fi
+
+# ---- open-shift guard (drawer safety) --------------------------------------
+SHIFTPY=$(mktemp /tmp/tpos-shift.XXXXXX.py)
+printf '%s\n' \
+  'from canteen.models import Shift' \
+  'print("__OPEN__%d" % Shift.objects.filter(is_open=True).count())' > "$SHIFTPY"
+OPEN=$(as_app "$PY manage.py shell" < "$SHIFTPY" 2>>"$LOG" \
+        | sed -n 's/.*__OPEN__\([0-9][0-9]*\).*/\1/p' | tail -1)
+rm -f "$SHIFTPY"
+if [[ "$OPEN" =~ ^[0-9]+$ ]]; then
+  if [ "$OPEN" -gt 0 ]; then
+    if [ "$FORCE" -eq 1 ]; then
+      log "WARN: $OPEN shift(s) OPEN — deploying anyway (--force)."
+    else
+      die "$OPEN shift(s) OPEN — drawer risk. Close the shift, or re-run with --force."
+    fi
+  else
+    log "shift check: no open shift."
+  fi
+else
+  if [ "$FORCE" -eq 1 ]; then
+    log "WARN: could not read shift state — continuing (--force)."
+  else
+    die "could not determine open-shift state (query failed — see $LOG). If you have confirmed no shift is open, re-run with --force."
+  fi
+fi
+
+OLD=$(cat "$REPO/.git/refs/heads/main")
+
+# ---- dry-run: show what WOULD deploy, change nothing -----------------------
+if [ "$MODE" = dryrun ]; then
+  log "DRY-RUN — fetching origin/main (no pull, no changes)"
+  as_app "git fetch origin main --quiet" || die "git fetch failed"
+  NEW=$(as_app "git rev-parse origin/main")
+  echo "  current HEAD : $OLD"
+  echo "  origin/main  : $NEW"
+  if [ "$OLD" = "$NEW" ]; then echo "  -> already up to date, nothing to deploy"; exit 0; fi
+  echo "  changed files:"; as_app "git diff --name-only $OLD $NEW" | sed 's/^/    /'
+  if as_app "git diff --name-only $OLD $NEW" | grep -qvE '^frontend/public/'; then
+    echo "  -> BACKEND change: will migrate + restart gunicorn"
+  else
+    echo "  -> FRONTEND-ONLY: no migrate, no restart (kiosk relaunch only)"
+  fi
+  echo "  pending migrations:"
+  as_app "$PY manage.py showmigrations canteen 2>/dev/null | grep '\[ \]' || echo '(none pending)'" | sed 's/^/    /'; true
+  exit 0
+fi
+
+# ============================ REAL DEPLOY ===================================
+log "DEPLOY start on $(hostname) — HEAD before: $OLD  (force=$FORCE)"
+
+# 1. Snapshot the DB (consistent, WAL-safe online backup). Root writes backups/.
+DEST="$BACKUPS/pre-deploy-$(date +%Y%m%d-%H%M%S).sqlite3"
+BKPY=$(mktemp /tmp/tpos-bk.XXXXXX.py)
+printf '%s\n' \
+  "import sqlite3" \
+  "src = sqlite3.connect('$REPO/db.sqlite3')" \
+  "dst = sqlite3.connect('$DEST')" \
+  "src.backup(dst)" \
+  "dst.close(); src.close()" \
+  "print('__BKOK__')" > "$BKPY"
+if "$REPO/$PY" "$BKPY" 2>>"$LOG" | grep -q __BKOK__ && [ -s "$DEST" ]; then
+  log "snapshot OK: $DEST ($(stat -c%s "$DEST") bytes)"
+else
+  log "online-backup snapshot failed; falling back to cp"
+  if cp "$REPO/db.sqlite3" "$DEST" 2>>"$LOG" && [ -s "$DEST" ]; then
+    log "snapshot (cp) OK: $DEST ($(stat -c%s "$DEST") bytes)"
+  else
+    rm -f "$BKPY"; die "could NOT create a DB snapshot — refusing to deploy."
+  fi
+fi
+rm -f "$BKPY"
+
+# 2. Reset drifted staticfiles BEFORE pulling (trap 3 — this WILL block the pull).
+as_app "git checkout -- staticfiles/ && git clean -fd staticfiles/" 2>>"$LOG" \
+  || die "staticfiles reset failed"
+
+# 3. Pull main (fast-forward only).
+as_app "git pull --ff-only origin main" 2>>"$LOG" \
+  || die "git pull failed (not a fast-forward?). Box unchanged at $OLD."
+NEW=$(cat "$REPO/.git/refs/heads/main")
+log "pulled: $OLD -> $NEW"
+
+if [ "$OLD" = "$NEW" ]; then
+  log "already up to date — nothing changed. Skipping migrate/restart/relaunch."
+  verify "$NEW"; exit $?
+fi
+
+# 4. Classify the change.
+CHANGED=$(as_app "git diff --name-only $OLD $NEW")
+if echo "$CHANGED" | grep -qvE '^frontend/public/'; then BACKEND=1; else BACKEND=0; fi
+log "change scope: $([ $BACKEND -eq 1 ] && echo BACKEND || echo FRONTEND-ONLY)"
+
+ROLLBACK="ROLLBACK: sudo -u $APP_USER -H bash -c 'cd $REPO && git reset --hard $OLD'; sudo systemctl stop $SVC; sudo cp '$DEST' $REPO/db.sqlite3; sudo chown $APP_USER:$APP_USER $REPO/db.sqlite3; sudo systemctl start $SVC; sudo pkill chrome"
+
+# 5. Migrate (backend only).
+if [ $BACKEND -eq 1 ]; then
+  as_app "$PY manage.py migrate --noinput" 2>>"$LOG" || die "migrate FAILED. $ROLLBACK"
+fi
+
+# 6. Collectstatic (no-op for frontend, harmless).
+as_app "$PY manage.py collectstatic --noinput" >>"$LOG" 2>&1 \
+  || log "WARN: collectstatic non-zero (nginx serves frontend directly; usually harmless)"
+
+# 7. Restart gunicorn + reload nginx (backend only).
+if [ $BACKEND -eq 1 ]; then
+  systemctl restart "$SVC" || die "systemctl restart $SVC FAILED. $ROLLBACK"
+  systemctl reload nginx   || log "WARN: nginx reload non-zero"
+  sleep 2   # transient 502 while workers boot (trap 5)
+fi
+
+# 8. Relaunch the kiosk (always — picks up the new SW). Snap comm is 'chrome'.
+pkill chrome; true
+sleep 1
+
+# 9. Verify the deployed artifacts (Phase 4).
+log "verifying deployed artifacts..."
+if verify "$NEW"; then
+  log "DEPLOY OK — $OLD -> $NEW (snapshot: $DEST)"
+  echo
+  echo "NOTE: code-verified, NOT human-confirmed. Have the manager tap the changed"
+  echo "path on the register before calling it done."
+  exit 0
+else
+  die "post-deploy verification FAILED — box is at $NEW but not healthy. Snapshot: $DEST. $ROLLBACK"
+fi
