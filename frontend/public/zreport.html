@@ -2,7 +2,16 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Kiosk viewport lock: the register is a fixed-size touch appliance, so pinch-
+         and double-tap zoom are pure hazard. A stray two-finger touch or a
+         double-tap on a field used to zoom the page ~2.5x; because a modal is
+         position:fixed to the LAYOUT viewport while zoom pans the VISUAL
+         viewport, the payment modal could pan off-screen and the app looked like
+         it had crashed to a white screen. Cashier had no way to undo it.
+         NOT applied to remote.html / period.html / status.html /
+         accreditation.html - those are read on real phones where pinch-zoom is a
+         genuine accessibility need (WCAG 1.4.4). -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Z-Report - TarsierPOS</title>
     <script>if(localStorage.getItem('darkMode')==='true')document.documentElement.classList.add('dark');</script>
     <link rel="manifest" href="manifest.json">
@@ -209,7 +218,7 @@
     </div>
 
     <!-- CLOSE SHIFT MODAL -->
-    <div id="close-modal" data-modal data-modal-close="closeCloseModal" data-modal-no-backdrop-close class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center" style="z-index: var(--z-modal);">
+    <div id="close-modal" data-modal data-modal-close="closeCloseModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center" style="z-index: var(--z-modal);">
         <div class="modal-card" style="max-width: 28rem;">
             <div class="modal-card__head">
                 <h3 class="modal-card__title">Close Shift</h3>

@@ -102,7 +102,17 @@
 // v143: stacked modals no longer compound the backdrop blur — any modal that
 // follows another open modal drops its own blur, so exactly one frosted layer
 // shows regardless of stack depth (triple-stack: Manage Variants → Edit → Add Option).
-const CACHE_NAME = 'tarsierpos-v143'; // canonical cache version
+// v144: kiosk modal hardening — three class-level defences after the manager's
+// GCash "crash" report. (1) backdrop-close is now OPT-IN (data-modal-backdrop-close)
+// instead of opt-out, so a modal can no longer be born able to vanish on a stray
+// tap — an audit found 15 of 21 modals exposed, incl. GCash + Maya. (2) kiosk
+// pages lock the viewport (user-scalable=no + touch-action:manipulation): a
+// pinch/double-tap zoom pans the VISUAL viewport while modals are fixed to the
+// LAYOUT viewport, which made the payment modal pan off-screen and look like a
+// white-screen crash. (3) modal geometry keys on osk-ENABLED not osk-OPEN, so the
+// card no longer jumps 169–219px out from under the user's finger when the
+// keyboard opens.
+const CACHE_NAME = 'tarsierpos-v144'; // canonical cache version
 const ASSETS = [
   'index.html',
   'login.html',

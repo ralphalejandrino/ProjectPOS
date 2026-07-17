@@ -2,7 +2,16 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- Kiosk viewport lock: the register is a fixed-size touch appliance, so pinch-
+         and double-tap zoom are pure hazard. A stray two-finger touch or a
+         double-tap on a field used to zoom the page ~2.5x; because a modal is
+         position:fixed to the LAYOUT viewport while zoom pans the VISUAL
+         viewport, the payment modal could pan off-screen and the app looked like
+         it had crashed to a white screen. Cashier had no way to undo it.
+         NOT applied to remote.html / period.html / status.html /
+         accreditation.html - those are read on real phones where pinch-zoom is a
+         genuine accessibility need (WCAG 1.4.4). -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>Ingredients — TarsierPOS</title>
   <script>if(localStorage.getItem('darkMode')==='true')document.documentElement.classList.add('dark');</script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -375,7 +384,7 @@
 <!-- ══════════════════════════════════════════════════════
      MODALS
 ══════════════════════════════════════════════════════ -->
-<div id="modalBackdrop" data-modal data-modal-close="closeModal" data-modal-no-backdrop-close
+<div id="modalBackdrop" data-modal data-modal-close="closeModal"
   class="fixed inset-0 bg-black/40 modal-backdrop hidden flex items-center justify-center p-4" style="z-index: var(--z-modal);">
 
   <!-- ── INGREDIENT MODAL ── -->
@@ -1803,14 +1812,14 @@ function closeModal() {
   closeAllModals();
   document.getElementById('modalBackdrop').classList.add('hidden');
 }
-// Backdrop-click-to-close is handled by dialogs.js (attachModalBehavior), which
-// honours data-modal-no-backdrop-close on #modalBackdrop. The old page-local
-// handler that used to live here did NOT check that opt-out, so on the touch
-// kiosk a slightly-missed tap beside the narrow Restock modal (max-w-md, 2-col
-// grid → backdrop sits right next to the fields) landed on the dimmed backdrop
-// and closed the whole modal mid-entry — the manager "restock disappears on
-// tap" report. Removed; dialogs.js is the single, opt-out-aware close path
-// (× / Cancel / Escape still close explicitly).
+// Backdrop-click-to-close is handled by dialogs.js (attachModalBehavior), where
+// it is now OPT-IN (data-modal-backdrop-close) and this modal does not opt in.
+// The old page-local handler that used to live here closed on any backdrop tap,
+// so on the touch kiosk a slightly-missed tap beside the narrow Restock modal
+// (max-w-md, 2-col grid → backdrop sits right next to the fields) landed on the
+// dimmed backdrop and closed the whole modal mid-entry — the manager "restock
+// disappears on tap" report. Removed; dialogs.js is the single close path
+// (Cancel / Escape still close explicitly).
 
 // ─── Refresh helpers ──────────────────────────────────────
 async function refreshIngredients() {
@@ -1865,7 +1874,7 @@ checkAuth();
   }
 </script>
   <!-- FEATURE-056: prep-a-batch modal (standalone overlay) -->
-  <div id="prepBatchModal" data-modal data-modal-close="closePrepBatchModal" data-modal-no-backdrop-close class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center" style="z-index: var(--z-modal);">
+  <div id="prepBatchModal" data-modal data-modal-close="closePrepBatchModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center" style="z-index: var(--z-modal);">
     <div class="modal-card" style="max-width: 24rem;">
       <div class="modal-card__head">
         <h2 class="modal-card__title">Prep a batch</h2>

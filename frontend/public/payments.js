@@ -170,12 +170,53 @@ const PaymentSystem = {
         this.closeModal();
     },
 
+    // The processing spinner is the one modal with no Cancel control — it is
+    // transient and closes itself on success (showSuccessModal) or failure
+    // (showErrorModal, which renders its own "Try Again"). Backdrop-close used to
+    // be its accidental escape hatch, but dismissing a spinner by mis-tap is
+    // exactly the hazard we removed app-wide in v144: it hides a payment that may
+    // still be in flight. So give it an EXPLICIT, bounded escape instead — if
+    // neither outcome arrives (network stall with no timeout), surface a way out
+    // rather than trapping the cashier at a spinning register mid-sale.
+    // The kiosk has no physical Escape key, so this is her only exit.
+    PAYMENT_WATCHDOG_MS: 20000,
+
+    _armWatchdog(modal) {
+        this._disarmWatchdog();
+        this._paymentPending = true;
+        this._watchdog = setTimeout(() => {
+            // Only bite while the payment is genuinely unresolved and on screen.
+            // (Can't sniff for the spinner element: showPaymentModal overwrites
+            // .payment-message via textContent, which removes it.) The success and
+            // error paths clear _paymentPending, so their content is never
+            // overwritten by this.
+            if (!this._paymentPending || modal.classList.contains('hidden')) return;
+            const msg = modal.querySelector('.payment-message');
+            if (!msg) return;
+            msg.innerHTML = `
+                <div class="text-center">
+                    <div class="text-5xl mb-4">⏳</div>
+                    <p class="text-lg font-bold text-gray-800 mb-2">Still waiting for the payment</p>
+                    <p class="text-gray-600 mb-4">This is taking longer than usual. Check the
+                       customer's app before retrying — the payment may still go through.</p>
+                    <button onclick="PaymentSystem.closeModal()"
+                            class="modal-btn modal-btn--secondary">Close</button>
+                </div>`;
+        }, this.PAYMENT_WATCHDOG_MS);
+    },
+
+    _disarmWatchdog() {
+        this._paymentPending = false;
+        if (this._watchdog) { clearTimeout(this._watchdog); this._watchdog = null; }
+    },
+
     showPaymentModal(method, message) {
         const modal = document.getElementById('payment-modal');
         if (modal) {
             modal.querySelector('.payment-method').textContent = method;
             modal.querySelector('.payment-message').textContent = message;
             modal.classList.remove('hidden');
+            this._armWatchdog(modal);
         }
     },
 
@@ -200,6 +241,7 @@ const PaymentSystem = {
     },
 
     showSuccessModal(method, data) {
+        this._disarmWatchdog();   // outcome arrived (or user left) — stand the watchdog down
         const modal = document.getElementById('payment-modal');
         if (modal) {
             const cart = this.getCart();
@@ -269,6 +311,7 @@ const PaymentSystem = {
     },
 
     showErrorModal(method, message) {
+        this._disarmWatchdog();   // outcome arrived (or user left) — stand the watchdog down
         const modal = document.getElementById('payment-modal');
         if (modal) {
             modal.querySelector('.payment-message').innerHTML = `
@@ -285,6 +328,7 @@ const PaymentSystem = {
     },
 
     closeModal() {
+        this._disarmWatchdog();   // outcome arrived (or user left) — stand the watchdog down
         const modal = document.getElementById('payment-modal');
         if (modal) {
             modal.classList.add('hidden');

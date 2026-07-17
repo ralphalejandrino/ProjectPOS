@@ -174,12 +174,25 @@
 
     el.addEventListener('click', (e) => {
       if (el.classList.contains('hidden')) return;
-      // Opt-out: a payment/data-entry modal (data-modal-no-backdrop-close) must
-      // NOT close on a stray backdrop tap — on the touch kiosk that silently
-      // discarded an in-progress cash entry. Such modals close only via their
-      // explicit Cancel/close controls (Escape still works).
-      if (el.hasAttribute('data-modal-no-backdrop-close')) return;
-      if (e.target === el) close();
+      if (e.target !== el) return;           // a tap inside the card is never a close
+      // Backdrop-close is OPT-IN (data-modal-backdrop-close), not opt-out.
+      //
+      // It used to be opt-out (data-modal-no-backdrop-close). That default lost
+      // this bug class repeatedly: a modal shipped WITHOUT the attribute closed on
+      // any stray backdrop tap, silently discarding in-progress work, and we then
+      // added the attribute to that ONE modal per incident (cash, restock,
+      // product, void, close-shift...). An audit on 2026-07-17 found 15 of 21
+      // modals still exposed — including the GCash and Maya payment-reference
+      // modals. On a touch kiosk a fingertip misses by a few mm constantly, and
+      // the card also moves when the on-screen keyboard opens, so "stray backdrop
+      // tap" is the NORMAL case, not the edge case.
+      //
+      // Inverted, the unsafe state is unreachable by omission: forget the
+      // attribute and you get the SAFE behaviour. Only a read-only viewer with
+      // nothing to lose should opt in. Every modal keeps its explicit
+      // Cancel/Close control, and Escape still closes.
+      if (!el.hasAttribute('data-modal-backdrop-close')) return;
+      close();
     });
 
     let prevFocus = null;

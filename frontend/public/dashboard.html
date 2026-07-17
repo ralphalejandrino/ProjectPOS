@@ -2,7 +2,16 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Kiosk viewport lock: the register is a fixed-size touch appliance, so pinch-
+         and double-tap zoom are pure hazard. A stray two-finger touch or a
+         double-tap on a field used to zoom the page ~2.5x; because a modal is
+         position:fixed to the LAYOUT viewport while zoom pans the VISUAL
+         viewport, the payment modal could pan off-screen and the app looked like
+         it had crashed to a white screen. Cashier had no way to undo it.
+         NOT applied to remote.html / period.html / status.html /
+         accreditation.html - those are read on real phones where pinch-zoom is a
+         genuine accessibility need (WCAG 1.4.4). -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Dashboard — TarsierPOS</title>
     <script>if(localStorage.getItem('darkMode')==='true')document.documentElement.classList.add('dark');</script>
     <link rel="manifest" href="manifest.json">
@@ -885,7 +894,7 @@
         // logout() is provided by config.js (awaits token blacklist, then location.replace)
     </script>
     <!-- VOID MODAL -->
-    <div id="void-modal" data-modal data-modal-close="closeVoidModal" data-modal-no-backdrop-close class="hidden fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm flex items-center justify-center p-4" style="z-index: var(--z-modal);">
+    <div id="void-modal" data-modal data-modal-close="closeVoidModal" class="hidden fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm flex items-center justify-center p-4" style="z-index: var(--z-modal);">
         <div class="modal-card" style="max-width: 28rem;">
             <div class="modal-card__head">
                 <h3 class="modal-card__title" id="void-modal-title">Void Transaction</h3>
@@ -912,7 +921,9 @@
     </div>
 
     <!-- TRANSACTION DETAIL MODAL -->
-    <div id="detail-modal" data-modal data-modal-close="closeDetailModal" class="hidden fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm flex items-center justify-center p-4" style="z-index: var(--z-modal);">
+    <!-- Opts in to backdrop-close: read-only transaction viewer, no in-progress
+         entry to lose. Data-entry and payment modals must never opt in. -->
+    <div id="detail-modal" data-modal data-modal-close="closeDetailModal" data-modal-backdrop-close class="hidden fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm flex items-center justify-center p-4" style="z-index: var(--z-modal);">
         <div class="modal-card" style="max-width: 28rem;">
             <div class="modal-card__head">
                 <h3 class="modal-card__title" id="detail-modal-title">Transaction Detail</h3>

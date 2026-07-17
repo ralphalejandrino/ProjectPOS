@@ -727,6 +727,18 @@ body {
 /* Lift bottom-pinned content above the keyboard while it's open. */
 body.osk-open { padding-bottom: 19rem; }
 
+/* ===== Kiosk: no accidental zoom ===============================================
+   Second line of defence behind the kiosk pages' viewport lock
+   (user-scalable=no). Chromium can still honour double-tap-to-zoom in some
+   configurations, and a zoomed register is unusable: a modal is position:fixed to
+   the LAYOUT viewport, but zoom pans the VISUAL viewport, so the payment modal
+   can pan off-screen while the app is running perfectly — it just LOOKS like a
+   white-screen crash, and the cashier has no gesture to undo it mid-sale.
+   `manipulation` keeps scrolling and normal taps, and drops double-tap zoom.
+   Scoped to the kiosk body class so phone/remote pages keep pinch-zoom. */
+body.osk-enabled { touch-action: manipulation; }
+body.osk-enabled [data-modal] { touch-action: manipulation; }
+
 /* ===== Kiosk: lift modal cards above the on-screen keyboard =====================
    The OSK is fixed to the bottom ~19rem. A vertically-centred modal's primary
    Save/Confirm button used to sit UNDER it on the touch kiosk, so a user could
@@ -741,12 +753,25 @@ body.osk-open { padding-bottom: 19rem; }
    direct-child card, so EVERY registered modal inherits it with no per-modal
    markup. Only bites when the keyboard is actually open (i.e. a field is focused
    inside that modal); desktop / non-touch is completely unaffected.
-   (ingredients.html adds a pinned header/footer refinement on top of this.) */
-body.osk-open [data-modal] { align-items: flex-start; }
+   (ingredients.html adds a pinned header/footer refinement on top of this.)
+
+   NO MOVING TARGET (2026-07-17): these are keyed on osk-ENABLED (this is a touch
+   kiosk) rather than osk-OPEN (a field is focused RIGHT NOW), which is what they
+   used to use. Under osk-open the card only top-aligned and shrank AFTER the user
+   tapped a field — measured at 169px @1024x600, 219px @1366x768, 195px @1280x720
+   of travel. The control she was aiming at moved out from under her finger
+   between her tap and her next one, so her follow-up tap landed on whatever the
+   reshuffle put there (keypad, backdrop, a different control). That is the engine
+   behind the whole "kiosk modal did something insane" bug family, and it is
+   unfixable per-modal because it is a timing/layout property of the contract.
+   Reserving the keyboard's space up-front on the kiosk costs some idle height and
+   buys a modal whose geometry NEVER changes under the user's hand. Desktop
+   (no osk-enabled) is untouched and stays vertically centred. */
+body.osk-enabled [data-modal] { align-items: flex-start; }
 /* Safety net for any modal NOT yet on the .modal-card standard: cap its card and
    let it scroll so the action stays reachable. Scoped :not(.modal-card) so it
    doesn't fight the card contract below (which manages its own scroll). */
-body.osk-open [data-modal] > *:not(.hidden):not(.modal-card) {
+body.osk-enabled [data-modal] > *:not(.hidden):not(.modal-card) {
   margin-top: 0.75rem;
   max-height: calc(100vh - 19rem) !important;
   overflow-y: auto;
@@ -817,8 +842,10 @@ body.osk-open [data-modal] > *:not(.hidden):not(.modal-card) {
 .modal-btn--primary:hover { background: var(--color-primary-hover, #1d4ed8); }
 .modal-btn--danger  { background: var(--color-danger, #dc2626); color: #fff; }
 .modal-btn--warn    { background: #ea580c; color: #fff; }
-/* Kiosk: cap the card to the space above the on-screen keyboard. */
-body.osk-open .modal-card { max-height: calc(100vh - 19rem); }
+/* Kiosk: cap the card to the space above the on-screen keyboard.
+   Keyed on osk-ENABLED (the kiosk is a touch device), not osk-OPEN (a field is
+   focused right now) — see the "no moving target" note above. */
+body.osk-enabled .modal-card { max-height: calc(100vh - 19rem); }
 
 /* Frosted backdrop behind EVERY modal — consistent across the whole app. The
    dim (bg-black/opacity) comes from each backdrop's utility classes; this adds

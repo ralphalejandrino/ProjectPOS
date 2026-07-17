@@ -332,7 +332,13 @@
       // Instant (not 'smooth') scroll: an animated scroll of a position:fixed
       // modal on the low-end kiosk panel churns the compositor and was a path to
       // the white-screen crash. A jump is fine here.
-      try { el.scrollIntoView({ block: 'center' }); } catch (e) {}
+      // 'nearest', NOT 'center': center re-scrolls the field even when it is
+      // already fully visible, so tapping a field yanked it under the user's
+      // finger and her next tap landed somewhere else (measured 34-49px of
+      // travel @1024x600 after the geometry was otherwise stabilised).
+      // 'nearest' is a no-op unless the field is actually covered — which is
+      // all this ever needed to do.
+      try { el.scrollIntoView({ block: 'nearest' }); } catch (e) {}
     }, 0);
   }
 
