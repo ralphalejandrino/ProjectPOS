@@ -2152,43 +2152,82 @@ def _aggregate_zreports(d_from, d_to):
     return totals, txn_count, void_count, daily
 
 
-def _live_today_snapshot(today):
-    """ISSUE-118: live (X-style) numbers for the current PHT day — seed-free
-    transactions belonging to still-open shifts, i.e. sales not yet frozen
-    into a ZReport. Mirrors the xreport filters (status='completed' for
-    sales, voids counted separately, refunds excluded by status)."""
-    live_qs = PosTransaction.objects.filter(
-        shift__is_open=True, is_seed=False, created_at__date=today,
+def _aggregate_transactions(d_from, d_to):
+    """Report-basis fix (#2): derive the weekly/daily money totals from the
+    actual sale transactions, each attributed to the PHT calendar day it was
+    rung (``created_at`` localised) — NOT from ZReport.business_date.
+
+    ZReport.business_date is the shift's OPEN date, so a shift that spans
+    midnight mis-files a whole day's sales into the wrong day (and wrong week);
+    and the old ``_live_today_snapshot`` only ever looked at *today*, so a past
+    day whose shift was never closed vanished from the report while being
+    labelled 'final' — a silent hole. Counting the raw transactions by their
+    own date removes BOTH failure modes structurally: every completed,
+    non-seed, non-refund sale in [d_from, d_to] is counted exactly once, on its
+    true day, whether or not its shift has been finalized into a Z.
+
+    Uses the same PHT-date / seed / void filters as _weekly_top_items and
+    _weekly_busiest_hour, so the summary now shares ONE basis with the item /
+    cashier / COGS sections (this also resolves the FLAG-082 basis mismatch).
+
+    Returns (totals, txn_count, void_count, by_day) where by_day maps
+    'YYYY-MM-DD' -> {gross, net, transaction_count, void_count}.
+    """
+    from .models import PaymentLine
+    sales = (
+        PosTransaction.objects
+        .filter(
+            created_at__date__gte=d_from, created_at__date__lte=d_to,
+            is_seed=False, void=False, status='completed',
+        )
+        .exclude(transaction_type='refund')
     )
-    completed = live_qs.filter(void=False, status='completed')
-    agg = completed.aggregate(
-        gross=Sum('total_amount'),
-        discount=Sum('discount_amount'),
-        vat=Sum('vat_amount'),
-        cnt=Count('id'),
-    )
-    gross = _Dec(str(agg['gross'] or 0))
-    snapshot = {
-        'gross': gross,
-        'discount': _Dec(str(agg['discount'] or 0)),
-        'vat': _Dec(str(agg['vat'] or 0)),
-        # X-report parity: net_sales == gross for the live portion.
-        'net': gross,
-        'transaction_count': agg['cnt'] or 0,
-        'void_count': live_qs.filter(void=True).count(),
-        'cash': _Dec('0'), 'card': _Dec('0'),
+
+    totals = {
+        'gross': _Dec('0'), 'discount': _Dec('0'), 'vat': _Dec('0'),
+        'net': _Dec('0'), 'cash': _Dec('0'), 'card': _Dec('0'),
         'gcash': _Dec('0'), 'maya': _Dec('0'),
     }
-    from .models import PaymentLine
-    pl_rows = (
-        PaymentLine.objects.filter(transaction__in=completed)
-        .values('method')
-        .annotate(total=Sum('amount'))
+    by_day = {}
+
+    for r in sales.values('created_at__date').annotate(
+            gross=Sum('gross_total'), discount=Sum('discount_total'),
+            vat=Sum('vat_amount'), net=Sum('net_total'), cnt=Count('id')):
+        key = r['created_at__date'].strftime('%Y-%m-%d')
+        g = _Dec(str(r['gross'] or 0))
+        n = _Dec(str(r['net'] or 0))
+        by_day[key] = {
+            'gross': g, 'net': n,
+            'transaction_count': r['cnt'] or 0, 'void_count': 0,
+        }
+        totals['gross'] += g
+        totals['discount'] += _Dec(str(r['discount'] or 0))
+        totals['vat'] += _Dec(str(r['vat'] or 0))
+        totals['net'] += n
+
+    txn_count = sales.count()
+
+    # Voids, counted on their own PHT day (display only).
+    void_qs = PosTransaction.objects.filter(
+        created_at__date__gte=d_from, created_at__date__lte=d_to,
+        is_seed=False, void=True,
     )
-    for r in pl_rows:
+    void_count = void_qs.count()
+    for r in void_qs.values('created_at__date').annotate(c=Count('id')):
+        key = r['created_at__date'].strftime('%Y-%m-%d')
+        by_day.setdefault(key, {
+            'gross': _Dec('0'), 'net': _Dec('0'),
+            'transaction_count': 0, 'void_count': 0,
+        })
+        by_day[key]['void_count'] = r['c']
+
+    # Payment mix from the tender lines of those completed sales.
+    for r in (PaymentLine.objects.filter(transaction__in=sales)
+              .values('method').annotate(total=Sum('amount'))):
         if r['method'] in ('cash', 'card', 'gcash', 'maya'):
-            snapshot[r['method']] = _Dec(str(r['total'] or 0))
-    return snapshot
+            totals[r['method']] += _Dec(str(r['total'] or 0))
+
+    return totals, txn_count, void_count, by_day
 
 
 def _weekly_top_items(d_from, d_to):
@@ -2516,9 +2555,11 @@ def _weekly_payload(week_param):
     """ISSUE-118: Weekly Performance Report payload (dict).
 
     The week is SATURDAY→FRIDAY in PHT (ISSUE-121-FU-A), derived from any date
-    inside it. Finalized ZReports provide completed days; the current PHT day
-    adds live open-shift (X-style) data when the week is in progress. Days are
-    labelled final/live so the two sources are never silently mixed.
+    inside it. Report-basis fix (#2): the summary and per-day figures come from
+    the sale transactions themselves, each counted on its true PHT day
+    (_aggregate_transactions) — regardless of whether the shift is closed — so
+    a midnight-spanning shift no longer mis-dates a day and an unclosed shift no
+    longer drops one. Days are labelled final (past) / live (today) / upcoming.
 
     Returns (payload_dict, None) on success or (None, error_dict) on a bad week
     param, so both the JSON view and the thermal-print path (ISSUE-121-FU-D)
@@ -2532,27 +2573,12 @@ def _weekly_payload(week_param):
     today = timezone.localdate()
     live_day = today if week_start <= today <= week_end else None
 
-    totals, txn_count, void_count, daily = _aggregate_zreports(week_start, week_end)
-
-    # Bucket the per-shift Z rows into per-day rows.
-    by_day = {}
-    for row in daily:
-        d = by_day.setdefault(row['date'], {
-            'gross': _Dec('0'), 'net': _Dec('0'),
-            'transaction_count': 0, 'void_count': 0, 'z_count': 0,
-        })
-        d['gross'] += _Dec(row['gross'])
-        d['net'] += _Dec(row['net'])
-        d['transaction_count'] += row['transaction_count']
-        d['void_count'] += row['void_count']
-        d['z_count'] += 1
-
-    live = _live_today_snapshot(today) if live_day else None
-    if live:
-        for key in ('gross', 'discount', 'vat', 'net', 'cash', 'card', 'gcash', 'maya'):
-            totals[key] += live[key]
-        txn_count += live['transaction_count']
-        void_count += live['void_count']
+    # Report-basis fix (#2): count every sale on its true PHT day, from the
+    # transactions themselves — not ZReport.business_date (the shift-open date,
+    # which mis-files a midnight-spanning shift's sales) nor a today-only
+    # snapshot (which dropped a past day whose shift was never closed).
+    totals, txn_count, void_count, by_day = _aggregate_transactions(
+        week_start, week_end)
 
     days = []
     for i in range(7):
@@ -2563,22 +2589,16 @@ def _weekly_payload(week_param):
         net = bucket['net'] if bucket else _Dec('0')
         d_txns = bucket['transaction_count'] if bucket else 0
         d_voids = bucket['void_count'] if bucket else 0
-        if d == live_day:
-            status_label = 'live'
-            gross += live['gross']
-            net += live['net']
-            d_txns += live['transaction_count']
-            d_voids += live['void_count']
-        elif d > today:
+        if d > today:
             status_label = 'upcoming'
+        elif d == today:
+            status_label = 'live'
         else:
             status_label = 'final'
         days.append({
             'date': key,
             'day_name': d.strftime('%a'),
             'status': status_label,
-            # A live day can also hold already-finalized Z's (closed shifts).
-            'finalized_shifts': bucket['z_count'] if bucket else 0,
             'gross': _money(gross),
             'net': _money(net),
             'transaction_count': d_txns,
@@ -2589,9 +2609,9 @@ def _weekly_payload(week_param):
     # Z-only by construction). Omitted (null) when the prior week is empty.
     prev_start = week_start - timedelta(days=7)
     prev_end = week_start - timedelta(days=1)
-    prev_totals, prev_txns, _pv, prev_daily = _aggregate_zreports(prev_start, prev_end)
+    prev_totals, prev_txns, _pv, prev_by_day = _aggregate_transactions(prev_start, prev_end)
     previous_week = None
-    if prev_daily:
+    if prev_by_day:
         delta = totals['gross'] - prev_totals['gross']
         pct = None
         if prev_totals['gross']:

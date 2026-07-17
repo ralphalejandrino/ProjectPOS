@@ -35,7 +35,7 @@
         <div class="flex items-center justify-between mb-6">
             <div>
                 <h2 class="text-3xl font-bold text-gray-800">🗓️ Weekly Performance Report</h2>
-                <p class="text-gray-600">Sat–Fri week: finalized Z-Reports for completed days, plus live (X) data for today.</p>
+                <p class="text-gray-600">Sat–Fri week: every sale counted on the day it was rung; today's total is live and still updating.</p>
             </div>
             <!-- ISSUE-121-FU-E: top-right print button, matching the X/Z report
                  print buttons (same green style + class names) for consistency. -->
@@ -463,8 +463,8 @@
 
             // Per-day breakdown — always all 7 rows, labelled by source.
             const statusBadge = st => ({
-                final:    '<span class="px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded">Final (Z)</span>',
-                live:     '<span class="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded">Live (X)</span>',
+                final:    '<span class="px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded">Final</span>',
+                live:     '<span class="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded">Today</span>',
                 upcoming: '<span class="px-2 py-1 text-xs font-medium bg-gray-100 text-gray-500 rounded">—</span>',
             }[st] || '');
             document.getElementById('daily-body').innerHTML = data.days.map(d => `

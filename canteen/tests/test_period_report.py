@@ -198,7 +198,6 @@ class WeeklyReportTests(APITestCase):
         day = next(d for d in resp.data['days']
                    if d['date'] == today.strftime('%Y-%m-%d'))
         self.assertEqual(day['status'], 'live')
-        self.assertEqual(day['finalized_shifts'], 1)
         self.assertEqual(Decimal(day['gross']), Decimal('250.00'))
         self.assertEqual(day['transaction_count'], 3)
 
@@ -232,9 +231,11 @@ class WeeklyReportTests(APITestCase):
         # No prior-week data yet → delta gracefully omitted.
         self.assertIsNone(resp.data['previous_week'])
 
-        # Plant the Z one week back (queryset update bypasses the immutable
-        # save() guard — test-only relocation).
-        ZReport.objects.all().update(business_date=today - timedelta(days=7))
+        # Relocate the prior sale one week back by its TRANSACTION date — the
+        # report now buckets by created_at (report-basis fix #2), not by
+        # ZReport.business_date. update() bypasses auto_now_add.
+        PosTransaction.objects.all().update(
+            created_at=timezone.now() - timedelta(days=7))
         s2 = self._open_shift()
         self._sell(3)   # gross 150 this week (live)
         close_shift_and_finalize_z(s2.id, Decimal('0.00'), self.cashier)

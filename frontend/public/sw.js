@@ -112,7 +112,7 @@
 // white-screen crash. (3) modal geometry keys on osk-ENABLED not osk-OPEN, so the
 // card no longer jumps 169–219px out from under the user's finger when the
 // keyboard opens.
-const CACHE_NAME = 'tarsierpos-v144'; // canonical cache version
+const CACHE_NAME = 'tarsierpos-v145'; // canonical cache version
 const ASSETS = [
   'index.html',
   'login.html',
