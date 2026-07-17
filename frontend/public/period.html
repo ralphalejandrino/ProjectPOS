@@ -413,23 +413,43 @@
                 (ncf < 0 ? 'border-red-500' : 'border-emerald-500');
             document.getElementById('summary-row').classList.remove('hidden');
 
-            // FEATURE-054: profitability (recipe-valued COGS). Gross profit may
-            // be negative on a bad week; color mirrors the NCF card.
+            // FEATURE-054 + #10 margin honesty: recipe-valued COGS/profit. When
+            // cost coverage is thin the COGS is understated (uncosted lines cost
+            // 0), so the margin is FLATTERED — it must NOT be shown as a
+            // confident figure. Surface the gap instead. Threshold: >=90% of
+            // sold lines costed for a reliable margin/profit.
             const prof = data.profitability || {};
+            const cov = prof.costed_line_ratio;
+            const covPct = cov != null ? Math.round(cov * 100) : null;
+            const marginReliable = (cov == null || cov >= 0.9);
+
             const gp = parseFloat(prof.gross_profit || '0');
             const gpEl = document.getElementById('sum-gp');
             gpEl.textContent = formatCurrency(gp);
-            gpEl.className = 'text-3xl font-bold ' + (gp < 0 ? 'text-red-600' : 'text-green-700');
+            gpEl.className = 'text-3xl font-bold ' + (
+                !marginReliable ? 'text-amber-600'
+                                : (gp < 0 ? 'text-red-600' : 'text-green-700'));
             document.getElementById('sum-cogs').textContent = formatCurrency(parseFloat(prof.cogs || '0'));
-            document.getElementById('sum-gm').textContent =
-                prof.gross_margin_pct != null ? prof.gross_margin_pct.toFixed(1) + '%' : '—';
-            // Caveat the figure when the cost-at-sale snapshot doesn't yet cover
-            // every line (pre-FEATURE-054 history has no snapshot).
-            const cov = prof.costed_line_ratio;
-            document.getElementById('cogs-coverage').textContent =
-                (cov != null && cov < 1)
-                    ? `recipe-valued · ${Math.round(cov * 100)}% of lines costed`
+
+            const gmEl = document.getElementById('sum-gm');
+            const covEl = document.getElementById('cogs-coverage');
+            if (marginReliable) {
+                gmEl.textContent = prof.gross_margin_pct != null
+                    ? prof.gross_margin_pct.toFixed(1) + '%' : '—';
+                gmEl.className = 'text-3xl font-bold text-green-700';
+                covEl.textContent = (cov != null && cov < 1)
+                    ? `recipe-valued · ${covPct}% of lines costed`
                     : 'recipe-valued';
+                covEl.className = 'text-xs mt-1 text-gray-400';
+            } else {
+                // Refuse the confident number when the data can't support it.
+                gmEl.textContent = 'N/A';
+                gmEl.className = 'text-3xl font-bold text-amber-600';
+                covEl.innerHTML =
+                    `⚠ Only ${covPct}% of sold items have cost data — margin &amp; profit `
+                    + `are not reliable yet. Record ingredient purchases (by the package) to enable.`;
+                covEl.className = 'text-xs mt-1 font-medium text-amber-700';
+            }
             document.getElementById('profit-row').classList.remove('hidden');
 
             // Daily revenue chart — CSS-width bars (dashboard widget pattern).
