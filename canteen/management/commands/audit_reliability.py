@@ -82,6 +82,7 @@ class Command(BaseCommand):
             self._fail(f'_weekly_payload returned error: {err}')
             return
         self._ok('weekly report computed without error (no crash)')
+        self.payload = payload
 
         s = payload['summary']
         self._info(f"summary: gross {s['gross_total']}  net {s['net_total']}  "
@@ -216,13 +217,31 @@ class Command(BaseCommand):
             pos_transaction__created_at__date__lte=wk_end,
             pos_transaction__void=False, pos_transaction__is_seed=False)
         total = lines.count()
-        costed = lines.filter(unit_cost__isnull=False).count()
-        ratio = round(costed / total, 3) if total else None
-        self._info(f'cost coverage this week: {costed}/{total} lines '
-                   f'= {ratio if ratio is not None else "n/a"}')
-        if ratio is not None and ratio < 0.9:
-            self._ok(f'coverage < 0.9 -> report WILL show margin N/A (honest, #10 working)')
-        elif ratio is not None:
-            self._ok(f'coverage >= 0.9 -> report shows a confident margin ({ratio})')
+        non_null = lines.filter(unit_cost__isnull=False).count()     # what _weekly_cogs counts
+        non_zero = lines.filter(unit_cost__gt=0).count()             # genuinely costed
+        nn_ratio = round(non_null / total, 3) if total else None
+        nz_ratio = round(non_zero / total, 3) if total else None
+
+        # What the report ACTUALLY shows her (read straight off the payload).
+        prof = getattr(self, 'payload', {}).get('profitability', {}) if hasattr(self, 'payload') else {}
+        rep_ratio = prof.get('costed_line_ratio')
+        rep_margin = prof.get('gross_margin_pct')
+        rep_cogs = prof.get('cogs')
+        self._info(f'report shows: margin {rep_margin}%  COGS {rep_cogs}  '
+                   f'costed_line_ratio {rep_ratio}  (=_weekly_cogs non-null count)')
+        self._info(f'coverage non-null (unit_cost set): {non_null}/{total} = {nn_ratio}')
+        self._info(f'coverage GENUINE (unit_cost > 0):  {non_zero}/{total} = {nz_ratio}')
+
+        margin_shown = (rep_ratio is None or rep_ratio >= 0.9)  # period.html #10 gate
+        if margin_shown and nz_ratio is not None and nz_ratio < 0.9:
+            self._fail(
+                f'#10 HOLE: report shows a CONFIDENT margin ({rep_margin}%) because '
+                f'costed_line_ratio counts unit_cost=0 lines as covered ({nn_ratio}), but only '
+                f'{nz_ratio:.0%} of lines are genuinely costed — {non_null - non_zero} lines '
+                f'contribute 0 COGS -> the margin is FLATTERED. #10 should count unit_cost>0.')
+        elif not margin_shown:
+            self._ok(f'report shows margin N/A (coverage {rep_ratio} < 0.9) — honest')
         else:
-            self._info('no sold lines this week')
+            self._ok(f'report shows a margin backed by {nz_ratio:.0%} genuinely-costed lines')
+
+        # zero-cost active recipe ingredients already listed in section 4 drive this.
