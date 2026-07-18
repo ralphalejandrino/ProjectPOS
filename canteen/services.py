@@ -3,13 +3,14 @@ from django.db import transaction as db_transaction
 from django.db import IntegrityError
 from django.db.models import F, Q
 from django.core.exceptions import ValidationError
+from django.utils import timezone
 from rest_framework.exceptions import ValidationError as DRFValidationError
 from djmoney.money import Money
 from .utils.currency import format_currency
 from .models import (
     Item, PosTransaction, PosTransactionItem, Shift,
     VariantOption, TransactionItemVariant,
-    RecipeIngredient, Ingredient, IngredientLog, PaymentLine,
+    RecipeIngredient, Ingredient, IngredientLog, IngredientRestockLog, PaymentLine,
 )
 import threading
 from .receipt_service import kick_cash_drawer
@@ -40,6 +41,164 @@ def _move_ingredient(ingredient_pk, signed_delta, action, transaction, performed
         transaction=transaction,
         performed_by=performed_by,
     )
+
+
+# ---------------------------------------------------------------------------
+# FEATURE-058: restock corrections (void / edit / re-attribute a restock entry)
+# ---------------------------------------------------------------------------
+
+_COST_Q = Decimal('0.0001')
+
+
+def _weighted_avg_restock_cost(ingredient):
+    """Correction-path cost basis: the quantity-weighted average of the
+    ingredient's NON-VOIDED restocks. Deterministic and explainable ("the
+    average of what you actually paid"), unlike the FEATURE-051 rolling average
+    which is path-dependent on a stock timeline we can't reconstruct.
+
+    Returns the recomputed cost, or None when there is no non-voided purchase to
+    derive it from (caller leaves the existing cost untouched rather than zero a
+    manually-set one).
+    """
+    total_q = Decimal('0')
+    total_c = Decimal('0')
+    for r in (ingredient.restock_logs.filter(is_voided=False)
+              .values('quantity_added', 'cost_per_unit')):
+        q = r['quantity_added']
+        total_q += q
+        total_c += q * r['cost_per_unit']
+    if total_q > 0:
+        return (total_c / total_q).quantize(_COST_Q, rounding=ROUND_HALF_UP)
+    return None
+
+
+def _apply_correction_stock(ingredient, signed_delta, user, note):
+    """Apply a signed stock delta from a correction and append a 'correction'
+    ledger row (before/after snapshot). Unlike sale depletion this ignores
+    track_depletion — a purchase correction must move stock regardless — and
+    lets stock go negative (owner-investigate signal, per ISSUE-069). Returns
+    (before, after)."""
+    before = ingredient.current_stock
+    after = before + signed_delta
+    ingredient.current_stock = after
+    ingredient.save(update_fields=['current_stock', 'updated_at'])
+    IngredientLog.objects.create(
+        ingredient=ingredient, action='correction',
+        quantity_change=signed_delta, stock_before=before, stock_after=after,
+        performed_by=user, notes=note[:255],
+    )
+    return before, after
+
+
+def _recost(ingredient):
+    """Reset the ingredient's cost to the non-voided restock weighted average, if
+    derivable. No-op when there is no purchase history to derive from."""
+    c = _weighted_avg_restock_cost(ingredient)
+    if c is not None:
+        ingredient.cost_per_unit = c
+        ingredient.save(update_fields=['cost_per_unit'])
+    return c
+
+
+def void_restock(restock, *, user, reason=''):
+    """Soft-void a restock entry: mark it voided (kept for audit), remove its
+    stock contribution, and recompute the ingredient's cost from the remaining
+    purchases. Idempotent-guarded (a voided entry cannot be voided again)."""
+    with db_transaction.atomic():
+        ing = Ingredient.objects.select_for_update().get(pk=restock.ingredient_id)
+        if restock.is_voided:
+            raise DRFValidationError('This restock entry has already been voided.')
+        restock.is_voided = True
+        restock.voided_at = timezone.now()
+        restock.voided_by = user
+        if reason:
+            restock.correction_note = reason
+        restock.save(update_fields=[
+            'is_voided', 'voided_at', 'voided_by', 'correction_note'])
+        _, after = _apply_correction_stock(
+            ing, -restock.quantity_added, user,
+            f'void restock #{restock.pk} ({reason})'.strip())
+        _recost(ing)
+        return {'ingredient': ing, 'new_stock': after,
+                'negative_stock': after < 0}
+
+
+def edit_restock(restock, *, quantity_added=None, cost_per_unit=None,
+                 user, reason=''):
+    """Edit a restock's quantity and/or price. Applies the stock difference and
+    recomputes cost from the corrected purchase set. A voided entry cannot be
+    edited (re-instate it by editing a fresh entry instead)."""
+    if restock.is_voided:
+        raise DRFValidationError('A voided restock entry cannot be edited.')
+    if quantity_added is None and cost_per_unit is None:
+        raise DRFValidationError('Nothing to edit — pass a quantity or a price.')
+    with db_transaction.atomic():
+        ing = Ingredient.objects.select_for_update().get(pk=restock.ingredient_id)
+        old_q = restock.quantity_added
+        if quantity_added is not None:
+            restock.quantity_added = quantity_added
+        if cost_per_unit is not None:
+            restock.cost_per_unit = cost_per_unit
+        restock.corrected_at = timezone.now()
+        restock.corrected_by = user
+        if reason:
+            restock.correction_note = reason
+        # update_fields path → does NOT re-trigger the FEATURE-051 insert roll.
+        restock.save(update_fields=[
+            'quantity_added', 'cost_per_unit', 'corrected_at', 'corrected_by',
+            'correction_note'])
+        delta = restock.quantity_added - old_q
+        after = ing.current_stock
+        if delta != 0:
+            _, after = _apply_correction_stock(
+                ing, delta, user,
+                f'edit restock #{restock.pk} qty {old_q}->{restock.quantity_added} ({reason})'.strip())
+        _recost(ing)
+        return {'ingredient': ing, 'new_stock': after,
+                'negative_stock': after < 0}
+
+
+def reattribute_restock(restock, *, target_ingredient, quantity_added,
+                        cost_per_unit, user, reason=''):
+    """Move a restock to the correct ingredient. The original is soft-voided on
+    the source (stock removed, cost recomputed); a NEW correctly-attributed
+    restock is recorded on the target in the target's own units (so a ml→scoop
+    mis-tap can't carry the wrong number over). Returns the new restock."""
+    if restock.is_voided:
+        raise DRFValidationError('A voided restock entry cannot be re-attributed.')
+    if target_ingredient.pk == restock.ingredient_id:
+        raise DRFValidationError('Target is the same ingredient — use edit instead.')
+    with db_transaction.atomic():
+        src = Ingredient.objects.select_for_update().get(pk=restock.ingredient_id)
+        note = reason or f're-attributed to {target_ingredient.name}'
+        restock.is_voided = True
+        restock.voided_at = timezone.now()
+        restock.voided_by = user
+        restock.correction_note = note
+        restock.save(update_fields=[
+            'is_voided', 'voided_at', 'voided_by', 'correction_note'])
+        _apply_correction_stock(
+            src, -restock.quantity_added, user,
+            f'void restock #{restock.pk}: {note}')
+        _recost(src)
+
+        # Record the corrected purchase on the target. Its own save() runs the
+        # FEATURE-051 roll (a genuine new purchase on the target), then we log
+        # the stock movement for the audit trail (also chips at FLAG-078).
+        tgt = Ingredient.objects.select_for_update().get(pk=target_ingredient.pk)
+        before = tgt.current_stock
+        new = IngredientRestockLog(
+            ingredient_id=tgt.pk, quantity_added=quantity_added,
+            cost_per_unit=cost_per_unit, recorded_by=user,
+            corrected_by=user, corrected_at=timezone.now(),
+            notes=f're-attributed from restock #{restock.pk}')
+        new.save()
+        tgt.refresh_from_db()
+        IngredientLog.objects.create(
+            ingredient=tgt, action='correction', quantity_change=quantity_added,
+            stock_before=before, stock_after=tgt.current_stock,
+            performed_by=user, notes=f're-attributed in from restock #{restock.pk}')
+        return {'new_restock': new, 'source': src, 'target': tgt}
 
 
 # FEATURE-046: read-time "makeable" stock — how many units of a recipe item

@@ -1270,6 +1270,19 @@ class IngredientRestockLog(models.Model):
     date = models.DateTimeField(default=dj_tz.now)
     notes = models.TextField(blank=True)
     recorded_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
+    # FEATURE-058: restock corrections. A mistaken entry is soft-voided (kept for
+    # the audit trail, never deleted); an edited entry stamps corrected_by/at. The
+    # cost/stock effects are recomputed in services (see void/edit/reattribute).
+    is_voided = models.BooleanField(default=False)
+    voided_at = models.DateTimeField(null=True, blank=True)
+    voided_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name='+')
+    corrected_at = models.DateTimeField(null=True, blank=True)
+    corrected_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name='+')
+    correction_note = models.TextField(blank=True)
 
     class Meta:
         ordering = ['-date']
@@ -1405,6 +1418,7 @@ class IngredientLog(models.Model):
         ('restock', 'Restock'),
         ('production', 'Production'),  # FEATURE-056: prep-a-batch (both the
         # component depletion and the preparation's yield increment)
+        ('correction', 'Correction'),  # FEATURE-058: restock void/edit/re-attribute
     ]
 
     ingredient = models.ForeignKey(
