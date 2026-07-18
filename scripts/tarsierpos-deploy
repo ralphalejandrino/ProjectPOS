@@ -79,7 +79,11 @@ verify() {
   [ "$svc" = active ] || { echo "  X service not active";  ok=1; }
   [ "$root" = 200 ]   || { echo "  X root != 200";         ok=1; }
   [ "$ql" = 200 ]     || { echo "  X quick-login != 200";  ok=1; }
-  [ "${kiosk:-0}" -gt 0 ] 2>/dev/null || { echo "  X no kiosk procs"; ok=1; }
+  # Kiosk is the on-screen browser — a display concern, recoverable on its own,
+  # and NOT a reason to fail (and roll back) a healthy code deploy. It also lags
+  # a few seconds behind the pkill relaunch. Warn, never fail on it (trap #13).
+  [ "${kiosk:-0}" -gt 0 ] 2>/dev/null || \
+    echo "  ! kiosk procs 0 — display only, NOT a deploy failure; relaunch: sudo pkill chrome (openbox restarts it)"
   if [ -n "$expected" ] && [ "$head" != "$expected" ]; then
     echo "  X HEAD != expected SHA"; ok=1
   fi
@@ -205,7 +209,13 @@ fi
 
 # 8. Relaunch the kiosk (always — picks up the new SW). Snap comm is 'chrome'.
 pkill chrome; true
-sleep 1
+# The openbox .xinitrc loop relaunches Chromium, but it takes a few seconds. Poll
+# so the verify below doesn't read 0 procs mid-relaunch and cry wolf (trap #13:
+# both 2026-07-18 deploys false-FATALed here on a perfectly healthy box).
+for _ in $(seq 1 15); do
+  sleep 1
+  [ "$(pgrep -c chrome 2>/dev/null || echo 0)" -gt 0 ] && break
+done
 
 # 9. Verify the deployed artifacts (Phase 4).
 log "verifying deployed artifacts..."
