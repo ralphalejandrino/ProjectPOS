@@ -566,6 +566,12 @@ class IngredientSerializer(serializers.ModelSerializer):
 class IngredientRestockLogSerializer(serializers.ModelSerializer):
     ingredient_name = serializers.CharField(source='ingredient.name', read_only=True)
     recorded_by_name = serializers.CharField(source='recorded_by.username', read_only=True)
+    # FEATURE-058: correction audit surface. A voided entry stays in the history
+    # (struck through in the UI) with who/when; an edited entry carries the
+    # corrected-by stamp. All read-only — corrections go through the dedicated
+    # /restock-logs/{id}/void|edit|reattribute endpoints, never a bare PATCH.
+    voided_by_name = serializers.CharField(source='voided_by.username', read_only=True)
+    corrected_by_name = serializers.CharField(source='corrected_by.username', read_only=True)
     # FEATURE-050: package-based restock entry. When the manager buys whole
     # packages ("2 sacks @ ₱1,250"), she enters ``packages`` (+ optional
     # ``package_price``) and the POS converts to base units + per-base-unit cost
@@ -585,8 +591,13 @@ class IngredientRestockLogSerializer(serializers.ModelSerializer):
             'id', 'ingredient', 'ingredient_name', 'quantity_added',
             'cost_per_unit', 'date', 'notes', 'recorded_by', 'recorded_by_name',
             'packages', 'package_price',
+            'is_voided', 'voided_at', 'voided_by_name',
+            'corrected_at', 'corrected_by_name', 'correction_note',
         ]
-        read_only_fields = ['ingredient', 'recorded_by', 'date']
+        read_only_fields = [
+            'ingredient', 'recorded_by', 'date',
+            'is_voided', 'voided_at', 'corrected_at', 'correction_note',
+        ]
         # FEATURE-050: quantity_added/cost_per_unit are no longer client-required
         # because they can be derived from packages. validate() enforces that one
         # of the two entry modes is fully provided.
@@ -669,6 +680,71 @@ class IngredientRestockLogSerializer(serializers.ModelSerializer):
             ing.last_purchase_price = package_price
             ing.save(update_fields=['last_purchase_price'])
         return log
+
+
+# ---------------------------------------------------------------------------
+# FEATURE-058: correction inputs. Thin validation shells over the services —
+# they never write anything themselves (void/edit/reattribute_restock own the
+# transaction, stock delta, ledger row, and cost recompute).
+# ---------------------------------------------------------------------------
+
+class RestockVoidInputSerializer(serializers.Serializer):
+    reason = serializers.CharField(
+        required=False, allow_blank=True, max_length=255, default='')
+
+
+class RestockEditInputSerializer(serializers.Serializer):
+    quantity_added = serializers.DecimalField(
+        max_digits=10, decimal_places=4, required=False)
+    cost_per_unit = serializers.DecimalField(
+        max_digits=10, decimal_places=4, required=False)
+    reason = serializers.CharField(
+        required=False, allow_blank=True, max_length=255, default='')
+
+    def validate_quantity_added(self, value):
+        if value <= 0:
+            raise serializers.ValidationError(
+                'Corrected quantity must be greater than 0 — void the entry '
+                'instead if the restock never happened.')
+        return value
+
+    def validate_cost_per_unit(self, value):
+        # A zero price would silently re-create the zero-cost-snapshot disease
+        # (#10): the line "has a cost" but contributes nothing to COGS.
+        if value <= 0:
+            raise serializers.ValidationError(
+                'Corrected price must be greater than 0.')
+        return value
+
+    def validate(self, attrs):
+        if attrs.get('quantity_added') is None and attrs.get('cost_per_unit') is None:
+            raise serializers.ValidationError(
+                'Nothing to edit — provide a corrected quantity and/or price.')
+        return attrs
+
+
+class RestockReattributeInputSerializer(serializers.Serializer):
+    # Active-only on purpose: re-attributing onto a retired duplicate copy would
+    # re-create the split-record tangle the 2026-07-18 structural fix undid.
+    target_ingredient = serializers.PrimaryKeyRelatedField(
+        queryset=Ingredient.objects.filter(is_active=True))
+    quantity_added = serializers.DecimalField(max_digits=10, decimal_places=4)
+    cost_per_unit = serializers.DecimalField(max_digits=10, decimal_places=4)
+    reason = serializers.CharField(
+        required=False, allow_blank=True, max_length=255, default='')
+
+    def validate_quantity_added(self, value):
+        if value <= 0:
+            raise serializers.ValidationError(
+                "Quantity must be greater than 0, in the target ingredient's "
+                'own unit.')
+        return value
+
+    def validate_cost_per_unit(self, value):
+        if value <= 0:
+            raise serializers.ValidationError(
+                'Price must be greater than 0.')
+        return value
 
 
 class RecipeIngredientSerializer(serializers.ModelSerializer):

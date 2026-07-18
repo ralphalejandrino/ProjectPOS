@@ -9,6 +9,7 @@ from django.http import Http404
 from .services import (
     create_pos_transaction, _restore_ingredients, refund_transaction,
     close_shift_and_finalize_z, stock_movements_for_shift, produce_batch,
+    void_restock, edit_restock, reattribute_restock,
 )
 from .models import (
     ItemCategory, Item, ItemLog, PosTransaction, PosTransactionItem, Shift,
@@ -31,6 +32,9 @@ from .serializers import (
     SupplierSerializer,
     IngredientSerializer,
     IngredientRestockLogSerializer,
+    RestockVoidInputSerializer,
+    RestockEditInputSerializer,
+    RestockReattributeInputSerializer,
     RecipeIngredientSerializer,
     ItemLogSerializer,
     ZReportSerializer,
@@ -1939,6 +1943,92 @@ class IngredientViewSet(viewsets.ModelViewSet):
         return Response({'results': results})
 
 
+class IngredientRestockLogViewSet(viewsets.GenericViewSet):
+    """FEATURE-058: restock corrections. Deliberately NOT a ModelViewSet —
+    restock rows are append-only history (created via /ingredients/{id}/restock/,
+    listed via /ingredients/{id}/restock_logs/) and must never be edited or
+    deleted through a bare PATCH/DELETE. The only writes are the three
+    correction verbs below, each of which soft-voids/stamps and keeps the
+    audit trail (services own the transaction + stock delta + ledger row +
+    cost recompute).
+
+    Manager/admin only — stricter than the page gate on the ingredient
+    viewsets, because a correction moves stock and rewrites cost.
+    """
+    queryset = IngredientRestockLog.objects.select_related(
+        'ingredient', 'recorded_by', 'voided_by', 'corrected_by')
+    serializer_class = IngredientRestockLogSerializer
+    permission_classes = [IsManagerOrAbove]
+
+    def _correction_response(self, restock, result, extra=None):
+        ing = result['ingredient']
+        payload = {
+            'restock': IngredientRestockLogSerializer(restock).data,
+            'ingredient': {
+                'id': ing.pk,
+                'name': ing.name,
+                'current_stock': str(ing.current_stock),
+                'cost_per_unit': str(ing.cost_per_unit),
+            },
+            'negative_stock': result.get('negative_stock', False),
+        }
+        if extra:
+            payload.update(extra)
+        return Response(payload)
+
+    @action(detail=True, methods=['post'])
+    def void(self, request, pk=None):
+        restock = self.get_object()
+        ser = RestockVoidInputSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        result = void_restock(
+            restock, user=request.user, reason=ser.validated_data['reason'])
+        restock.refresh_from_db()
+        return self._correction_response(restock, result)
+
+    @action(detail=True, methods=['post'])
+    def edit(self, request, pk=None):
+        restock = self.get_object()
+        ser = RestockEditInputSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        result = edit_restock(
+            restock,
+            quantity_added=ser.validated_data.get('quantity_added'),
+            cost_per_unit=ser.validated_data.get('cost_per_unit'),
+            user=request.user, reason=ser.validated_data['reason'])
+        restock.refresh_from_db()
+        return self._correction_response(restock, result)
+
+    @action(detail=True, methods=['post'])
+    def reattribute(self, request, pk=None):
+        restock = self.get_object()
+        ser = RestockReattributeInputSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        result = reattribute_restock(
+            restock,
+            target_ingredient=ser.validated_data['target_ingredient'],
+            quantity_added=ser.validated_data['quantity_added'],
+            cost_per_unit=ser.validated_data['cost_per_unit'],
+            user=request.user, reason=ser.validated_data['reason'])
+        restock.refresh_from_db()
+        src, tgt = result['source'], result['target']
+        return Response({
+            'restock': IngredientRestockLogSerializer(restock).data,
+            'new_restock': IngredientRestockLogSerializer(result['new_restock']).data,
+            'source': {
+                'id': src.pk, 'name': src.name,
+                'current_stock': str(src.current_stock),
+                'cost_per_unit': str(src.cost_per_unit),
+            },
+            'target': {
+                'id': tgt.pk, 'name': tgt.name,
+                'current_stock': str(tgt.current_stock),
+                'cost_per_unit': str(tgt.cost_per_unit),
+            },
+            'negative_stock': src.current_stock < 0,
+        })
+
+
 class RecipeIngredientViewSet(viewsets.ModelViewSet):
     # BUG-014 / PAGINATION-WARN-2: explicit ordering — the global DRF paginator
     # (PAGE_SIZE=50) otherwise warns (UnorderedObjectListWarning) and can yield
@@ -2474,12 +2564,14 @@ def _weekly_restock_costs(d_from, d_to):
     which additionally snapshots cost_per_unit at restock time. So cost is read
     from that table as quantity_added * cost_per_unit (historically accurate,
     better than deriving from the ingredient's current cost_per_unit). Restocks
-    are not transactions, so is_seed/void exclusions do not apply. Windowed on
+    are not transactions, so is_seed exclusions do not apply — but FEATURE-058
+    soft-voided entries ARE excluded: a voided restock is a data-entry mistake,
+    not money spent, and must not inflate the week's restock spend. Windowed on
     the PHT date of each restock, mirroring the sales queries' __date lookup.
     """
     rows = (
         IngredientRestockLog.objects
-        .filter(date__date__gte=d_from, date__date__lte=d_to)
+        .filter(date__date__gte=d_from, date__date__lte=d_to, is_voided=False)
         .select_related('ingredient')
         .order_by('ingredient__name', 'date')
     )
@@ -2511,11 +2603,13 @@ def _weekly_restock_detail(d_from, d_to):
     Ordered by date so the table reads chronologically. ``cost`` is the
     historical snapshot quantity_added * cost_per_unit. ``recorded_by`` is null
     on rows created before that field existed → rendered '—', never an error.
-    Same PHT window resolution as the rest of the report.
+    Same PHT window resolution as the rest of the report. FEATURE-058 voided
+    entries excluded, mirroring _weekly_restock_costs (summary and detail must
+    reconcile).
     """
     rows = (
         IngredientRestockLog.objects
-        .filter(date__date__gte=d_from, date__date__lte=d_to)
+        .filter(date__date__gte=d_from, date__date__lte=d_to, is_voided=False)
         .select_related('ingredient', 'ingredient__unit', 'recorded_by')
         .order_by('date')
     )

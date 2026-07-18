@@ -515,6 +515,34 @@ class ISSUE121WeeklyReportTests(APITestCase):
         self.assertEqual(Decimal(rc['total']), Decimal('0.00'))
         self.assertEqual(rc['by_ingredient'], [])
 
+    def test_restock_cost_and_detail_exclude_voided_restocks(self):
+        """FEATURE-058: a soft-voided restock is a data-entry mistake, not money
+        spent — it must drop out of the week's restock spend and detail rows.
+        The surviving restock is the control proving the window still counts."""
+        from canteen.services import void_restock
+        unit = self._unit()
+        beans = Ingredient.objects.create(
+            name='Beans', unit=unit, cost_per_unit=Decimal('1.0000'),
+            current_stock=Decimal('0'))
+        keep = IngredientRestockLog.objects.create(
+            ingredient=beans, quantity_added=Decimal('10'),
+            cost_per_unit=Decimal('5.0000'))          # 50, stays
+        mistake = IngredientRestockLog.objects.create(
+            ingredient=beans, quantity_added=Decimal('100'),
+            cost_per_unit=Decimal('9.0000'))          # 900, voided below
+        void_restock(mistake, user=self.manager, reason='mis-tap')
+
+        resp = self.client.get(self._this_week())
+        rc = resp.data['restock_costs']
+        # CONTROL first: the surviving restock is counted...
+        self.assertEqual(Decimal(rc['total']), Decimal('50.00'))
+        by_name = {r['name']: r for r in rc['by_ingredient']}
+        self.assertEqual(Decimal(by_name['Beans']['cost']), Decimal('50.00'))
+        # ...and the voided 900 is gone from summary and detail alike.
+        detail = resp.data['restock_detail']
+        self.assertEqual(len(detail), 1)
+        self.assertEqual(detail[0]['cost'], '50.00')
+
     # --- ISSUE-121-FU-D: thermal output --------------------------------
 
     def test_weekly_report_thermal_output_contains_totals(self):
