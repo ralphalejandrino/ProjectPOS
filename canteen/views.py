@@ -2394,9 +2394,17 @@ def _weekly_cogs(d_from, d_to):
     total = 0
     for l in _weekly_sold_lines(d_from, d_to).values('quantity', 'unit_cost'):
         total += 1
-        if l['unit_cost'] is not None:
-            cogs += _Dec(str(l['unit_cost'])) * _Dec(str(l['quantity']))
-            costed += 1
+        uc = l['unit_cost']
+        if uc is not None:
+            cogs += _Dec(str(uc)) * _Dec(str(l['quantity']))
+            # #10 margin honesty: a line snapshotted at exactly 0 contributes no
+            # COGS and flatters the margin identically to a NULL one (recipe was
+            # uncosted at sale time). Counting it as "covered" defeated the
+            # honesty gate — a week of zero-cost snapshots showed a confident but
+            # fictional margin. Only a genuinely-costed (>0) line counts toward
+            # coverage; the COGS sum above is unchanged (0 adds nothing).
+            if uc > 0:
+                costed += 1
     return cogs, costed, total
 
 

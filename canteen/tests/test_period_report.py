@@ -46,6 +46,31 @@ class PeriodReportTests(APITestCase):
     def _url(self, frm, to):
         return f'/api/canteen/reports/period/?from={frm}&to={to}'
 
+    def test_zero_cost_snapshot_not_counted_as_covered(self):
+        """#10 margin honesty: a line snapshotted at unit_cost=0 contributes no
+        COGS and flatters the margin like a NULL one, so it must NOT count toward
+        cost coverage. Regression for the live PROD bug where 74/116 zero-cost
+        snapshots pushed costed_line_ratio to 0.966 and showed a fictional
+        confident 82.87% margin instead of N/A."""
+        from django.utils import timezone
+        from canteen.models import PosTransactionItem
+        from canteen.views import _weekly_cogs, _resolve_week, _weekly_payload
+        self._open_shift()
+        t1 = self._sell(1)
+        t2 = self._sell(1)
+        # One genuinely-costed line, one zero-cost snapshot.
+        PosTransactionItem.objects.filter(pos_transaction=t1).update(unit_cost=Decimal('5.0000'))
+        PosTransactionItem.objects.filter(pos_transaction=t2).update(unit_cost=Decimal('0.0000'))
+
+        wk_start, wk_end = _resolve_week(timezone.localdate())
+        cogs, costed, total = _weekly_cogs(wk_start, wk_end)
+        self.assertEqual(total, 2)
+        self.assertEqual(costed, 1)          # only the >0 line (was 2 pre-fix)
+        self.assertEqual(cogs, Decimal('5.0000'))  # COGS unchanged by the fix
+
+        payload, _ = _weekly_payload(wk_start.strftime('%Y-%m-%d'))
+        self.assertEqual(payload['profitability']['costed_line_ratio'], 0.5)  # <0.9 -> UI shows N/A
+
     def test_period_aggregates_across_zreports(self):
         # Shift 1: two txns, gross 100.
         s1 = self._open_shift()
