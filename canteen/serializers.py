@@ -726,8 +726,10 @@ class RestockEditInputSerializer(serializers.Serializer):
 class RestockReattributeInputSerializer(serializers.Serializer):
     # Active-only on purpose: re-attributing onto a retired duplicate copy would
     # re-create the split-record tangle the 2026-07-18 structural fix undid.
+    # Preparations excluded too (v1 scope) — their cost is production-derived,
+    # not purchase-derived; services carry the same guard for the source side.
     target_ingredient = serializers.PrimaryKeyRelatedField(
-        queryset=Ingredient.objects.filter(is_active=True))
+        queryset=Ingredient.objects.filter(is_active=True, is_preparation=False))
     quantity_added = serializers.DecimalField(max_digits=10, decimal_places=4)
     cost_per_unit = serializers.DecimalField(max_digits=10, decimal_places=4)
     reason = serializers.CharField(

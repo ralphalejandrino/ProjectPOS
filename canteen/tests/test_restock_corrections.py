@@ -126,3 +126,44 @@ class RestockCorrectionTests(TestCase):
             reattribute_restock(r, target_ingredient=ing,
                                 quantity_added=Decimal('100'),
                                 cost_per_unit=Decimal('2.0'), user=self.user)
+
+    # -- preparations: v1 scope guard ----------------------------------------
+    def test_corrections_rejected_on_preparation_restocks(self):
+        """A prep's cost is blended from batch production (no restock rows), so
+        _recost from restocks alone would erase it — all three verbs refuse.
+        CONTROL below proves the same calls succeed on a normal ingredient."""
+        prep = Ingredient.objects.create(
+            name='Simple Syrup', unit=self.ml, cost_per_unit=Decimal('1.5'),
+            current_stock=Decimal('500'), is_preparation=True,
+            batch_yield=Decimal('500'))
+        normal = self._ing('Sugar', self.ml)
+        pr = self._restock(prep, '100', '2.0')
+        prep.refresh_from_db()
+        stock_before = prep.current_stock
+        cost_before = prep.cost_per_unit
+
+        with self.assertRaises(DRFValidationError):
+            void_restock(pr, user=self.user)
+        with self.assertRaises(DRFValidationError):
+            edit_restock(pr, quantity_added=Decimal('50'), user=self.user)
+        with self.assertRaises(DRFValidationError):
+            reattribute_restock(pr, target_ingredient=normal,
+                                quantity_added=Decimal('100'),
+                                cost_per_unit=Decimal('2.0'), user=self.user)
+        # prep untouched by the rejected attempts
+        prep.refresh_from_db(); pr.refresh_from_db()
+        self.assertEqual(prep.current_stock, stock_before)
+        self.assertEqual(prep.cost_per_unit, cost_before)
+        self.assertFalse(pr.is_voided)
+
+        # a prep TARGET is refused too
+        nr = self._restock(normal, '100', '2.0')
+        with self.assertRaises(DRFValidationError):
+            reattribute_restock(nr, target_ingredient=prep,
+                                quantity_added=Decimal('100'),
+                                cost_per_unit=Decimal('2.0'), user=self.user)
+
+        # CONTROL: identical void on the normal ingredient succeeds
+        void_restock(nr, user=self.user)
+        nr.refresh_from_db()
+        self.assertTrue(nr.is_voided)

@@ -217,6 +217,35 @@ class RestockCorrectionApiTests(APITestCase):
         r.refresh_from_db()
         self.assertFalse(r.is_voided)
 
+    # -- preparations: v1 scope guard over HTTP ------------------------------
+
+    def test_prep_corrections_rejected_over_http(self):
+        prep = Ingredient.objects.create(
+            name='Simple Syrup', unit=self.ml, cost_per_unit=Decimal('1.5'),
+            current_stock=Decimal('500'), is_active=True,
+            is_preparation=True, batch_yield=Decimal('500'))
+        normal = self._ing('Sugar', self.ml)
+        pr = self._restock(prep, '100', '2.0')
+        nr = self._restock(normal, '100', '2.0')
+        # all three verbs on a prep's restock → 400
+        for verb, body in (
+            ('void', {}),
+            ('edit', {'quantity_added': '50'}),
+            ('reattribute', {'target_ingredient': normal.pk,
+                             'quantity_added': '100', 'cost_per_unit': '2.0'}),
+        ):
+            resp = self.client.post(self._url(pr, verb), body, format='json')
+            self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST, verb)
+        # a prep as reattribute TARGET → 400 (serializer queryset excludes it)
+        resp = self.client.post(
+            self._url(nr, 'reattribute'),
+            {'target_ingredient': prep.pk, 'quantity_added': '100',
+             'cost_per_unit': '2.0'}, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        pr.refresh_from_db(); nr.refresh_from_db()
+        self.assertFalse(pr.is_voided)
+        self.assertFalse(nr.is_voided)
+
     # -- history listing carries the audit surface ---------------------------
 
     def test_restock_logs_listing_exposes_correction_fields(self):

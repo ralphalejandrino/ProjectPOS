@@ -1132,9 +1132,14 @@ async function loadRestockLog() {
       if (l.correction_note) auditBits.push(esc(l.correction_note));
       const auditHtml = auditBits.length
         ? `<div class="text-xs ${voided ? 'text-red-600' : 'text-amber-700'}">${auditBits.join(' — ')}</div>` : '';
+      // FEATURE-058 v1 scope: no corrections on preparations — their cost is
+      // production-derived (produce_batch), which _recost can't reconstruct.
+      const isPrep = !!ing.is_preparation;
       const actions = voided
         ? `<span class="inline-block text-xs text-red-600 bg-red-50 rounded-full px-2 py-1">VOIDED</span>`
-        : `<button onclick="openRestockFix(${l.id})" class="row-action row-action--primary">Fix</button>
+        : isPrep
+          ? `<span class="text-xs text-gray-400" title="Preparations are corrected by producing a batch or a stock adjustment">prep — n/a</span>`
+          : `<button onclick="openRestockFix(${l.id})" class="row-action row-action--primary">Fix</button>
            <button onclick="openRestockMove(${l.id})" class="row-action row-action--primary">Move</button>
            <button onclick="voidRestockEntry(${l.id})" class="row-action text-red-600">Void</button>`;
       return `
@@ -1155,6 +1160,20 @@ async function loadRestockLog() {
 }
 
 // ─── FEATURE-058: restock corrections (fix / move / void) ─────────────
+// One correction in flight at a time — a kiosk double-tap must not fire the
+// same POST twice (same class as the payment double-submit, ISSUE-052).
+let _correctionInFlight = false;
+
+async function _postCorrection(url, body) {
+  if (_correctionInFlight) return null;
+  _correctionInFlight = true;
+  try {
+    return await apiFetch(url, {method: 'POST', body: JSON.stringify(body)});
+  } finally {
+    _correctionInFlight = false;
+  }
+}
+
 function _restockEntryOrWarn(id) {
   const l = restockLogsById[id];
   if (!l) { window.toast({message: 'Entry not found — refresh the log', severity: 'error'}); return null; }
@@ -1194,9 +1213,8 @@ function voidRestockEntry(id) {
     okLabel: 'Void Entry', danger: true,
   }).then(ok => { if (ok) (async () => {
     try {
-      const res = await apiFetch(`/restock-logs/${id}/void/`, {
-        method: 'POST', body: JSON.stringify({reason: ''}),
-      });
+      const res = await _postCorrection(`/restock-logs/${id}/void/`, {reason: ''});
+      if (res === null) return;   // another correction already in flight
       await _afterCorrection(res, 'Restock entry voided');
     } catch (e) {
       window.toast({message: 'Failed: ' + e.message, severity: 'error'});
@@ -1235,9 +1253,8 @@ async function submitRestockFix() {
     window.toast({message: 'Nothing changed', severity: 'info'}); return;
   }
   try {
-    const res = await apiFetch(`/restock-logs/${id}/edit/`, {
-      method: 'POST', body: JSON.stringify(body),
-    });
+    const res = await _postCorrection(`/restock-logs/${id}/edit/`, body);
+    if (res === null) return;   // another correction already in flight
     await _afterCorrection(res, 'Restock entry corrected');
   } catch (e) {
     window.toast({message: 'Failed: ' + e.message, severity: 'error'});
@@ -1253,7 +1270,7 @@ function openRestockMove(id) {
   document.getElementById('moveRestockInfo').textContent = `Wrong entry: ${s.text}`;
   const sel = document.getElementById('moveTarget');
   sel.innerHTML = '<option value="">Select…</option>' +
-    ingredients.filter(i => i.is_active && i.id !== l.ingredient)
+    ingredients.filter(i => i.is_active && !i.is_preparation && i.id !== l.ingredient)
       .map(i => `<option value="${i.id}" data-abbr="${esc(i.unit_detail?.abbreviation || '')}">${esc(i.name)}${i.unit_detail ? ' (' + esc(i.unit_detail.abbreviation) + ')' : ''}</option>`).join('');
   // Pre-fill from the wrong entry — the manager must CONFIRM these in the
   // target's units (they may not carry over across a ml→scoop mis-tap).
@@ -1291,15 +1308,13 @@ async function submitRestockMove() {
   });
   if (!ok) return;
   try {
-    const res = await apiFetch(`/restock-logs/${id}/reattribute/`, {
-      method: 'POST',
-      body: JSON.stringify({
-        target_ingredient: parseInt(targetId, 10),
-        quantity_added: String(qty),
-        cost_per_unit: String(cost),
-        reason: document.getElementById('moveReason').value.trim(),
-      }),
+    const res = await _postCorrection(`/restock-logs/${id}/reattribute/`, {
+      target_ingredient: parseInt(targetId, 10),
+      quantity_added: String(qty),
+      cost_per_unit: String(cost),
+      reason: document.getElementById('moveReason').value.trim(),
     });
+    if (res === null) return;   // another correction already in flight
     await _afterCorrection(res, `Restock moved to ${target.name || 'the correct ingredient'}`);
   } catch (e) {
     window.toast({message: 'Failed: ' + e.message, severity: 'error'});

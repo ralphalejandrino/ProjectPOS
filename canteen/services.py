@@ -100,10 +100,24 @@ def _recost(ingredient):
     return c
 
 
+def _reject_preparation_correction(ingredient):
+    """FEATURE-058 v1 scope guard: corrections are for PURCHASED ingredients.
+    A preparation's cost is blended from batch production (produce_batch),
+    which writes no restock rows — so recomputing its cost from restocks alone
+    (_recost) would silently erase the production-derived component. Blocked
+    until v2 handles preparation/component corrections."""
+    if getattr(ingredient, 'is_preparation', False):
+        raise DRFValidationError(
+            f'{ingredient.name} is a preparation — its cost comes from batch '
+            'production, so restock corrections are not supported on it yet. '
+            'Adjust it with a new batch or a stock adjustment instead.')
+
+
 def void_restock(restock, *, user, reason=''):
     """Soft-void a restock entry: mark it voided (kept for audit), remove its
     stock contribution, and recompute the ingredient's cost from the remaining
     purchases. Idempotent-guarded (a voided entry cannot be voided again)."""
+    _reject_preparation_correction(restock.ingredient)
     with db_transaction.atomic():
         ing = Ingredient.objects.select_for_update().get(pk=restock.ingredient_id)
         if restock.is_voided:
@@ -128,6 +142,7 @@ def edit_restock(restock, *, quantity_added=None, cost_per_unit=None,
     """Edit a restock's quantity and/or price. Applies the stock difference and
     recomputes cost from the corrected purchase set. A voided entry cannot be
     edited (re-instate it by editing a fresh entry instead)."""
+    _reject_preparation_correction(restock.ingredient)
     if restock.is_voided:
         raise DRFValidationError('A voided restock entry cannot be edited.')
     if quantity_added is None and cost_per_unit is None:
@@ -164,6 +179,8 @@ def reattribute_restock(restock, *, target_ingredient, quantity_added,
     the source (stock removed, cost recomputed); a NEW correctly-attributed
     restock is recorded on the target in the target's own units (so a ml→scoop
     mis-tap can't carry the wrong number over). Returns the new restock."""
+    _reject_preparation_correction(restock.ingredient)
+    _reject_preparation_correction(target_ingredient)
     if restock.is_voided:
         raise DRFValidationError('A voided restock entry cannot be re-attributed.')
     if target_ingredient.pk == restock.ingredient_id:
