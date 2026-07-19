@@ -384,6 +384,44 @@ def item_recipe_cost(item):
     return total.quantize(Decimal('0.0001'), rounding=ROUND_HALF_UP)
 
 
+def item_effective_unit_cost(item, variant_option_ids):
+    """Per-unit COGS at sale time INCLUDING the selected variants' recipe
+    lines — the cost twin of _deplete_ingredients, with identical semantics:
+    a selected variant line costs its own quantity; a 'replace' line
+    substitutes the base line for that ingredient while an 'add' line stacks
+    on it; unselected variant lines cost nothing.
+
+    item_recipe_cost only reads base (variant-null) lines, so an item whose
+    recipe is encoded per size variant (the PROD menu shape — no base lines at
+    all) snapshotted its purchase_price (0) on every sale and could never show
+    a margin. Returns None only when the item has NO recipe lines at all, so
+    the caller falls back to the resale purchase_price. Lines with a
+    missing/non-positive quantity are skipped, as in item_recipe_cost."""
+    lines = list(
+        item.recipe_ingredients.select_related('ingredient').all()
+    )
+    if not lines:
+        return None
+    selected = set(variant_option_ids or [])
+    replaced = set()
+    chosen = []
+    for line in lines:
+        if line.variant_id is not None and line.variant_id in selected:
+            chosen.append(line)
+            if line.depletion_mode == 'replace':
+                replaced.add(line.ingredient_id)
+    for line in lines:
+        if line.variant_id is None and line.ingredient_id not in replaced:
+            chosen.append(line)
+    total = Decimal('0')
+    for line in chosen:
+        q = line.quantity_used
+        if q is None or q <= 0:
+            continue
+        total += q * line.ingredient.cost_per_unit
+    return total.quantize(Decimal('0.0001'), rounding=ROUND_HALF_UP)
+
+
 def produce_batch(preparation, num_batches, performed_by=None, notes=''):
     """FEATURE-056: 'prep a batch' — make ``num_batches`` of a preparation.
 
@@ -996,8 +1034,14 @@ def create_pos_transaction(items_data, payment_method, cashier=None, **kwargs):
             # FEATURE-054: freeze the effective per-unit COGS at sale time —
             # the recipe-derived cost for recipe items, else the manual
             # purchase_price. Read-time reports can't reconstruct this once
-            # ingredient costs drift, so it's snapshotted per line.
-            _recipe_cost = item_recipe_cost(item)
+            # ingredient costs drift, so it's snapshotted per line. Includes
+            # the SELECTED variants' recipe lines (depletion parity) — an item
+            # whose whole recipe is variant-scoped costs 0 through the base-
+            # only item_recipe_cost.
+            _recipe_cost = item_effective_unit_cost(
+                item,
+                [rv.get('option_id') for rv in resolved_variants if rv.get('option_id')],
+            )
             _unit_cost = _recipe_cost if _recipe_cost is not None else item.purchase_price
 
             processed_items.append({
