@@ -6,15 +6,32 @@ their cost from each item's CURRENT effective cost (recipe-derived for recipe
 items, else the manual purchase_price) — a best-effort proxy, not the true
 historical cost-at-sale. It only touches NULL rows, so it is idempotent and safe
 to re-run; new sales snapshot their own cost and are never rewritten.
+
+--include-zero extends the same proxy to lines snapshotted at exactly 0: a line
+sold while its recipe's ingredients were still uncosted froze a 0 that flatters
+COGS identically to a NULL (the #10 margin-honesty hole). After the ingredient
+costs are corrected, re-running with this flag re-snapshots those lines at the
+now-genuine cost. A zero line whose item STILL has no positive cost is left
+untouched (a 0→0 rewrite would falsely mark it re-snapshotted) and reported.
+Lines with unit_cost > 0 are never selected, under any flags.
+
+--since YYYY-MM-DD scopes the run to lines whose transaction falls on/after that
+PHT date — same `created_at__date` bucketing the weekly report uses. Recommended
+together with --include-zero (and a --dry-run first) to keep the rewrite to the
+window whose costs were actually corrected.
 """
 
+from datetime import date
 from decimal import Decimal
 
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
+from django.db.models import Q
 
 from canteen.models import PosTransactionItem
 from canteen.services import item_recipe_cost
+
+ZERO = Decimal('0')
 
 
 class Command(BaseCommand):
@@ -25,10 +42,34 @@ class Command(BaseCommand):
             '--dry-run', action='store_true',
             help='Report how many rows would change without writing.',
         )
+        parser.add_argument(
+            '--include-zero', action='store_true',
+            help='Also re-snapshot lines frozen at unit_cost=0 whose item now '
+                 'has a positive effective cost (see module docstring).',
+        )
+        parser.add_argument(
+            '--since', metavar='YYYY-MM-DD',
+            help='Only touch lines whose transaction is on/after this PHT date.',
+        )
 
     def handle(self, *args, **options):
         dry = options['dry_run']
-        qs = PosTransactionItem.objects.filter(unit_cost__isnull=True).select_related('item')
+        include_zero = options['include_zero']
+
+        cond = Q(unit_cost__isnull=True)
+        if include_zero:
+            cond |= Q(unit_cost=ZERO)
+        qs = PosTransactionItem.objects.filter(cond).select_related('item')
+
+        if options['since']:
+            try:
+                cutoff = date.fromisoformat(options['since'])
+            except ValueError:
+                raise CommandError(
+                    f"--since must be YYYY-MM-DD, got {options['since']!r}"
+                )
+            qs = qs.filter(pos_transaction__created_at__date__gte=cutoff)
+
         total = qs.count()
         if total == 0:
             self.stdout.write(self.style.SUCCESS('Nothing to backfill — all lines already costed.'))
@@ -37,13 +78,19 @@ class Command(BaseCommand):
         # Cache per-item effective cost to avoid recomputing the recipe per line.
         cost_cache = {}
         updated = 0
+        skipped_zero = 0
         with transaction.atomic():
             for line in qs.iterator():
                 item = line.item
                 if item.id not in cost_cache:
                     rc = item_recipe_cost(item)
                     cost_cache[item.id] = rc if rc is not None else (item.purchase_price or Decimal('0'))
-                line.unit_cost = cost_cache[item.id]
+                cost = cost_cache[item.id]
+                if line.unit_cost is not None and cost <= ZERO:
+                    # Zero-frozen line, item still uncosted: leave it be.
+                    skipped_zero += 1
+                    continue
+                line.unit_cost = cost
                 if not dry:
                     line.save(update_fields=['unit_cost'])
                 updated += 1
@@ -54,3 +101,8 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(
             f'{verb} {updated} of {total} line(s) across {len(cost_cache)} item(s).'
         ))
+        if skipped_zero:
+            self.stdout.write(self.style.WARNING(
+                f'skipped {skipped_zero} zero-cost line(s) whose item still has '
+                f'no positive cost — correct the ingredient costs, then re-run.'
+            ))
