@@ -81,40 +81,72 @@ class CorrectionEqualsCleanTimelineTests(TestCase):
         self._assert_matches_clean(wrong_m, wrong_c)
         self._assert_matches_clean(right_m, right_c)
 
-    def test_void_only_restock_leaves_cost_untouched(self):
-        """No surviving purchase to derive a cost from → the existing cost must
-        NOT be zeroed (it may be a legitimate hand-set value)."""
-        ing = self._ing('Lonely')
-        r = self._restock(ing, '100', '2.0')
-        ing.refresh_from_db()
-        self.assertEqual(ing.cost_per_unit, Decimal('2.0000'))
+    def test_void_only_restock_restores_pre_purchase_snapshot(self):
+        """v2: voiding the ingredient's ONLY purchase restores the cost that
+        existed BEFORE that purchase rolled in (cost_before snapshot) — the
+        matcha case: hand-set ₱10, fat-fingered ₱500 restock rolls cost to
+        ~₱300, void must bring back ₱10, not keep the polluted blend."""
+        ing = Ingredient.objects.create(
+            name='Matcha', unit=self.ml, cost_per_unit=Decimal('10'),
+            current_stock=Decimal('0'))
+        r = self._restock(ing, '100', '500')
+        ing.refresh_from_db(); r.refresh_from_db()
+        self.assertEqual(r.cost_before, Decimal('10.0000'))   # snapshot stamped
+        self.assertEqual(ing.cost_per_unit, Decimal('500.0000'))  # adopted (stock was 0)
         void_restock(r, user=self.user)
         ing.refresh_from_db()
         self.assertEqual(ing.current_stock, Decimal('0'))
+        self.assertEqual(ing.cost_per_unit, Decimal('10.0000'),
+                         'pre-purchase cost restored from the snapshot')
+
+    def test_void_only_restock_legacy_row_keeps_cost(self):
+        """Rows recorded before the cost_before column exist with NULL snapshot
+        — voiding them keeps the current cost (old behavior) rather than
+        guessing or zeroing."""
+        ing = self._ing('Legacy')
+        r = self._restock(ing, '100', '2.0')
+        IngredientRestockLog.objects.filter(pk=r.pk).update(cost_before=None)
+        r.refresh_from_db()
+        void_restock(r, user=self.user)
+        ing.refresh_from_db()
         self.assertEqual(ing.cost_per_unit, Decimal('2.0000'),
-                         'cost preserved when no purchases remain')
+                         'no snapshot → cost left untouched')
 
-    def test_known_divergence_from_rolling_average_is_pinned(self):
-        """DOCUMENTED trade-off: with sales between restocks, the FEATURE-051
-        rolling average weights by stock-on-hand, but the correction recompute
-        weights by purchase quantities. This test pins the divergence so it is
-        an explicit, understood property — not an accident.
+    def test_recost_prices_the_shelf_not_all_time(self):
+        """v2: the recompute averages only the newest purchases that cover the
+        CURRENT stock (FIFO — the old lot is the consumed one). Consumed cheap
+        history must not drag the cost: 100@1 fully consumed + 100@2 on the
+        shelf prices the shelf at 2.00, not the all-time 1.50."""
+        ing = self._ing('Rice')
+        self._restock(ing, '100', '1.0')
+        Ingredient.objects.filter(pk=ing.pk).update(current_stock=Decimal('0'))
+        self._restock(ing, '100', '2.0')
+        ing.refresh_from_db()
+        self.assertEqual(ing.cost_per_unit, Decimal('2.0000'))
+        dup = self._restock(ing, '1', '2.0')   # tiny duplicate, then fix it
+        void_restock(dup, user=self.user)
+        ing.refresh_from_db()
+        self.assertEqual(ing.current_stock, Decimal('100'))
+        self.assertEqual(ing.cost_per_unit, Decimal('2.0000'),
+                         'consumed 100@1 lot excluded — shelf priced at 2.00')
 
-        Timeline: buy 100@2 → sell down to 10 → buy 100@4.
-        Rolling: (10*2 + 100*4)/110 = 3.8182. Purchase-avg: (100*2+100*4)/200 = 3.0.
-        """
+    def test_recost_weights_partial_oldest_lot(self):
+        """The oldest lot still partly on the shelf is weighted only by the
+        portion remaining. Timeline: buy 100@2 → sell down to 10 → buy 100@4 →
+        shelf is 110 = 100@4 + 10 of the @2 lot → (100*4 + 10*2)/110 = 3.8182,
+        which matches the live FEATURE-051 rolling value — the correction basis
+        now agrees with the rolling basis instead of diverging."""
         ing = self._ing('PathDependent')
         self._restock(ing, '100', '2.0')
         Ingredient.objects.filter(pk=ing.pk).update(current_stock=Decimal('10'))
         self._restock(ing, '100', '4.0')
         ing.refresh_from_db()
         self.assertEqual(ing.cost_per_unit, Decimal('3.8182'))   # rolling (live)
-        # any correction triggers the recompute — void a tiny duplicate entry
         dup = self._restock(ing, '1', '4.0')
         void_restock(dup, user=self.user)
         ing.refresh_from_db()
-        self.assertEqual(ing.cost_per_unit, Decimal('3.0000'),
-                         'correction resets to the purchase-weighted average')
+        self.assertEqual(ing.cost_per_unit, Decimal('3.8182'),
+                         'shelf-replacement recompute agrees with the rolling basis')
 
 
 class SalesHistoryImmutableTests(TestCase):

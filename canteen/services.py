@@ -1,7 +1,7 @@
 from decimal import Decimal, ROUND_HALF_UP
 from django.db import transaction as db_transaction
 from django.db import IntegrityError
-from django.db.models import F, Q, Sum, DecimalField
+from django.db.models import F, Q
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError as DRFValidationError
@@ -51,22 +51,43 @@ _COST_Q = Decimal('0.0001')
 
 
 def _weighted_avg_restock_cost(ingredient):
-    """Correction-path cost basis: the quantity-weighted average of the
-    ingredient's NON-VOIDED restocks. Deterministic and explainable ("the
-    average of what you actually paid"), unlike the FEATURE-051 rolling average
-    which is path-dependent on a stock timeline we can't reconstruct.
+    """Correction-path cost basis: the replacement cost of what is currently ON
+    THE SHELF. Walk non-voided purchases newest-to-oldest, taking only as much
+    of each lot as is needed to cover ``current_stock`` (FIFO consumption: the
+    oldest purchases are the ones already used up), and average what was taken.
 
-    Returns the recomputed cost, or None when there is no non-voided purchase to
-    derive it from (caller leaves the existing cost untouched rather than zero a
-    manually-set one).
+    This keeps a correction from dragging cost toward long-consumed old prices:
+    100kg@1.00 fully consumed + 100kg@2.00 on the shelf prices the shelf at
+    2.00, not the all-time 1.50. A partially-needed oldest lot is weighted only
+    by the portion still on the shelf. Deterministic and explainable ("the cost
+    of the stock you still have"), unlike the FEATURE-051 rolling average whose
+    exact history we can't replay.
+
+    Edge cases: stock <= 0 → the newest purchase price (pure replacement cost);
+    purchases don't cover the shelf (counts/adjustments added stock) → all
+    purchases, i.e. the all-time average. Returns None when there is no
+    non-voided purchase at all (caller restores the pre-purchase snapshot or
+    leaves the cost untouched).
     """
-    agg = ingredient.restock_logs.filter(is_voided=False).aggregate(
-        tq=Sum('quantity_added'),
-        tc=Sum(F('quantity_added') * F('cost_per_unit'),
-               output_field=DecimalField(max_digits=20, decimal_places=8)))
-    if agg['tq'] and agg['tq'] > 0:
-        return (agg['tc'] / agg['tq']).quantize(_COST_Q, rounding=ROUND_HALF_UP)
-    return None
+    rows = list(
+        ingredient.restock_logs.filter(is_voided=False)
+        .order_by('-date', '-pk')
+        .values_list('quantity_added', 'cost_per_unit'))
+    if not rows:
+        return None
+    need = ingredient.current_stock
+    if need <= 0:
+        return rows[0][1].quantize(_COST_Q, rounding=ROUND_HALF_UP)
+    total_q = Decimal('0')
+    total_c = Decimal('0')
+    for q, p in rows:
+        take = q if q <= need else need
+        total_q += take
+        total_c += take * p
+        need -= take
+        if need <= 0:
+            break
+    return (total_c / total_q).quantize(_COST_Q, rounding=ROUND_HALF_UP)
 
 
 def _apply_correction_stock(ingredient, signed_delta, user, note):
@@ -174,7 +195,11 @@ def void_restock(restock, *, user, reason=''):
         _, after = _apply_correction_stock(
             ing, -restock.quantity_added, user,
             _note('void restock #%d' % restock.pk, reason))
-        _recost(ing)
+        if _recost(ing) is None and restock.cost_before is not None:
+            # No purchase survives to derive a cost from — restore the honest
+            # pre-purchase snapshot instead of keeping the voided entry's roll.
+            ing.cost_per_unit = restock.cost_before
+            ing.save(update_fields=['cost_per_unit'])
         _clear_stale_price_memory(ing, restock)
         return {'restock': restock, 'ingredient': ing, 'new_stock': after,
                 'negative_stock': after < 0}
@@ -250,7 +275,9 @@ def reattribute_restock(restock, *, target_ingredient, quantity_added,
         _apply_correction_stock(
             src, -restock.quantity_added, user,
             f'void restock #{restock.pk}: {note}')
-        _recost(src)
+        if _recost(src) is None and restock.cost_before is not None:
+            src.cost_per_unit = restock.cost_before
+            src.save(update_fields=['cost_per_unit'])
         _clear_stale_price_memory(src, restock)
 
         # Record the corrected purchase on the target, dated at the ORIGINAL

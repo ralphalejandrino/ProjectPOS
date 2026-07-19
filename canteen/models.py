@@ -1283,6 +1283,14 @@ class IngredientRestockLog(models.Model):
         settings.AUTH_USER_MODEL, null=True, blank=True,
         on_delete=models.SET_NULL, related_name='+')
     correction_note = models.TextField(blank=True)
+    # FEATURE-058 v2: snapshot of the ingredient's cost_per_unit BEFORE this
+    # purchase rolled into it. Lets a void of the ingredient's ONLY remaining
+    # purchase restore the honest pre-purchase cost instead of keeping the
+    # polluted blend (the roll otherwise destroys the prior value). NULL on
+    # rows recorded before this column existed — those fall back to keeping
+    # the current cost.
+    cost_before = models.DecimalField(
+        max_digits=10, decimal_places=4, null=True, blank=True)
 
     class Meta:
         ordering = ['-date']
@@ -1318,6 +1326,11 @@ class IngredientRestockLog(models.Model):
                 ing.current_stock = new_qty
                 ing.cost_per_unit = new_cost
                 ing.save(update_fields=['current_stock', 'cost_per_unit'])
+                # FEATURE-058 v2: stamp the pre-roll cost on this row (the row
+                # was inserted before the lock read old_cost, so update it in
+                # place inside the same transaction).
+                type(self).objects.filter(pk=self.pk).update(cost_before=old_cost)
+                self.cost_before = old_cost
             # Keep the in-memory ingredient consistent for the caller.
             self.ingredient.current_stock = new_qty
             self.ingredient.cost_per_unit = new_cost
