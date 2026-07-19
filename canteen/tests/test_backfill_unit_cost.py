@@ -14,7 +14,9 @@ from django.test import TestCase
 from django.utils import timezone
 
 from canteen.models import (
-    BusinessProfile, Item, PosTransaction, PosTransactionItem, Shift, User,
+    BusinessProfile, CategoryVariantGroup, Ingredient, IngredientUnit, Item,
+    ItemCategory, PosTransaction, PosTransactionItem, RecipeIngredient, Shift,
+    User, VariantGroup, VariantOption,
 )
 from canteen.services import create_pos_transaction
 
@@ -141,3 +143,49 @@ class BackfillUnitCostTests(TestCase):
         line.refresh_from_db()
         self.assertEqual(line.unit_cost, Decimal('7.00'))
         self.assertIn('Nothing to backfill', out)
+
+    # --- variant-aware (C1 parity) ---
+
+    def _variant_sale_line(self, unit_cost):
+        """Sell an item whose whole recipe is size-variant-scoped (the PROD
+        shape) with 12oz selected, then force the snapshot state."""
+        cat = ItemCategory.objects.create(name='Drinks')
+        size = VariantGroup.objects.create(name='Size', sort_order=0)
+        self.v12 = VariantOption.objects.create(group=size, name='12oz')
+        CategoryVariantGroup.objects.create(category=cat, group=size)
+        ml = IngredientUnit.objects.get_or_create(abbreviation='ml', defaults={'name': 'ml'})[0]
+        milk = Ingredient.objects.create(
+            name='Milk', unit=ml, cost_per_unit=Decimal('0.10'), current_stock=Decimal('5000'))
+        drink = Item.objects.create(name='Latte', price=Decimal('59'), stock=0, category=cat)
+        RecipeIngredient.objects.create(item=drink, variant=self.v12, ingredient=milk,
+                                        quantity_used=Decimal('100'), depletion_mode='add')
+        txn = create_pos_transaction(
+            [{'item_id': drink.id, 'quantity': 1,
+              'variant_selections': [{'group_id': size.id, 'option_id': self.v12.id}]}],
+            'cash', cashier=self.cashier, cash_received=Decimal('500.00'),
+        )
+        PosTransactionItem.objects.filter(pos_transaction=txn).update(unit_cost=unit_cost)
+        return PosTransactionItem.objects.get(pos_transaction=txn)
+
+    def test_variant_scoped_zero_line_resnapshotted_from_selection(self):
+        line = self._variant_sale_line(Decimal('0.0000'))
+        self._run('--include-zero')
+        line.refresh_from_db()
+        self.assertEqual(line.unit_cost, Decimal('10.0000'))  # 100ml * 0.10
+
+    def test_variant_scoped_null_line_backfilled_from_selection(self):
+        line = self._variant_sale_line(None)
+        self._run()
+        line.refresh_from_db()
+        self.assertEqual(line.unit_cost, Decimal('10.0000'))
+
+    def test_renamed_option_leaves_zero_line_skipped_loudly(self):
+        # If the recorded option name no longer resolves, the derived cost is 0
+        # — the line must be SKIPPED (never fake-stamped), and said so.
+        line = self._variant_sale_line(Decimal('0.0000'))
+        self.v12.name = '12 ounce'
+        self.v12.save(update_fields=['name'])
+        out = self._run('--include-zero')
+        line.refresh_from_db()
+        self.assertEqual(line.unit_cost, Decimal('0.0000'))
+        self.assertIn('skipped 1 zero-cost line', out)

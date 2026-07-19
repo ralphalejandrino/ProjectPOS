@@ -19,6 +19,13 @@ Lines with unit_cost > 0 are never selected, under any flags.
 PHT date — same `created_at__date` bucketing the weekly report uses. Recommended
 together with --include-zero (and a --dry-run first) to keep the rewrite to the
 window whose costs were actually corrected.
+
+Variant-aware (C1 parity): each line's cost is derived through
+item_effective_unit_cost using the line's RECORDED variant selections
+(TransactionItemVariant name-pair snapshots resolved back to options, the same
+ISSUE-072 pairing the void/refund restore path uses) — so history for items
+whose whole recipe is size-variant-scoped is repaired too, not just base-line
+recipes.
 """
 
 from datetime import date
@@ -28,10 +35,28 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django.db.models import Q
 
-from canteen.models import PosTransactionItem
-from canteen.services import item_recipe_cost
+from canteen.models import PosTransactionItem, VariantOption
+from canteen.services import item_effective_unit_cost
 
 ZERO = Decimal('0')
+
+
+def _line_option_ids(line, pairset_cache):
+    """Resolve the line's snapshot (group_name, option_name) pairs to current
+    VariantOption ids — full-pair match (ISSUE-072), cached per pair-set."""
+    pairs = frozenset(
+        (v.group_name, v.option_name) for v in line.variant_selections.all()
+    )
+    if not pairs:
+        return ()
+    if pairs not in pairset_cache:
+        f = Q()
+        for group_name, option_name in pairs:
+            f |= Q(group__name=group_name, name=option_name)
+        pairset_cache[pairs] = tuple(
+            VariantOption.objects.filter(f).values_list('id', flat=True)
+        )
+    return pairset_cache[pairs]
 
 
 class Command(BaseCommand):
@@ -59,7 +84,9 @@ class Command(BaseCommand):
         cond = Q(unit_cost__isnull=True)
         if include_zero:
             cond |= Q(unit_cost=ZERO)
-        qs = PosTransactionItem.objects.filter(cond).select_related('item')
+        qs = (PosTransactionItem.objects.filter(cond)
+              .select_related('item')
+              .prefetch_related('variant_selections'))
 
         if options['since']:
             try:
@@ -75,17 +102,21 @@ class Command(BaseCommand):
             self.stdout.write(self.style.SUCCESS('Nothing to backfill — all lines already costed.'))
             return
 
-        # Cache per-item effective cost to avoid recomputing the recipe per line.
+        # Cache per (item, selected options) — the same key the C1 sale-time
+        # snapshot varies on — plus per pair-set option resolution.
         cost_cache = {}
+        pairset_cache = {}
         updated = 0
         skipped_zero = 0
         with transaction.atomic():
-            for line in qs.iterator():
+            for line in qs:
                 item = line.item
-                if item.id not in cost_cache:
-                    rc = item_recipe_cost(item)
-                    cost_cache[item.id] = rc if rc is not None else (item.purchase_price or Decimal('0'))
-                cost = cost_cache[item.id]
+                option_ids = _line_option_ids(line, pairset_cache)
+                key = (item.id, option_ids)
+                if key not in cost_cache:
+                    rc = item_effective_unit_cost(item, option_ids)
+                    cost_cache[key] = rc if rc is not None else (item.purchase_price or Decimal('0'))
+                cost = cost_cache[key]
                 if line.unit_cost is not None and cost <= ZERO:
                     # Zero-frozen line, item still uncosted: leave it be.
                     skipped_zero += 1
@@ -99,7 +130,7 @@ class Command(BaseCommand):
 
         verb = 'would update' if dry else 'updated'
         self.stdout.write(self.style.SUCCESS(
-            f'{verb} {updated} of {total} line(s) across {len(cost_cache)} item(s).'
+            f'{verb} {updated} of {total} line(s) across {len(cost_cache)} item/variant combo(s).'
         ))
         if skipped_zero:
             self.stdout.write(self.style.WARNING(
