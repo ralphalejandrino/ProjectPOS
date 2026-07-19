@@ -1134,18 +1134,24 @@ async function loadRestockLog() {
         ? `<div class="text-xs ${voided ? 'text-red-600' : 'text-amber-700'}">${auditBits.join(' — ')}</div>` : '';
       // FEATURE-058 v1 scope: no corrections on preparations — their cost is
       // production-derived (produce_batch), which _recost can't reconstruct.
+      // Buttons are also role-gated: the PAGE can be granted to non-managers
+      // (FEATURE-044 page access) but the correction API is manager/admin
+      // only — rendering buttons that can only 403 reads as a broken register.
       const isPrep = !!ing.is_preparation;
+      const canCorrect = ['admin', 'manager'].includes(getUserRole());
       const actions = voided
         ? `<span class="inline-block text-xs text-red-600 bg-red-50 rounded-full px-2 py-1">VOIDED</span>`
         : isPrep
           ? `<span class="text-xs text-gray-400" title="Preparations are corrected by producing a batch or a stock adjustment">prep — n/a</span>`
-          : `<button onclick="openRestockFix(${l.id})" class="row-action row-action--primary">Fix</button>
+          : !canCorrect
+            ? `<span class="text-xs text-gray-400">—</span>`
+            : `<button onclick="openRestockFix(${l.id})" class="row-action row-action--primary">Fix</button>
            <button onclick="openRestockMove(${l.id})" class="row-action row-action--primary">Move</button>
-           <button onclick="voidRestockEntry(${l.id})" class="row-action text-red-600">Void</button>`;
+           <button onclick="voidRestockEntry(${l.id})" class="row-action row-action--danger">Void</button>`;
       return `
         <tr class="border-b border-gray-50 hover:bg-gray-50${voided ? ' opacity-60' : ''}">
           <td class="px-4 py-3 text-gray-500 whitespace-nowrap">${date}</td>
-          <td class="px-4 py-3 font-medium text-gray-800 ${voided ? 'line-through text-gray-400' : ''}">${esc(l.ingredient_name || ing.name || '—')}</td>
+          <td class="px-4 py-3 font-medium text-gray-800 ${struck}">${esc(l.ingredient_name || ing.name || '—')}</td>
           <td class="px-4 py-3 text-right font-mono ${struck}">${parseFloat(l.quantity_added || 0).toFixed(3)}</td>
           <td class="px-4 py-3 text-gray-500">${esc(unit)}</td>
           <td class="px-4 py-3 text-right ${struck}">${cost}</td>
@@ -1174,6 +1180,34 @@ async function _postCorrection(url, body) {
   }
 }
 
+// One runner for all three verbs. The POST's failure and the post-success
+// refresh's failure are SEPARATE: once the POST succeeds the correction is
+// applied, and a wifi blip during the refresh must not tell the manager it
+// "Failed" (she'd retry a correction that already happened).
+async function _runCorrection(url, body, okMessage) {
+  let res;
+  try {
+    res = await _postCorrection(url, body);
+  } catch (e) {
+    window.toast({message: 'Failed: ' + e.message, severity: 'error'});
+    return;
+  }
+  if (res === null) return;   // another correction already in flight
+  closeModal();
+  window.toast({message: okMessage, severity: 'success'});
+  if (res.negative_stock) {
+    window.toast({
+      message: 'Warning: stock is now negative — sales had already consumed part of that entry. The next physical count will set it right.',
+      severity: 'warning'});
+  }
+  try {
+    await refreshIngredients();
+    await loadRestockLog();
+  } catch (e) {
+    window.toast({message: 'Saved — but the list failed to refresh. Tap Refresh to reload.', severity: 'warning'});
+  }
+}
+
 function _restockEntryOrWarn(id) {
   const l = restockLogsById[id];
   if (!l) { window.toast({message: 'Entry not found — refresh the log', severity: 'error'}); return null; }
@@ -1191,18 +1225,6 @@ function _restockEntrySummary(l) {
     text: `${parseFloat(l.quantity_added).toFixed(3)} ${unit} @ ${formatCurrency(parseFloat(l.cost_per_unit))}/unit on ${l.ingredient_name || ing.name || '—'} (${date})` };
 }
 
-async function _afterCorrection(res, okMessage) {
-  closeModal();
-  await refreshIngredients();
-  await loadRestockLog();
-  window.toast({message: okMessage, severity: 'success'});
-  if (res && res.negative_stock) {
-    window.toast({
-      message: 'Warning: stock is now negative — sales had already consumed part of that entry. The next physical count will set it right.',
-      severity: 'warning'});
-  }
-}
-
 function voidRestockEntry(id) {
   const l = _restockEntryOrWarn(id);
   if (!l) return;
@@ -1211,15 +1233,10 @@ function voidRestockEntry(id) {
     title: 'Void Restock Entry',
     message: `Void ${s.text}? Its stock and cost effects are removed; the entry stays in the history marked VOIDED.`,
     okLabel: 'Void Entry', danger: true,
-  }).then(ok => { if (ok) (async () => {
-    try {
-      const res = await _postCorrection(`/restock-logs/${id}/void/`, {reason: ''});
-      if (res === null) return;   // another correction already in flight
-      await _afterCorrection(res, 'Restock entry voided');
-    } catch (e) {
-      window.toast({message: 'Failed: ' + e.message, severity: 'error'});
-    }
-  })(); });
+  }).then(ok => {
+    if (ok) _runCorrection(`/restock-logs/${id}/void/`, {reason: ''},
+                           'Restock entry voided');
+  });
 }
 
 function openRestockFix(id) {
@@ -1252,13 +1269,8 @@ async function submitRestockFix() {
   if (body.quantity_added === undefined && body.cost_per_unit === undefined) {
     window.toast({message: 'Nothing changed', severity: 'info'}); return;
   }
-  try {
-    const res = await _postCorrection(`/restock-logs/${id}/edit/`, body);
-    if (res === null) return;   // another correction already in flight
-    await _afterCorrection(res, 'Restock entry corrected');
-  } catch (e) {
-    window.toast({message: 'Failed: ' + e.message, severity: 'error'});
-  }
+  await _runCorrection(`/restock-logs/${id}/edit/`, body,
+                       'Restock entry corrected');
 }
 
 function openRestockMove(id) {
@@ -1307,18 +1319,12 @@ async function submitRestockMove() {
     okLabel: 'Move Restock', danger: true,
   });
   if (!ok) return;
-  try {
-    const res = await _postCorrection(`/restock-logs/${id}/reattribute/`, {
-      target_ingredient: parseInt(targetId, 10),
-      quantity_added: String(qty),
-      cost_per_unit: String(cost),
-      reason: document.getElementById('moveReason').value.trim(),
-    });
-    if (res === null) return;   // another correction already in flight
-    await _afterCorrection(res, `Restock moved to ${target.name || 'the correct ingredient'}`);
-  } catch (e) {
-    window.toast({message: 'Failed: ' + e.message, severity: 'error'});
-  }
+  await _runCorrection(`/restock-logs/${id}/reattribute/`, {
+    target_ingredient: parseInt(targetId, 10),
+    quantity_added: String(qty),
+    cost_per_unit: String(cost),
+    reason: document.getElementById('moveReason').value.trim(),
+  }, `Restock moved to ${target.name || 'the correct ingredient'}`);
 }
 
 function populateRestockFilter() {

@@ -1741,7 +1741,11 @@ class IngredientViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['get'])
     def restock_logs(self, request, pk=None):
         ingredient = self.get_object()
-        logs = ingredient.restock_logs.all().order_by('-date')[:50]
+        # FEATURE-058: voided rows stay in this history on purpose (struck
+        # through in the UI), but they consume window slots — cap raised from
+        # 50 so a correction session can't push real purchases out of the
+        # window the frontend then date-filters client-side.
+        logs = ingredient.restock_logs.all().order_by('-date')[:200]
         serializer = IngredientRestockLogSerializer(logs, many=True)
         return Response(serializer.data)
 
@@ -1960,17 +1964,21 @@ class IngredientRestockLogViewSet(viewsets.GenericViewSet):
     serializer_class = IngredientRestockLogSerializer
     permission_classes = [IsManagerOrAbove]
 
-    def _correction_response(self, restock, result, extra=None):
+    def _correction_response(self, result, extra=None):
+        # result['restock'] is the fresh row the service re-fetched under the
+        # transaction (the view-loaded instance is stale by design — see
+        # services._locked_fresh_restock). negative_stock likewise comes from
+        # the service, the single owner of that derivation.
         ing = result['ingredient']
         payload = {
-            'restock': IngredientRestockLogSerializer(restock).data,
+            'restock': IngredientRestockLogSerializer(result['restock']).data,
             'ingredient': {
                 'id': ing.pk,
                 'name': ing.name,
                 'current_stock': str(ing.current_stock),
                 'cost_per_unit': str(ing.cost_per_unit),
             },
-            'negative_stock': result.get('negative_stock', False),
+            'negative_stock': result['negative_stock'],
         }
         if extra:
             payload.update(extra)
@@ -1983,8 +1991,7 @@ class IngredientRestockLogViewSet(viewsets.GenericViewSet):
         ser.is_valid(raise_exception=True)
         result = void_restock(
             restock, user=request.user, reason=ser.validated_data['reason'])
-        restock.refresh_from_db()
-        return self._correction_response(restock, result)
+        return self._correction_response(result)
 
     @action(detail=True, methods=['post'])
     def edit(self, request, pk=None):
@@ -1996,8 +2003,7 @@ class IngredientRestockLogViewSet(viewsets.GenericViewSet):
             quantity_added=ser.validated_data.get('quantity_added'),
             cost_per_unit=ser.validated_data.get('cost_per_unit'),
             user=request.user, reason=ser.validated_data['reason'])
-        restock.refresh_from_db()
-        return self._correction_response(restock, result)
+        return self._correction_response(result)
 
     @action(detail=True, methods=['post'])
     def reattribute(self, request, pk=None):
@@ -2010,10 +2016,9 @@ class IngredientRestockLogViewSet(viewsets.GenericViewSet):
             quantity_added=ser.validated_data['quantity_added'],
             cost_per_unit=ser.validated_data['cost_per_unit'],
             user=request.user, reason=ser.validated_data['reason'])
-        restock.refresh_from_db()
         src, tgt = result['source'], result['target']
         return Response({
-            'restock': IngredientRestockLogSerializer(restock).data,
+            'restock': IngredientRestockLogSerializer(result['restock']).data,
             'new_restock': IngredientRestockLogSerializer(result['new_restock']).data,
             'source': {
                 'id': src.pk, 'name': src.name,
@@ -2025,7 +2030,7 @@ class IngredientRestockLogViewSet(viewsets.GenericViewSet):
                 'current_stock': str(tgt.current_stock),
                 'cost_per_unit': str(tgt.cost_per_unit),
             },
-            'negative_stock': src.current_stock < 0,
+            'negative_stock': result['negative_stock'],
         })
 
 

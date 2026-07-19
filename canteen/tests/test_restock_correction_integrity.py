@@ -106,13 +106,12 @@ class CorrectionEqualsCleanTimelineTests(TestCase):
         ing = self._ing('PathDependent')
         self._restock(ing, '100', '2.0')
         Ingredient.objects.filter(pk=ing.pk).update(current_stock=Decimal('10'))
-        r2 = self._restock(ing, '100', '4.0')
+        self._restock(ing, '100', '4.0')
         ing.refresh_from_db()
         self.assertEqual(ing.cost_per_unit, Decimal('3.8182'))   # rolling (live)
-        # a no-op-sized edit (price unchanged, qty unchanged is rejected, so
-        # edit the price to the same value via a real field change path: bump
-        # then restore is overkill — edit price to same value is allowed)
-        edit_restock(r2, cost_per_unit=Decimal('4.0'), user=self.user)
+        # any correction triggers the recompute — void a tiny duplicate entry
+        dup = self._restock(ing, '1', '4.0')
+        void_restock(dup, user=self.user)
         ing.refresh_from_db()
         self.assertEqual(ing.cost_per_unit, Decimal('3.0000'),
                          'correction resets to the purchase-weighted average')

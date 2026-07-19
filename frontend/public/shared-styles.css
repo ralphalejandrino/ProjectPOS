@@ -979,3 +979,6 @@ body.osk-enabled .modal-card { max-height: calc(100vh - 19rem); }
 
 /* --- FEATURE-058: voided restock rows in the Restock History table --- */
 .line-through { text-decoration-line: line-through; }
+/* py-10 was used by the restock-log empty states but never existed in the
+   frozen purge output (no Tailwind build — see tarsierpos.md) — hand-added. */
+.py-10 { padding-top: 2.5rem; padding-bottom: 2.5rem; }

@@ -127,6 +127,99 @@ class RestockCorrectionTests(TestCase):
                                 quantity_added=Decimal('100'),
                                 cost_per_unit=Decimal('2.0'), user=self.user)
 
+    # -- review findings (2026-07-19 double-take) ----------------------------
+
+    def test_stale_instance_cannot_double_apply(self):
+        """Race reproduction: two requests load the same restock, the first
+        voids it, the second still holds a stale instance with
+        is_voided=False. The in-transaction re-fetch must reject the loser —
+        pre-fix, this deducted the restock quantity TWICE."""
+        ing = self._ing('Sugar', self.ml)
+        r_a = self._restock(ing, '100', '2.0')
+        r_b = IngredientRestockLog.objects.get(pk=r_a.pk)   # second request's copy
+        void_restock(r_a, user=self.user)
+        self.assertFalse(r_b.is_voided)   # stale in memory, exactly like the race
+        with self.assertRaises(DRFValidationError):
+            void_restock(r_b, user=self.user)
+        with self.assertRaises(DRFValidationError):
+            edit_restock(r_b, quantity_added=Decimal('50'), user=self.user)
+        other = self._ing('Salt', self.ml)
+        with self.assertRaises(DRFValidationError):
+            reattribute_restock(r_b, target_ingredient=other,
+                                quantity_added=Decimal('100'),
+                                cost_per_unit=Decimal('2.0'), user=self.user)
+        ing.refresh_from_db()
+        self.assertEqual(ing.current_stock, Decimal('0'),
+                         'stock deducted exactly once despite the stale copy')
+        self.assertEqual(IngredientLog.objects.filter(
+            ingredient=ing, action='correction').count(), 1)
+
+    def test_reattribute_preserves_purchase_date(self):
+        """The replacement entry keeps the ORIGINAL purchase date — otherwise
+        the weekly restock-spend report loses the purchase from its real week
+        and invents spend in the correction week."""
+        from datetime import timedelta
+        from django.utils import timezone as dj_tz
+        wrong = self._ing('Choco mousse', self.scoop)
+        right = self._ing('Caramel syrup', self.ml)
+        r = self._restock(wrong, '730', '0.78')
+        old_date = dj_tz.now() - timedelta(days=9)
+        IngredientRestockLog.objects.filter(pk=r.pk).update(date=old_date)
+        r.refresh_from_db()
+        out = reattribute_restock(
+            r, target_ingredient=right, quantity_added=Decimal('730'),
+            cost_per_unit=Decimal('0.2877'), user=self.user)
+        self.assertEqual(out['new_restock'].date, old_date)
+
+    def test_void_clears_last_purchase_price_memory(self):
+        """FEATURE-050 prefills the next package restock from
+        last_purchase_price; voiding the LATEST purchase clears that memory so
+        a corrected fat-fingered price can't silently resurrect. CONTROL: with
+        a newer valid purchase on file, the memory is kept."""
+        ing = self._ing('Flour', self.ml)
+        ing.last_purchase_price = Decimal('12500')   # the typo'd sack price
+        ing.save(update_fields=['last_purchase_price'])
+        r = self._restock(ing, '50', '250')          # the latest (only) restock
+        void_restock(r, user=self.user)
+        ing.refresh_from_db()
+        self.assertIsNone(ing.last_purchase_price)
+
+        # control: voiding an OLDER entry keeps the memory
+        ing2 = self._ing('Rice', self.ml)
+        ing2.last_purchase_price = Decimal('1250')
+        ing2.save(update_fields=['last_purchase_price'])
+        from datetime import timedelta
+        from django.utils import timezone as dj_tz
+        older = self._restock(ing2, '50', '25')
+        IngredientRestockLog.objects.filter(pk=older.pk).update(
+            date=dj_tz.now() - timedelta(days=5))
+        older.refresh_from_db()
+        self._restock(ing2, '50', '25')              # newer valid purchase
+        void_restock(older, user=self.user)
+        ing2.refresh_from_db()
+        self.assertEqual(ing2.last_purchase_price, Decimal('1250'))
+
+    def test_noop_edit_rejected_and_not_stamped(self):
+        """Re-sending the stored values (a replayed POST) is not an edit: no
+        recompute, no false 'corrected by' stamp."""
+        ing = self._ing('Sugar', self.ml)
+        r = self._restock(ing, '100', '2.0')
+        with self.assertRaises(DRFValidationError):
+            edit_restock(r, quantity_added=Decimal('100'),
+                         cost_per_unit=Decimal('2.0'), user=self.user)
+        r.refresh_from_db()
+        self.assertIsNone(r.corrected_by)
+        self.assertIsNone(r.corrected_at)
+
+    def test_ledger_note_has_no_dangling_parens_without_reason(self):
+        ing = self._ing('Sugar', self.ml)
+        r = self._restock(ing, '100', '2.0')
+        void_restock(r, user=self.user, reason='')
+        log = IngredientLog.objects.filter(
+            ingredient=ing, action='correction').latest('id')
+        self.assertNotIn('()', log.notes)
+        self.assertEqual(log.notes, f'void restock #{r.pk}')
+
     # -- preparations: v1 scope guard ----------------------------------------
     def test_corrections_rejected_on_preparation_restocks(self):
         """A prep's cost is blended from batch production (no restock rows), so
