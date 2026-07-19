@@ -112,7 +112,10 @@
 // white-screen crash. (3) modal geometry keys on osk-ENABLED not osk-OPEN, so the
 // card no longer jumps 169–219px out from under the user's finger when the
 // keyboard opens.
-const CACHE_NAME = 'tarsierpos-v145'; // canonical cache version
+// v146: FEATURE-058 restock corrections — Restock History gains Fix / Move /
+// Void actions (manager self-serve fix for mis-tapped restocks); voided rows
+// stay visible struck-through with a corrected-by audit note.
+const CACHE_NAME = 'tarsierpos-v146'; // canonical cache version
 const ASSETS = [
   'index.html',
   'login.html',

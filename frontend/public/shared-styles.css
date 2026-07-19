@@ -976,3 +976,6 @@ body.osk-enabled .modal-card { max-height: calc(100vh - 19rem); }
 @media print {
   .no-print-bg { background: transparent !important; }
 }
+
+/* --- FEATURE-058: voided restock rows in the Restock History table --- */
+.line-through { text-decoration-line: line-through; }

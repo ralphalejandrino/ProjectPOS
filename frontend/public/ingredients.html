@@ -238,10 +238,12 @@
             <th class="px-4 py-3 text-right">Cost/Unit</th>
             <th class="px-4 py-3 text-left">Recorded By</th>
             <th class="px-4 py-3 text-left">Notes</th>
+            <!-- FEATURE-058: correction actions (page is manager/admin-gated) -->
+            <th class="px-4 py-3 text-center">Actions</th>
           </tr>
         </thead>
         <tbody id="restockTableBody">
-          <tr><td colspan="7" class="text-center py-10 text-gray-400">Select an ingredient or click Refresh.</td></tr>
+          <tr><td colspan="8" class="text-center py-10 text-gray-400">Select an ingredient or click Refresh.</td></tr>
         </tbody>
       </table>
     </div>
@@ -645,6 +647,88 @@
     </div>
   </div>
 
+  <!-- ── FEATURE-058: FIX RESTOCK (edit quantity / price) ── -->
+  <div id="restockFixModal" class="modal-panel modal-card hidden max-w-md">
+    <div class="modal-card__head">
+      <h2 class="modal-card__title">Fix Restock Entry</h2>
+      <div class="modal-card__actions">
+        <button onclick="closeModal()" class="modal-btn modal-btn--secondary">Cancel</button>
+        <button onclick="submitRestockFix()" class="modal-btn modal-btn--primary">Save Fix</button>
+      </div>
+    </div>
+    <div class="modal-card__body space-y-3">
+      <input type="hidden" id="fixRestockId" />
+      <div class="bg-gray-50 rounded-lg px-3 py-2 text-sm text-gray-600" id="fixRestockInfo">—</div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">Quantity <span class="text-gray-400" id="fixQtyUnitLabel"></span> <span class="text-red-500">*</span></label>
+          <input aria-label="Corrected Quantity" type="number" id="fixQty" min="0" step="0.001"
+            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">Cost (₱) <span class="text-gray-400" id="fixCostUnitLabel">per unit</span> <span class="text-red-500">*</span></label>
+          <input aria-label="Corrected Cost per Unit" type="number" id="fixCost" min="0" step="0.0001"
+            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+        </div>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">Reason</label>
+        <input aria-label="Reason" type="text" id="fixReason" maxlength="255" placeholder="e.g. typed 730 instead of 73"
+          class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+      </div>
+      <p class="text-xs text-gray-500">Stock moves by the difference; the ingredient's cost is
+        recomputed from its remaining valid restocks. Recorded as corrected by you.</p>
+    </div>
+  </div>
+
+  <!-- ── FEATURE-058: MOVE RESTOCK (re-attribute to the right ingredient) ── -->
+  <div id="restockMoveModal" class="modal-panel modal-card hidden max-w-md">
+    <div class="modal-card__head">
+      <h2 class="modal-card__title">Move Restock</h2>
+      <div class="modal-card__actions">
+        <button onclick="closeModal()" class="modal-btn modal-btn--secondary">Cancel</button>
+        <button onclick="submitRestockMove()" class="modal-btn modal-btn--primary">Move Restock</button>
+      </div>
+    </div>
+    <div class="modal-card__body space-y-3">
+      <input type="hidden" id="moveRestockId" />
+      <div class="bg-gray-50 rounded-lg px-3 py-2 text-sm text-gray-600" id="moveRestockInfo">—</div>
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">Correct ingredient <span class="text-red-500">*</span></label>
+        <select aria-label="Correct Ingredient" id="moveTarget" onchange="onMoveTargetChange()"
+          class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300">
+          <option value="">Select…</option>
+        </select>
+      </div>
+      <!-- The wrong entry's numbers are in the WRONG ingredient's units, so they
+           pre-fill but must be confirmed in the target's own units (a ml→scoop
+           mis-tap must not carry "730" over unexamined). -->
+      <div class="bg-amber-50 text-amber-700 text-xs rounded-lg px-3 py-2" id="moveUnitWarning">
+        Check the quantity and price — they are pre-filled from the wrong entry and may
+        be in a different unit.
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">Quantity <span class="text-gray-400" id="moveQtyUnitLabel"></span> <span class="text-red-500">*</span></label>
+          <input aria-label="Quantity in target units" type="number" id="moveQty" min="0" step="0.001"
+            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">Cost (₱) <span class="text-gray-400" id="moveCostUnitLabel">per unit</span> <span class="text-red-500">*</span></label>
+          <input aria-label="Cost per unit in target units" type="number" id="moveCost" min="0" step="0.0001"
+            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+        </div>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">Reason</label>
+        <input aria-label="Reason" type="text" id="moveReason" maxlength="255" placeholder="e.g. tapped the wrong ingredient"
+          class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+      </div>
+      <p class="text-xs text-gray-500">The wrong entry is voided (kept in history) and a corrected
+        purchase is recorded on the right ingredient. Both sides keep an audit trail.</p>
+    </div>
+  </div>
+
 
 </div><!-- /backdrop -->
 
@@ -987,12 +1071,16 @@ function renderUnits() {
 }
 
 // ─── Restock Log ─────────────────────────────────────────
+// FEATURE-058: rows are kept here so the correction actions (fix / move /
+// void) can read the entry they act on without re-fetching.
+let restockLogsById = {};
+
 async function loadRestockLog() {
   const ingId = document.getElementById('restockFilterIngredient').value;
   const tbody = document.getElementById('restockTableBody');
   const notice = document.getElementById('restockTruncationNotice');
   notice.classList.add('hidden');
-  tbody.innerHTML = `<tr><td colspan="7" class="text-center py-6"><div class="flex justify-center"><div class="spinner"></div></div></td></tr>`;
+  tbody.innerHTML = `<tr><td colspan="8" class="text-center py-6"><div class="flex justify-center"><div class="spinner"></div></div></td></tr>`;
 
   try {
     let logs = [];
@@ -1019,27 +1107,202 @@ async function loadRestockLog() {
     if (to)   logs = logs.filter(l => l.date <= to + 'T23:59:59');
 
     if (!logs.length) {
-      tbody.innerHTML = `<tr><td colspan="7" class="text-center py-10 text-gray-400">No restock logs found.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="8" class="text-center py-10 text-gray-400">No restock logs found.</td></tr>`;
       return;
     }
+    restockLogsById = {};
+    logs.forEach(l => { restockLogsById[l.id] = l; });
     tbody.innerHTML = logs.map(l => {
       const ing  = ingredients.find(i => i.id === l.ingredient) || {};
       const unit = ing.unit_detail?.abbreviation || '—';
       const date = l.date ? new Date(l.date).toLocaleDateString('en-PH', { year:'numeric', month:'short', day:'numeric' }) : '—';
       const cost = l.cost_per_unit != null ? formatCurrency(parseFloat(l.cost_per_unit)) : '—';
+      // FEATURE-058: a voided entry stays visible (struck through) with its
+      // audit note; an edited one shows who corrected it.
+      const voided = !!l.is_voided;
+      const struck = voided ? 'line-through text-gray-400' : '';
+      let auditBits = [];
+      if (voided) {
+        const when = l.voided_at ? new Date(l.voided_at).toLocaleDateString('en-PH', { month:'short', day:'numeric' }) : '';
+        auditBits.push(`Voided by ${esc(l.voided_by_name || '—')}${when ? ' on ' + when : ''}`);
+      } else if (l.corrected_at) {
+        const when = new Date(l.corrected_at).toLocaleDateString('en-PH', { month:'short', day:'numeric' });
+        auditBits.push(`Corrected by ${esc(l.corrected_by_name || '—')} on ${when}`);
+      }
+      if (l.correction_note) auditBits.push(esc(l.correction_note));
+      const auditHtml = auditBits.length
+        ? `<div class="text-xs ${voided ? 'text-red-600' : 'text-amber-700'}">${auditBits.join(' — ')}</div>` : '';
+      const actions = voided
+        ? `<span class="inline-block text-xs text-red-600 bg-red-50 rounded-full px-2 py-1">VOIDED</span>`
+        : `<button onclick="openRestockFix(${l.id})" class="row-action row-action--primary">Fix</button>
+           <button onclick="openRestockMove(${l.id})" class="row-action row-action--primary">Move</button>
+           <button onclick="voidRestockEntry(${l.id})" class="row-action text-red-600">Void</button>`;
       return `
-        <tr class="border-b border-gray-50 hover:bg-gray-50">
+        <tr class="border-b border-gray-50 hover:bg-gray-50${voided ? ' opacity-60' : ''}">
           <td class="px-4 py-3 text-gray-500 whitespace-nowrap">${date}</td>
-          <td class="px-4 py-3 font-medium text-gray-800">${esc(l.ingredient_name || ing.name || '—')}</td>
-          <td class="px-4 py-3 text-right font-mono">${parseFloat(l.quantity_added || 0).toFixed(3)}</td>
+          <td class="px-4 py-3 font-medium text-gray-800 ${voided ? 'line-through text-gray-400' : ''}">${esc(l.ingredient_name || ing.name || '—')}</td>
+          <td class="px-4 py-3 text-right font-mono ${struck}">${parseFloat(l.quantity_added || 0).toFixed(3)}</td>
           <td class="px-4 py-3 text-gray-500">${esc(unit)}</td>
-          <td class="px-4 py-3 text-right">${cost}</td>
+          <td class="px-4 py-3 text-right ${struck}">${cost}</td>
           <td class="px-4 py-3 text-gray-500">${esc(l.recorded_by_name || '—')}</td>
-          <td class="px-4 py-3 text-gray-400 text-xs">${esc(l.notes || '')}</td>
+          <td class="px-4 py-3 text-gray-400 text-xs">${esc(l.notes || '')}${auditHtml}</td>
+          <td class="px-4 py-3 text-center whitespace-nowrap">${actions}</td>
         </tr>`;
     }).join('');
   } catch (e) {
-    tbody.innerHTML = `<tr><td colspan="7" class="text-center py-6 text-red-400">Failed to load: ${esc(e.message)}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" class="text-center py-6 text-red-400">Failed to load: ${esc(e.message)}</td></tr>`;
+  }
+}
+
+// ─── FEATURE-058: restock corrections (fix / move / void) ─────────────
+function _restockEntryOrWarn(id) {
+  const l = restockLogsById[id];
+  if (!l) { window.toast({message: 'Entry not found — refresh the log', severity: 'error'}); return null; }
+  if (l.is_voided) { window.toast({message: 'This entry is already voided', severity: 'warning'}); return null; }
+  return l;
+}
+
+function _restockEntrySummary(l) {
+  const ing  = ingredients.find(i => i.id === l.ingredient) || {};
+  const unit = ing.unit_detail?.abbreviation || '';
+  const date = l.date ? new Date(l.date).toLocaleDateString('en-PH', { year:'numeric', month:'short', day:'numeric' }) : '—';
+  // Plain text — only ever used in textContent / dialog-message contexts,
+  // which do their own escaping. Never inject into innerHTML.
+  return { ing, unit, date,
+    text: `${parseFloat(l.quantity_added).toFixed(3)} ${unit} @ ${formatCurrency(parseFloat(l.cost_per_unit))}/unit on ${l.ingredient_name || ing.name || '—'} (${date})` };
+}
+
+async function _afterCorrection(res, okMessage) {
+  closeModal();
+  await refreshIngredients();
+  await loadRestockLog();
+  window.toast({message: okMessage, severity: 'success'});
+  if (res && res.negative_stock) {
+    window.toast({
+      message: 'Warning: stock is now negative — sales had already consumed part of that entry. The next physical count will set it right.',
+      severity: 'warning'});
+  }
+}
+
+function voidRestockEntry(id) {
+  const l = _restockEntryOrWarn(id);
+  if (!l) return;
+  const s = _restockEntrySummary(l);
+  window.confirmDialog({
+    title: 'Void Restock Entry',
+    message: `Void ${s.text}? Its stock and cost effects are removed; the entry stays in the history marked VOIDED.`,
+    okLabel: 'Void Entry', danger: true,
+  }).then(ok => { if (ok) (async () => {
+    try {
+      const res = await apiFetch(`/restock-logs/${id}/void/`, {
+        method: 'POST', body: JSON.stringify({reason: ''}),
+      });
+      await _afterCorrection(res, 'Restock entry voided');
+    } catch (e) {
+      window.toast({message: 'Failed: ' + e.message, severity: 'error'});
+    }
+  })(); });
+}
+
+function openRestockFix(id) {
+  const l = _restockEntryOrWarn(id);
+  if (!l) return;
+  const s = _restockEntrySummary(l);
+  closeAllModals();
+  document.getElementById('fixRestockId').value = id;
+  document.getElementById('fixRestockInfo').textContent =
+    `Original: ${parseFloat(l.quantity_added).toFixed(3)} ${s.unit} @ ${formatCurrency(parseFloat(l.cost_per_unit))}/unit — ${l.ingredient_name || s.ing.name || '—'}, ${s.date}`;
+  document.getElementById('fixQty').value  = parseFloat(l.quantity_added);
+  document.getElementById('fixCost').value = parseFloat(l.cost_per_unit);
+  document.getElementById('fixQtyUnitLabel').textContent  = s.unit ? `(${s.unit})` : '';
+  document.getElementById('fixCostUnitLabel').textContent = s.unit ? `per ${s.unit}` : 'per unit';
+  document.getElementById('fixReason').value = '';
+  showModal('restockFixModal');
+}
+
+async function submitRestockFix() {
+  const id = document.getElementById('fixRestockId').value;
+  const l  = restockLogsById[id];
+  if (!l) { window.toast({message: 'Entry not found — refresh the log', severity: 'error'}); return; }
+  const qty  = parseFloat(document.getElementById('fixQty').value);
+  const cost = parseFloat(document.getElementById('fixCost').value);
+  if (!(qty > 0))  { window.toast({message: 'Quantity must be greater than 0 — void the entry instead if the restock never happened', severity: 'error'}); return; }
+  if (!(cost > 0)) { window.toast({message: 'Cost must be greater than 0', severity: 'error'}); return; }
+  const body = { reason: document.getElementById('fixReason').value.trim() };
+  if (qty !== parseFloat(l.quantity_added))  body.quantity_added = String(qty);
+  if (cost !== parseFloat(l.cost_per_unit)) body.cost_per_unit = String(cost);
+  if (body.quantity_added === undefined && body.cost_per_unit === undefined) {
+    window.toast({message: 'Nothing changed', severity: 'info'}); return;
+  }
+  try {
+    const res = await apiFetch(`/restock-logs/${id}/edit/`, {
+      method: 'POST', body: JSON.stringify(body),
+    });
+    await _afterCorrection(res, 'Restock entry corrected');
+  } catch (e) {
+    window.toast({message: 'Failed: ' + e.message, severity: 'error'});
+  }
+}
+
+function openRestockMove(id) {
+  const l = _restockEntryOrWarn(id);
+  if (!l) return;
+  const s = _restockEntrySummary(l);
+  closeAllModals();
+  document.getElementById('moveRestockId').value = id;
+  document.getElementById('moveRestockInfo').textContent = `Wrong entry: ${s.text}`;
+  const sel = document.getElementById('moveTarget');
+  sel.innerHTML = '<option value="">Select…</option>' +
+    ingredients.filter(i => i.is_active && i.id !== l.ingredient)
+      .map(i => `<option value="${i.id}" data-abbr="${esc(i.unit_detail?.abbreviation || '')}">${esc(i.name)}${i.unit_detail ? ' (' + esc(i.unit_detail.abbreviation) + ')' : ''}</option>`).join('');
+  // Pre-fill from the wrong entry — the manager must CONFIRM these in the
+  // target's units (they may not carry over across a ml→scoop mis-tap).
+  document.getElementById('moveQty').value  = parseFloat(l.quantity_added);
+  document.getElementById('moveCost').value = parseFloat(l.cost_per_unit);
+  document.getElementById('moveQtyUnitLabel').textContent  = '';
+  document.getElementById('moveCostUnitLabel').textContent = 'per unit';
+  document.getElementById('moveReason').value = '';
+  showModal('restockMoveModal');
+}
+
+function onMoveTargetChange() {
+  const sel = document.getElementById('moveTarget');
+  const abbr = sel.selectedOptions[0]?.dataset?.abbr || '';
+  document.getElementById('moveQtyUnitLabel').textContent  = abbr ? `(${abbr})` : '';
+  document.getElementById('moveCostUnitLabel').textContent = abbr ? `per ${abbr}` : 'per unit';
+}
+
+async function submitRestockMove() {
+  const id = document.getElementById('moveRestockId').value;
+  const l  = restockLogsById[id];
+  if (!l) { window.toast({message: 'Entry not found — refresh the log', severity: 'error'}); return; }
+  const targetId = document.getElementById('moveTarget').value;
+  const qty  = parseFloat(document.getElementById('moveQty').value);
+  const cost = parseFloat(document.getElementById('moveCost').value);
+  if (!targetId)   { window.toast({message: 'Select the correct ingredient', severity: 'error'}); return; }
+  if (!(qty > 0))  { window.toast({message: 'Quantity must be greater than 0', severity: 'error'}); return; }
+  if (!(cost > 0)) { window.toast({message: 'Cost must be greater than 0', severity: 'error'}); return; }
+  const target = ingredients.find(i => i.id === parseInt(targetId, 10)) || {};
+  const tAbbr = target.unit_detail?.abbreviation || 'unit';
+  const ok = await window.confirmDialog({
+    title: 'Move Restock',
+    message: `Void the entry on ${l.ingredient_name || '—'} and record ${qty} ${tAbbr} @ ${formatCurrency(cost)}/${tAbbr} on ${target.name || '—'}?`,
+    okLabel: 'Move Restock', danger: true,
+  });
+  if (!ok) return;
+  try {
+    const res = await apiFetch(`/restock-logs/${id}/reattribute/`, {
+      method: 'POST',
+      body: JSON.stringify({
+        target_ingredient: parseInt(targetId, 10),
+        quantity_added: String(qty),
+        cost_per_unit: String(cost),
+        reason: document.getElementById('moveReason').value.trim(),
+      }),
+    });
+    await _afterCorrection(res, `Restock moved to ${target.name || 'the correct ingredient'}`);
+  } catch (e) {
+    window.toast({message: 'Failed: ' + e.message, severity: 'error'});
   }
 }
 
