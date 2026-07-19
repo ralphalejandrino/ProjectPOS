@@ -214,7 +214,11 @@ pkill chrome; true
 # both 2026-07-18 deploys false-FATALed here on a perfectly healthy box).
 for _ in $(seq 1 15); do
   sleep 1
-  [ "$(pgrep -c chrome 2>/dev/null || echo 0)" -gt 0 ] && break
+  # NB: pgrep -c PRINTS "0" and exits 1 on zero matches — '|| echo 0' would
+  # yield "0\n0" and break the -gt test ("integer expression expected", seen
+  # on the 2026-07-19 deploy). Capture then default instead.
+  _procs=$(pgrep -c chrome 2>/dev/null)
+  [ "${_procs:-0}" -gt 0 ] && break
 done
 
 # 9. Verify the deployed artifacts (Phase 4).
