@@ -175,6 +175,51 @@ class FixIngredientCostingTests(TestCase):
         self.assertEqual(
             RecipeIngredient.objects.filter(item=self.melon, ingredient=self.blacktea).count(), 2)
 
+    def test_red_velvet_orphaned_bogus_line_is_deleted_not_edited(self):
+        # Live-box state 2026-07-20: the manager added correct 0.05 lines for
+        # both size variants herself but left the old 200-pcs line orphaned on
+        # one of them. Editing it down would give that variant TWO 0.05 lines
+        # and double-count the tea, so the covered one must be deleted.
+        good_12 = RecipeIngredient.objects.create(
+            item=self.rv, variant=self.v12, ingredient=self.blacktea, quantity_used=D('0.05'))
+        good_16 = RecipeIngredient.objects.create(
+            item=self.rv, variant=self.v16, ingredient=self.blacktea, quantity_used=D('0.05'))
+
+        self._run('--apply')
+
+        lines = RecipeIngredient.objects.filter(item=self.rv, ingredient=self.blacktea)
+        self.assertEqual(lines.count(), 2)
+        self.assertEqual({l.quantity_used for l in lines}, {D('0.05')})
+        # Exactly one line per variant — no double-count on the covered one.
+        self.assertEqual(
+            sorted(l.variant_id for l in lines), sorted([good_12.variant_id, good_16.variant_id]))
+        self.assertFalse(RecipeIngredient.objects.filter(pk=self.rv_line.pk).exists())
+        self.assertTrue(RecipeIngredient.objects.filter(pk=good_12.pk).exists())
+        self.assertTrue(RecipeIngredient.objects.filter(pk=good_16.pk).exists())
+        # Negative control: the unrelated line on the same item is untouched.
+        self.control_line.refresh_from_db()
+        self.assertEqual(self.control_line.quantity_used, D('1'))
+
+    def test_red_velvet_uncovered_bogus_line_is_edited_down(self):
+        # The pre-manager-edit world: the bogus line is the only coverage for
+        # its variant, so it must be corrected in place, never deleted.
+        self._run('--apply')
+        lines = RecipeIngredient.objects.filter(item=self.rv, ingredient=self.blacktea)
+        self.assertEqual(lines.count(), 1)
+        self.rv_line.refresh_from_db()
+        self.assertEqual(self.rv_line.quantity_used, D('0.05'))
+        self.assertEqual(self.rv_line.variant_id, self.v12.id)
+
+    def test_red_velvet_unexpected_qty_aborts(self):
+        # A bogus line at a qty we never analysed must abort, not be guessed at.
+        RecipeIngredient.objects.filter(pk=self.rv_line.pk).update(quantity_used=D('7'))
+        with self.assertRaises(CommandError):
+            self._run('--apply')
+        self._refresh_all()
+        self.assertEqual(self.milk.cost_per_unit, D('1.0068'))
+        self.rv_line.refresh_from_db()
+        self.assertEqual(self.rv_line.quantity_used, D('7'))
+
     def test_missing_actor_fails_loud(self):
         with self.assertRaises(CommandError):
             self._run('--as-user', 'nonexistent')

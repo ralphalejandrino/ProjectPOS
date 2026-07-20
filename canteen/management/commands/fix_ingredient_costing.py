@@ -188,21 +188,36 @@ class Command(BaseCommand):
                 self._say('  * deleted 2 bogus Latte-Melon blacktea lines (no tea in it)')
                 applied += 1
 
+            # Red Velvet DOES have tea, at the house convention of 0.05 pcs
+            # (1/20 of a teabag). The manager may have already added correct
+            # per-variant lines herself, leaving the old mis-united line
+            # orphaned alongside them — so a bogus line whose variant is
+            # already covered must be DELETED, not edited down, or that
+            # variant would carry two 0.05 lines and double-count the tea.
             rv = self._one_item('Milk Tea - Red Velvet')
-            rv_lines = RecipeIngredient.objects.filter(item=rv, ingredient_id=49)
-            self._guard(rv_lines.count() == 1,
-                        f'Red Velvet blacktea lines: {rv_lines.count()}, expected 1')
-            rv_line = rv_lines.get()
-            if rv_line.quantity_used == D('0.05'):
-                self._say('  ~ Red Velvet blacktea already 0.05 — skip')
+            rv_lines = list(RecipeIngredient.objects.filter(item=rv, ingredient_id=49))
+            self._guard(bool(rv_lines), 'Red Velvet has no blacktea line')
+            good = [l for l in rv_lines if l.quantity_used == D('0.05')]
+            bogus_rv = [l for l in rv_lines if l.quantity_used != D('0.05')]
+            if not bogus_rv:
+                self._say(f'  ~ Red Velvet blacktea already 0.05 ({len(good)} line(s)) — skip')
                 skipped += 1
             else:
-                self._guard(rv_line.quantity_used == D('200'),
-                            f'Red Velvet blacktea qty {rv_line.quantity_used}, expected 200')
-                rv_line.quantity_used = D('0.05')
-                rv_line.save(update_fields=['quantity_used'])
-                self._say('  * Red Velvet blacktea line: 200 -> 0.05 pcs (1/20 teabag)')
-                applied += 1
+                qtys = sorted(l.quantity_used for l in bogus_rv)
+                self._guard(all(q == D('200') for q in qtys),
+                            f'Red Velvet blacktea unexpected qty {qtys}, expected 200')
+                covered = {l.variant_id for l in good}
+                for line in bogus_rv:
+                    if line.variant_id in covered:
+                        line.delete()
+                        self._say('  * Red Velvet: deleted orphaned 200-pcs blacktea line '
+                                  '(variant already covered at 0.05)')
+                    else:
+                        line.quantity_used = D('0.05')
+                        line.save(update_fields=['quantity_used'])
+                        covered.add(line.variant_id)
+                        self._say('  * Red Velvet blacktea line: 200 -> 0.05 pcs (1/20 teabag)')
+                    applied += 1
 
             after = _sales_fingerprint()
             if after != before:
