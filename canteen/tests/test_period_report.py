@@ -438,6 +438,65 @@ class ISSUE121WeeklyReportTests(APITestCase):
         self.assertEqual(notices['low_stock'], [])
         self.assertEqual(notices['out_of_stock'], [])
 
+    def test_inventory_notices_exclude_recipe_items(self):
+        """FLAG-083: a made-to-order recipe item has a meaningless Item.stock
+        (it is limited by ingredients, not by its stock counter — the sale path
+        gates stock only for non-recipe items). Its stock reads 0 forever, so it
+        must NOT appear in the low-stock or out-of-stock notices. Covers BOTH a
+        base-recipe item and — the PROD screenshot case — a variant-ONLY recipe
+        item (recipe encoded per size/flavor variant, no base line), which the
+        serializer's base-lines-only is_recipe_item would have missed.
+
+        Negative control: a pure resale item at stock=0 still IS listed, so this
+        proves the filter excludes recipe items specifically, not everything."""
+        from canteen.models import (
+            VariantGroup, VariantOption, RecipeIngredient, IngredientUnit,
+        )
+        unit, _ = IngredientUnit.objects.get_or_create(
+            abbreviation='ml', defaults={'name': 'Milliliter'})
+        milk = Ingredient.objects.create(
+            name='Fresh Milk', unit=unit, cost_per_unit=Decimal('0.05'),
+            current_stock=Decimal('5000'))
+
+        # (a) base-recipe drink at stock 0 — must be excluded.
+        latte = Item.objects.create(
+            name='Latte', price=Decimal('90.00'), stock=0, low_stock_threshold=5)
+        RecipeIngredient.objects.create(
+            item=latte, variant=None, ingredient=milk,
+            quantity_used=Decimal('200'))
+
+        # (b) variant-ONLY drink at stock 0 — the screenshot case (no base line).
+        frappe = Item.objects.create(
+            name='Frappe - Avocado', price=Decimal('120.00'), stock=0,
+            low_stock_threshold=5)
+        grp = VariantGroup.objects.create(name='Size')
+        large = VariantOption.objects.create(group=grp, name='Large')
+        RecipeIngredient.objects.create(
+            item=frappe, variant=large, ingredient=milk,
+            quantity_used=Decimal('300'))
+
+        # Negative control: a pure resale good at stock 0 — must still appear.
+        bottled = Item.objects.create(
+            name='Bottled Water', price=Decimal('20.00'), stock=0,
+            low_stock_threshold=5)
+
+        # And a recipe item that is merely LOW (not zero) — excluded from low too.
+        Item.objects.filter(pk=latte.pk).update(stock=2)  # <- low, but recipe
+
+        resp = self.client.get(self._this_week())
+        notices = resp.data['inventory_notices']
+        oos_names = [i['name'] for i in notices['out_of_stock']]
+        low_names = [i['name'] for i in notices['low_stock']]
+
+        # Recipe items never surface in either bucket.
+        self.assertNotIn('Latte', oos_names)
+        self.assertNotIn('Latte', low_names)
+        self.assertNotIn('Frappe - Avocado', oos_names)
+        self.assertNotIn('Frappe - Avocado', low_names)
+        # The pure resale good at stock 0 still does (proves the filter is
+        # recipe-specific, not a blanket suppression).
+        self.assertIn('Bottled Water', oos_names)
+
     # --- ISSUE-121-FU-C: expiry notice removed from the report ----------
 
     def test_report_no_longer_includes_expiry_notice(self):

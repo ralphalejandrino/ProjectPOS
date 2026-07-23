@@ -2450,16 +2450,28 @@ def _inventory_notices(today):
     """
     active = Item.objects.filter(is_active=True)
 
+    # FLAG-083: Item.stock is only meaningful for pure resale goods. A recipe
+    # (made-to-order) item is limited by its ingredients, not by its stock
+    # counter — create_pos_transaction gates stock ONLY when the item has no
+    # recipe (is_recipe_item = recipe_ingredients.exists(), services.py). A drink
+    # assembled from recipe lines therefore reads stock=0 forever and would flood
+    # these notices with false "out of stock" rows (every frappe/fruit tea/Fries).
+    # Exclude any item that owns a recipe line — base OR variant-scoped; the
+    # recipe_item_required constraint guarantees both carry the item FK — mirroring
+    # that same sale-path definition. The par-based ingredient reorder list
+    # (FEATURE-054) is the correct restock signal for recipe items.
+    stocked = active.filter(recipe_ingredients__isnull=True)
+
     low_stock = [
         {'id': i.id, 'name': i.name, 'stock': i.stock,
          'threshold': i.low_stock_threshold}
-        for i in active.filter(
+        for i in stocked.filter(
             stock__gt=0, stock__lte=F('low_stock_threshold')
         ).order_by('stock', 'name')
     ]
     out_of_stock = [
         {'id': i.id, 'name': i.name}
-        for i in active.filter(stock=0).order_by('name')
+        for i in stocked.filter(stock=0).order_by('name')
     ]
     return {
         'low_stock': low_stock,
