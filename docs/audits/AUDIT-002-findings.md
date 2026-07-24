@@ -24,7 +24,7 @@ Customer/Gio-facing impact: **revenue at risk is low today** (modifiers are coll
 
 ## 2. Variant Model State
 
-All variant models live in `canteen/models.py`. None of `VariantGroup`, `VariantOption`, `CategoryVariantGroup`, `ProductVariantGroup`, `TransactionItemVariant` use the `BaseModelWithUUID` base except where noted; they declare their own `id`.
+All variant models live in `pos/models.py`. None of `VariantGroup`, `VariantOption`, `CategoryVariantGroup`, `ProductVariantGroup`, `TransactionItemVariant` use the `BaseModelWithUUID` base except where noted; they declare their own `id`.
 
 ### `VariantGroup` (`models.py:69–85`)
 | Field | Type | Params/Default |
@@ -113,7 +113,7 @@ Trace for "customer selects Large":
 
 **The server is authoritative and recomputes price from the DB `item.price` + DB `option.price_modifier`.** The client also sends `price` (`app.js:681`, `752`) but the service ignores it — there is **no client/server price-trust gap**. Client-side preview math (`app.js:363–369`, `408`) mirrors the server formula, so the cart total shown equals what is charged.
 
-**Dead code:** `PosTransactionCreateSerializer` (`serializers.py:263–304`) trusts client `unit_price`, marks `variant_selections` read-only, and never creates variant rows — but it is **referenced nowhere** (`grep` across `canteen/` finds only its definition). It is a latent footgun if ever wired up, but not a live risk.
+**Dead code:** `PosTransactionCreateSerializer` (`serializers.py:263–304`) trusts client `unit_price`, marks `variant_selections` read-only, and never creates variant rows — but it is **referenced nowhere** (`grep` across `pos/` finds only its definition). It is a latent footgun if ever wired up, but not a live risk.
 
 Receipt (`receipt_service.py:78–80`): prints each variant as `  {group_name}: {option_name} {+PHP modifier}`. Line subtotal already includes the modifier (since `unit_price == final_price`). **Minor display issue:** negative modifiers are suppressed (`modifier_str` only set when `price_modifier > 0`), so a discount-style option would print with no price annotation.
 

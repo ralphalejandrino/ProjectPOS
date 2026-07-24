@@ -9,7 +9,7 @@
 
 ## 1. TL;DR
 
-TarsierPOS has **three pieces of intended automation, two of which are silently broken**, and **zero off-machine backup**. The only backup mechanism that actually works is `ExecStopPost=backup_db.sh` on `tarsierpos.service` — it fires *only when the service stops*, keeps 7 rotating copies, and writes them to `/home/ralph/TarsierPOS/backups/` **on the same disk as the database**. The nightly cron backup (`30 23 * * * /home/ralph/canteen-pos-modern/backup_db.sh`) points at a **path that does not exist** (the repo was renamed from `canteen-pos-modern` to `TarsierPOS`) — it has been a no-op for an unknown period and produces no error anyone sees. The root health watchdog (`*/5 * * * * health_check.sh`) is **permanently failed**: it health-checks the disabled frontend on `:8081` (always down since FIX-047) and tries to restart `tarsierpos-backend` (disabled since FIX-PENDING-13) instead of the canonical `tarsierpos.service` — it has been logging `ALERT: 5 restarts triggered — manual intervention required` every 5 minutes (5,244 such lines) and **cannot recover a real backend outage**.
+TarsierPOS has **three pieces of intended automation, two of which are silently broken**, and **zero off-machine backup**. The only backup mechanism that actually works is `ExecStopPost=backup_db.sh` on `tarsierpos.service` — it fires *only when the service stops*, keeps 7 rotating copies, and writes them to `/home/ralph/TarsierPOS/backups/` **on the same disk as the database**. The nightly cron backup (`30 23 * * * /home/ralph/pos-modern/backup_db.sh`) points at a **path that does not exist** (the repo was renamed from `pos-modern` to `TarsierPOS`) — it has been a no-op for an unknown period and produces no error anyone sees. The root health watchdog (`*/5 * * * * health_check.sh`) is **permanently failed**: it health-checks the disabled frontend on `:8081` (always down since FIX-047) and tries to restart `tarsierpos-backend` (disabled since FIX-PENDING-13) instead of the canonical `tarsierpos.service` — it has been logging `ALERT: 5 restarts triggered — manual intervention required` every 5 minutes (5,244 such lines) and **cannot recover a real backend outage**.
 
 **Biggest single gap:** no automated off-machine backup of any kind. Every copy of the database lives on `/dev/nvme0n1p2`. A single disk/SSD failure or filesystem corruption is total, unrecoverable data loss for the cafe.
 
@@ -67,9 +67,9 @@ WantedBy=multi-user.target
 **`ralph` crontab (`crontab -l`):**
 ```cron
 */5 * * * * curl -s http://localhost:18080 > /dev/null 2>&1 || (cd /home/ralph/.openclaw/workspace/mission_control_v2 && nohup npm run start ...)   # unrelated — openclaw mission_control
-30 23 * * * /home/ralph/canteen-pos-modern/backup_db.sh                                                                                       # ⚠ BROKEN — path does not exist
+30 23 * * * /home/ralph/pos-modern/backup_db.sh                                                                                       # ⚠ BROKEN — path does not exist
 ```
-- `/home/ralph/canteen-pos-modern` **does not exist** (`ls` → No such file or directory; `readlink -f` returns the literal path, i.e. not a symlink). The repo is `/home/ralph/TarsierPOS`. **The nightly 23:30 backup has been a silent no-op since the repo was renamed.** cron will email the failure to local `ralph` mail spool only — effectively unseen.
+- `/home/ralph/pos-modern` **does not exist** (`ls` → No such file or directory; `readlink -f` returns the literal path, i.e. not a symlink). The repo is `/home/ralph/TarsierPOS`. **The nightly 23:30 backup has been a silent no-op since the repo was renamed.** cron will email the failure to local `ralph` mail spool only — effectively unseen.
 
 **`root` crontab (`sudo crontab -l`):**
 ```cron
@@ -145,7 +145,7 @@ exit 0
 | Trigger reality | `ExecStopPost` on `tarsierpos.service` only. The intended *nightly* trigger (cron 23:30) is **dead** (§2.3). |
 | Backup log | `/var/log/tarsierpos-backup.log` **does not exist**; `/tmp/tarsierpos-backup.log` also absent (and `/tmp` is wiped by `systemd-tmpfiles-clean.timer`). **No audit trail of backups exists** — there is no way to see whether/when backups ran. |
 | Restore procedure | **Not documented anywhere.** No README/runbook/comment describes how to restore from a `backups/db_*.sqlite3` file. |
-| Read-only verification | ✅ Confirmed: `sqlite3 backups/db_20260516_013457.sqlite3 'SELECT COUNT(*) FROM canteen_postransaction;'` → **366**. Latest backup is a valid, queryable database. |
+| Read-only verification | ✅ Confirmed: `sqlite3 backups/db_20260516_013457.sqlite3 'SELECT COUNT(*) FROM pos_postransaction;'` → **366**. Latest backup is a valid, queryable database. |
 | Cloud tooling | Installed: `gsutil`, `tailscale`, `sqlite3`. **Not installed:** `rclone`, `restic`, `borg`, `aws`, `b2`, `mc`. `~/.config/gcloud` *is* configured (has `application_default_credentials.json`) so a GCS path is technically *available* but **no script uses it**. No `~/.config/rclone|restic`, `~/.borg`, `~/.aws`. |
 | **Off-machine copy** | **NONE. No backup is ever transmitted off the OptiPlex automatically.** No `scp`/`rsync`/`rclone`/`gsutil` in any repo script or cron. The GitHub auto-push excludes the DB via `.gitignore`. **Stated plainly: zero off-machine backup exists today.** |
 
@@ -155,12 +155,12 @@ exit 0
 
 | Capability | State |
 |---|---|
-| **Health endpoint** | **Exists.** `pos_config/urls.py` → `api/health/` → `HealthCheckView` (`canteen/views.py:45`). Checks DB connection only; returns `{"status":"ok"|"degraded","checks":{...}}`. No disk/printer/cert checks. |
+| **Health endpoint** | **Exists.** `pos_config/urls.py` → `api/health/` → `HealthCheckView` (`pos/views.py:45`). Checks DB connection only; returns `{"status":"ok"|"degraded","checks":{...}}`. No disk/printer/cert checks. |
 | **Health watchdog** | `health_check.sh` via root cron `*/5`. **BROKEN — see below.** |
 | **Application logging** | Django `LOGGING` (`settings.py:211`): single `logging.FileHandler` → `/var/log/tarsierpos-app.log` (env `LOG_FILE`), level `WARNING`; console handler `ERROR`. Plain `FileHandler` — **no rotation**, no `logrotate.d` entry. Currently **796 KB, growing unbounded.** |
 | **Nginx logs** | `/var/log/nginx/{access,error}.log`. Rotation: `/etc/logrotate.d/nginx` — daily, keep 14, compressed ✓. access.log 119 KB, error.log 2.6 KB (rotated copies present). Healthy. |
 | **System monitoring** | **None.** No `prometheus`, `node_exporter`, `monit`, `netdata`, `grafana`, `glances` (`sysstat` present — stock Ubuntu, not app monitoring). |
-| **Alerting** | **None.** `grep` for `smtp/sentry/slack/webhook/discord/telegram` across `canteen/` + `pos_config/` returns only a `webhook_url` *config model field* (`models.py:612` — payment-gateway/terminal config, unrelated to failure alerting). No `EMAIL_HOST`, no error reporting. **Nothing fires on failure.** |
+| **Alerting** | **None.** `grep` for `smtp/sentry/slack/webhook/discord/telegram` across `pos/` + `pos_config/` returns only a `webhook_url` *config model field* (`models.py:612` — payment-gateway/terminal config, unrelated to failure alerting). No `EMAIL_HOST`, no error reporting. **Nothing fires on failure.** |
 | **Printer connectivity** | **Nothing monitors `/dev/usb/lp1`.** No cron, no watchdog check between sales. (USB printer device present in `systemctl --user` device list.) |
 | **Service auto-restart** | `tarsierpos.service`: `Restart=always`, `RestartSec=5s`. Default `StartLimitBurst=5`/`StartLimitIntervalSec=10s` — not effectively reached (see §2.1) → effectively unbounded restart, no alert on crashloop. |
 | **Journal retention** | `journalctl --disk-usage` → **1.7 GB**. `/etc/systemd/journald.conf` is **all defaults** (no `SystemMaxUse`/`MaxRetentionSec` set) — capped only by systemd default (~4 GB / 10% of fs). Not urgent given 144 GB free. |
@@ -193,7 +193,7 @@ The watchdog is **worse than absent**: it provides false assurance, restarts the
 
 ### 5.2 Clean shutdown / power loss
 
-- Transactions wrap writes in `db_transaction.atomic()` (`canteen/views.py:236`, `:1249`, `:1415`). On `systemctl stop`, gunicorn workers get SIGTERM with `TimeoutStopUSec=90s`; an in-flight `atomic()` block either commits or rolls back — no partial transaction. SQLite WAL mode + `busy_timeout=30000` means a hard power-yank loses only the uncommitted transaction and WAL auto-recovers on next open. **Behaviour is acceptable; not a data-integrity gap.**
+- Transactions wrap writes in `db_transaction.atomic()` (`pos/views.py:236`, `:1249`, `:1415`). On `systemctl stop`, gunicorn workers get SIGTERM with `TimeoutStopUSec=90s`; an in-flight `atomic()` block either commits or rolls back — no partial transaction. SQLite WAL mode + `busy_timeout=30000` means a hard power-yank loses only the uncommitted transaction and WAL auto-recovers on next open. **Behaviour is acceptable; not a data-integrity gap.**
 - **No documented clean-shutdown / end-of-day procedure** (no "close shift → Z report → power down" runbook anywhere in the repo).
 
 ### 5.3 Tailscale certificate
@@ -201,7 +201,7 @@ The watchdog is **worse than absent**: it provides false assurance, restarts the
 - Cert: `/home/ralph/TarsierPOS/certs/ralph-optiplex-3060.example-tailnet.ts.net.crt` (+ `.key`, root-owned).
 - `openssl x509 -noout -dates`: `notBefore=May 14 02:50:51 2026 GMT`, **`notAfter=Aug 12 02:50:50 2026 GMT`**. ✅ Matches TARSIER_POS.md's stated 2026-08-12. **~88 days remaining** from 2026-05-16.
 - Renewal is **100% manual**, documented only as comments in `tarsierpos-frontend.service` / nginx site: `sudo tailscale cert ralph-optiplex-3060.example-tailnet.ts.net` → move `.crt`/`.key` into `certs/` → `sudo systemctl reload nginx`. **No automation, no reminder, no monitoring of expiry.** When it lapses, HTTPS breaks for the whole cafe and there is nothing to warn beforehand.
-- nginx active config `/etc/nginx/sites-enabled/canteen-pos` → references the cert path correctly; `default` site also symlinked (stock). Active config matches TARSIER_POS.md intent (proxy `/api/` → `127.0.0.1:9000`, static from `frontend/public`, media alias, auth rate-limit).
+- nginx active config `/etc/nginx/sites-enabled/pos` → references the cert path correctly; `default` site also symlinked (stock). Active config matches TARSIER_POS.md intent (proxy `/api/` → `127.0.0.1:9000`, static from `frontend/public`, media alias, auth rate-limit).
 
 ### 5.4 Other secrets
 
@@ -284,7 +284,7 @@ All read-only:
 Conservative scope; post-backlog so severities skew Low/Medium, with two Medium-High exceptions where silent failure causes data loss.
 
 ### Cluster A — Backup automation
-1. **FEATURE: Fix & re-home the scheduled backup** — Gap: nightly cron points at non-existent `/home/ralph/canteen-pos-modern/backup_db.sh`; backups only fire on service stop. **Severity: Medium-High** (silent — data-loss exposure). Dep: none.
+1. **FEATURE: Fix & re-home the scheduled backup** — Gap: nightly cron points at non-existent `/home/ralph/pos-modern/backup_db.sh`; backups only fire on service stop. **Severity: Medium-High** (silent — data-loss exposure). Dep: none.
 2. **FEATURE: Off-machine backup target** — Gap: zero off-host copy; total loss on disk failure. Candidate path: existing `gcloud`/`gsutil` creds, or Tailscale-reachable host. **Severity: Medium-High** (highest-impact gap). Dep: depends on A1 (a working backup to ship).
 3. **FEATURE: Backup audit log + restore runbook** — Gap: `tarsierpos-backup.log` never exists; no documented restore-from-`backups/` procedure; no backup-success visibility. **Severity: Medium.** Dep: A1.
 4. **FEATURE: Backup retention/scheduling review** — Gap: 7-file rotation tied to service stop is not time-based; consider time-anchored daily + longer retention. **Severity: Low.** Dep: A1.

@@ -3,7 +3,7 @@ Version: 1.0
 Last updated: 2026-03-18
 
 ## Contents
-- canteen/          Django backend app
+- pos/              Django backend app
 - pos_config/       Django configuration
 - frontend/public/  Vanilla JS PWA frontend
 - wheels/           Vendored Python packages (offline install)

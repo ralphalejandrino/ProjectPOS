@@ -37,7 +37,7 @@ SVC=tarsierpos.service
 PY=venv/bin/python
 LOG=/opt/tarsierpos/backups/deploy.log
 URL_ROOT='https://localhost/'
-URL_QL='https://localhost/api/canteen/users/quick-login/'
+URL_QL='https://localhost/api/pos/users/quick-login/'
 
 MODE=deploy
 FORCE=0
@@ -100,7 +100,7 @@ fi
 # ---- open-shift guard (drawer safety) --------------------------------------
 SHIFTPY=$(mktemp /tmp/tpos-shift.XXXXXX.py)
 printf '%s\n' \
-  'from canteen.models import Shift' \
+  'from pos.models import Shift' \
   'print("__OPEN__%d" % Shift.objects.filter(is_open=True).count())' > "$SHIFTPY"
 OPEN=$(as_app "$PY manage.py shell" < "$SHIFTPY" 2>>"$LOG" \
         | sed -n 's/.*__OPEN__\([0-9][0-9]*\).*/\1/p' | tail -1)
@@ -140,7 +140,7 @@ if [ "$MODE" = dryrun ]; then
     echo "  -> FRONTEND-ONLY: no migrate, no restart (kiosk relaunch only)"
   fi
   echo "  pending migrations:"
-  as_app "$PY manage.py showmigrations canteen 2>/dev/null | grep '\[ \]' || echo '(none pending)'" | sed 's/^/    /'; true
+  as_app "$PY manage.py showmigrations pos 2>/dev/null | grep '\[ \]' || echo '(none pending)'" | sed 's/^/    /'; true
   exit 0
 fi
 

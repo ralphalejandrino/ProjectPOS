@@ -304,7 +304,7 @@ exits non-zero, leaving the live DB untouched.
 ```sh
 cd "$TARSIERPOS_DIR"
 venv/bin/python manage.py safe_migrate              # snapshot + migrate all
-venv/bin/python manage.py safe_migrate canteen 0033 # snapshot + migrate a target
+venv/bin/python manage.py safe_migrate pos 0033 # snapshot + migrate a target
 venv/bin/python manage.py safe_migrate --noinput    # non-interactive (deploys)
 ```
 

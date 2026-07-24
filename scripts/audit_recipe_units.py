@@ -33,7 +33,7 @@ import django  # noqa: E402
 
 django.setup()
 
-from canteen.models import Ingredient, RecipeIngredient  # noqa: E402
+from pos.models import Ingredient, RecipeIngredient  # noqa: E402
 
 BULK_UNITS = {'kg', 'l'}        # compared lowercased
 SMALL_UNITS = {'g', 'ml'}

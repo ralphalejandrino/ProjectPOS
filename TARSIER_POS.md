@@ -33,7 +33,7 @@ TarsierPOS is an offline-first point-of-sale system for Philippine SME cafes and
 ```
 /home/ralph/TarsierPOS/
 ├── pos_config/           # Django project settings (WSGI, URLs, settings.py)
-├── canteen/              # Main Django app
+├── pos/                  # Main Django app
 │   ├── models.py         # All data models
 │   ├── views.py          # API endpoints + HTML views
 │   ├── services.py       # Business logic (discounts, transactions)
@@ -47,7 +47,7 @@ TarsierPOS is an offline-first point-of-sale system for Philippine SME cafes and
 │   ├── payment_adapters.py # GCash/Maya adapters
 │   ├── management/       # Management commands (seed_demo)
 │   ├── migrations/       # DB migrations, head: 0014
-│   └── templates/canteen/ # HTML templates (verify path)
+│   └── templates/pos/    # HTML templates (verify path)
 ├── frontend/             # Static JS/CSS assets
 ├── media/                # Uploaded images (product photos, QR codes)
 ├── venv/                 # Python virtualenv
@@ -62,7 +62,7 @@ TarsierPOS is an offline-first point-of-sale system for Philippine SME cafes and
 
 ---
 
-## Models (canteen/models.py)
+## Models (pos/models.py)
 
 | Model | Purpose |
 |---|---|

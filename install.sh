@@ -132,7 +132,7 @@ ADMIN_PASS=$("$VENV/bin/python" -c "import secrets, string; \
   print(''.join(secrets.choice(chars) for _ in range(12)))")
 
 sudo -u "$DEPLOY_USER" "$VENV/bin/python" manage.py shell -c "
-from canteen.models import User
+from pos.models import User
 if not User.objects.filter(role='admin').exists():
     User.objects.create_superuser(
         username='admin',

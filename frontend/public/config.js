@@ -3,7 +3,7 @@
 // base URL is empty and every endpoint is a relative path. This works on any
 // hostname (localhost, LAN IP, Tailscale host) with no rebuild and no env
 // injection — the browser resolves the path against the current origin.
-const API_BASE = '/api/canteen';
+const API_BASE = '/api/pos';
 const PAYMENTS_API = '/api/payments';
 const AUTH_API = '/api/auth';
 const API_URL = API_BASE;
@@ -150,12 +150,12 @@ function getUserRole() {
 
 // ============================================================
 // FEATURE-044 — per-user page access (client side)
-// Authoritative enforcement is server-side (canteen/access.py +
+// Authoritative enforcement is server-side (pos/access.py +
 // HasPageAccess). These helpers drive nav visibility + page guards
 // off the JWT 'pages' claim, falling back to the role default for
 // tokens issued before this feature (so behaviour is unchanged
 // until the user next logs in / refreshes). Keep this map in sync
-// with canteen/access.py.
+// with pos/access.py.
 // ============================================================
 const ROLE_DEFAULT_PAGES = {
     admin:   ['pos', 'inventory', 'ingredients', 'dashboard', 'xreport', 'zreport', 'settings', 'status', 'period', 'insights', 'remote'],

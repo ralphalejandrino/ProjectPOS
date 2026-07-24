@@ -20,7 +20,7 @@ Most of what an owner would want (top items, peak hours, per-cashier, voids-per-
 
 ## 2. Current X Report Content
 
-**Code path:** `canteen/views.py:570-626` (`PosTransactionViewSet.xreport`, GET, `IsCashierOrAbove`). Rendered by `frontend/public/xreport.html`. ESC/POS variant: `canteen/receipt_service.py:260-312` (`print_xreport_summary`), triggered via `views.py:354-361` (`print_xreport`).
+**Code path:** `pos/views.py:570-626` (`PosTransactionViewSet.xreport`, GET, `IsCashierOrAbove`). Rendered by `frontend/public/xreport.html`. ESC/POS variant: `pos/receipt_service.py:260-312` (`print_xreport_summary`), triggered via `views.py:354-361` (`print_xreport`).
 
 **Shift boundary:** the *current open `Shift` for the requesting user* — `Shift.objects.filter(cashier=request.user, is_open=True).first()` (`views.py:577-579`). Returns HTTP 404 if no open shift (`views.py:581-585`). It is **per-cashier and per-open-shift**, not per-day. `Shift` model: `models.py:768-781` (`opened_at` auto, `closed_at`, `opening_cash`, `closing_cash`, `is_open`).
 
@@ -47,7 +47,7 @@ X report has **no** VAT, discount, top-items, hourly, cashier-comparison, OR-ran
 
 ## 3. Current Z Report Content
 
-**Code path:** `canteen/views.py:363-568` (`PosTransactionViewSet.zreport`, GET, `IsManagerOrAbove`). Rendered by `frontend/public/zreport.html`. ESC/POS variant: `receipt_service.py:185-257` (`print_zreport_summary`), triggered via `views.py:345-352` (`print_zreport`).
+**Code path:** `pos/views.py:363-568` (`PosTransactionViewSet.zreport`, GET, `IsManagerOrAbove`). Rendered by `frontend/public/zreport.html`. ESC/POS variant: `receipt_service.py:185-257` (`print_zreport_summary`), triggered via `views.py:345-352` (`print_zreport`).
 
 **Shift boundary:** **none.** The Z report is keyed by **calendar date** — `PosTransaction.objects.filter(created_at__date=report_date)` (`views.py:376`), where `report_date` defaults to today or comes from `?date=YYYY-MM-DD` (`views.py:370-374`). `created_at__date` and `ExtractHour` resolve in **PHT** (`pos_config/settings.py:141` `TIME_ZONE='Asia/Manila'`, `:145` `USE_TZ=True`), which matches the OR-counter PHT rollover (`models.py:467-468`). The Z report is **decoupled from `Shift`** entirely — closing a shift (`views.py:1407-1442`) only sets `closing_cash/closed_at/is_open` and reloads today's date Z report in the UI (`zreport.html:602-606`); it does not finalize, snapshot, increment a counter, or freeze data.
 
@@ -114,7 +114,7 @@ Hardcoded/defaulted/missing-live-value flags: business name in HTML is DOM-sourc
 
 ## 5. Data Accuracy Findings (Phase 3)
 
-Live DB: 368 `PosTransaction` (364 completed, 4 void). Only 22 completed in last 14 days (2026-05-13..16); ~346 are March seed data. `is_seed`/FLAG-047 **not shipped** (no `is_seed` field in any `canteen/*.py`), so seed and real data are indistinguishable in aggregates.
+Live DB: 368 `PosTransaction` (364 completed, 4 void). Only 22 completed in last 14 days (2026-05-13..16); ~346 are March seed data. `is_seed`/FLAG-047 **not shipped** (no `is_seed` field in any `pos/*.py`), so seed and real data are indistinguishable in aggregates.
 
 1. **"Gross Sales" is net of discounts (ISSUE-class).** Reproduce: `zreport(date=2026-05-15)` → `gross_sales=1004`, `total_discounts_given=146`. Recompute from raw line items: `Sum(PosTransactionItem.subtotal)` for that day = **1150**; `1150 − 146 = 1004`. The report shows `1004` *as* "Gross Sales" **and** lists the `146` discounts separately (Section J) — a reader cannot recover true gross, and a naive "gross − discounts" double-subtracts. The VAT card additionally labels the same post-discount sum "Gross Sales (Total)" (`zreport.html:188-189`).
 
@@ -177,7 +177,7 @@ Additional accuracy notes:
 - **Network reach:** access is **Tailscale-only** — `https://100.100.100.100/` (`TARSIER_POS.md:12,100`), tailnet device required; `ufw` only opens 80/443 on `tailscale0` (`TARSIER_POS.md:349-350`). No public/internet endpoint. The owner must run Tailscale on their phone and be added to the tailnet; otherwise the report views are unreachable.
 - **Export:** none — no email, PDF, or CSV export of X/Z (only the thermal printer at the shop and browser print).
 - **Mobile rendering:** templates have `viewport` meta and Tailwind responsive classes (`zreport.html:5`, `grid-cols-1 sm:grid-cols-2`), so the HTML *scales*, but it is laid out for a wide report with multi-column tables; no phone-specific report layout.
-- **Scheduled digest:** none — no `send_mail`, SMTP, Celery, cron, or webhook in `canteen/*.py` or `pos_config/*.py`.
+- **Scheduled digest:** none — no `send_mail`, SMTP, Celery, cron, or webhook in `pos/*.py` or `pos_config/*.py`.
 - **Auth/roles:** roles are `admin`/`manager`/`cashier` only (`models.py:642-646,699-705`). Z report requires `IsManagerOrAbove` (`views.py:363`, `permissions.py:14-22`). **There is no read-only "owner/viewer" role** — a remote owner needs a manager or admin login (full write access) to see the Z report.
 - **Offsite notification on Z finalize:** none — and there is no "finalize" event to notify on (Z is a stateless recompute; closing a shift fires no notification).
 

@@ -25,7 +25,7 @@ However, Ralph's *business-level* concern — "the business is losing visibility
 
 ## 2. Data Model State
 
-### Models in scope (`canteen/models.py`)
+### Models in scope (`pos/models.py`)
 
 | Model | Lines | Role |
 |---|---|---|
@@ -45,7 +45,7 @@ However, Ralph's *business-level* concern — "the business is losing visibility
 
 ### The Item ↔ Ingredient link — IT EXISTS
 
-`RecipeIngredient` (`canteen/models.py:864–883`):
+`RecipeIngredient` (`pos/models.py:864–883`):
 
 - `item` → FK `Item`, nullable, `related_name='recipe_ingredients'` (866)
 - `variant` → FK **`VariantOption`**, nullable, `related_name='recipe_ingredients'` (867)
@@ -62,7 +62,7 @@ However, Ralph's *business-level* concern — "the business is losing visibility
 
 ## 3. Transaction-Time Behavior
 
-### Sale completion — `create_pos_transaction()` (`canteen/services.py:85–345`)
+### Sale completion — `create_pos_transaction()` (`pos/services.py:85–345`)
 
 There is exactly one service-layer completion path: `create_pos_transaction`. It is called from `views.py:195, 849, 911, 969` (POS checkout endpoints). Everything runs in `db_transaction.atomic()` (services.py:90), items are `select_for_update()` locked (services.py:106).
 
@@ -95,7 +95,7 @@ services.py:340        _deplete_ingredients(...)
 
 **Finding:** Ingredient depletion is *coupled to the Item inventory flag*. A business that disables Item tracking (e.g., sells untracked retail) **also silently stops all ingredient depletion**, even though the two are conceptually independent. There is no separate "track ingredients" switch.
 
-### Void / reversal path (`canteen/views.py:228–273`)
+### Void / reversal path (`pos/views.py:228–273`)
 
 Gated by `if not _bp or _bp.track_inventory:` (views.py:245). Per line item:
 
@@ -121,7 +121,7 @@ Gated by `if not _bp or _bp.track_inventory:` (views.py:245). Per line item:
 
 ## 4. Manual Adjustment Behavior
 
-### `Item.adjust_stock` (`canteen/views.py:1234–1280`)
+### `Item.adjust_stock` (`pos/views.py:1234–1280`)
 
 - Operates on **Items only** (`Item.objects.select_for_update().get(pk=pk)`, views.py:1250).
 - Payload: `{ "adjustment": <int signed>, "reason": <str> }` (views.py:1240–1241). Bounds: |adj| ≤ 10000, resulting stock 0…999999.
@@ -132,7 +132,7 @@ Gated by `if not _bp or _bp.track_inventory:` (views.py:245). Per line item:
 ### Ingredient manual adjustment
 
 - **No dedicated ingredient `adjust_stock` endpoint exists.** The only structured ingredient-stock mutation is `IngredientViewSet.restock` (`views.py:1556–1563`, URL `/ingredients/{id}/restock/`), which creates an `IngredientRestockLog`; the model's `save()` (models.py:851–858) increments `current_stock`. Additions only — logged.
-- **However `IngredientViewSet` is a full `ModelViewSet`** (`views.py:1551`) and `IngredientSerializer` exposes `current_stock` as a **writable** field (`canteen/serializers.py:499–511`, `current_stock` in `fields`, not in any `read_only_fields`). So a manager can `PATCH /ingredients/{id}/` and set `current_stock` to any value **with no log row whatsoever**. This is a silent, untracked write path.
+- **However `IngredientViewSet` is a full `ModelViewSet`** (`views.py:1551`) and `IngredientSerializer` exposes `current_stock` as a **writable** field (`pos/serializers.py:499–511`, `current_stock` in `fields`, not in any `read_only_fields`). So a manager can `PATCH /ingredients/{id}/` and set `current_stock` to any value **with no log row whatsoever**. This is a silent, untracked write path.
 - `frontend/public/ingredients.html` calls `/ingredients*` and `/recipe-ingredients*` and reads `/items/` (for the recipe builder's item dropdown, line 865) and a **non-existent** `/items/{id}/variants/` (line 898, error swallowed by `.catch(()=>null)`, line 898). It does not POST to any Item stock endpoint.
 
 ### Can admin/manager edit the two sides independently? — Yes.
@@ -173,7 +173,7 @@ Item `stock` is decrementing correctly (BLT: 100→92 after 8 sold). **34 of 70 
 **Reconciliation attempt (expected vs. observed ingredient stock).** Because there is no consumption ledger and no recorded initial-stock baseline, the only computable model is `expected = Σ restock_additions − Σ sale_depletion + Σ void_restore`. Result: **41 of 42 ingredients fail to reconcile**; expected values are massively negative (e.g. Whole Milk: current 25000, expected −64670, drift 89670). The single zero-drift ingredient (Oat Milk) is used in 0 recipes.
 
 This is **not** evidence the live deplete code is broken — it is evidence of three things, all of which support the visibility finding:
-1. **346/368 transactions are seed/demo data** created by `seed_demo._seed_transactions` (`canteen/management/commands/seed_demo.py:669+`), which builds `PosTransaction(...)` / `PosTransactionItem.objects.create(...)` **directly and never calls `create_pos_transaction` or `_deplete_ingredients`**. Those historical sales depleted nothing; ingredient stock was seeded independently via `IngredientRestockLog` (seed_demo.py:637). Historical ingredient levels are therefore fictitious.
+1. **346/368 transactions are seed/demo data** created by `seed_demo._seed_transactions` (`pos/management/commands/seed_demo.py:669+`), which builds `PosTransaction(...)` / `PosTransactionItem.objects.create(...)` **directly and never calls `create_pos_transaction` or `_deplete_ingredients`**. Those historical sales depleted nothing; ingredient stock was seeded independently via `IngredientRestockLog` (seed_demo.py:637). Historical ingredient levels are therefore fictitious.
 2. **There is no movement ledger and no initial-stock field**, so even legitimate live depletion cannot be verified or reconciled after the fact. The drift is *uncomputable by construction* — which is exactly the visibility gap.
 3. Round, positive `current_stock` values (25000, 5000, 1500, …) across nearly all ingredients confirm stock is being *set* by seeding/direct edits rather than *evolved* by logged movements.
 
@@ -201,7 +201,7 @@ Prefixes follow existing convention. Severity: BLOCKER / High / Medium / Low. Ra
 | **Ingredient `current_stock` is silently writable via `PATCH /ingredients/{id}/`** | ISSUE | High | New `IngredientLog` (for the fix) | `IngredientViewSet` is full `ModelViewSet` (`views.py:1551`); `current_stock` in writable serializer fields with no `read_only` (`serializers.py:506–511`). Untracked overwrite path. |
 | **Ingredient depletion coupled to `track_inventory` (no independent ingredient switch)** | FLAG | Medium | — | Depletion nested in `if _track_inventory:` (`services.py:324→340`); disabling Item tracking silently stops ingredient depletion. Same coupling in void (`views.py:245`). |
 | **Void ingredient-restore matches variants by global name (fragile/silent)** | ISSUE | Medium | New `IngredientLog` (to detect future misfires) | `_restore_ingredients` resolves via `VariantOption.objects.filter(name__in=…snapshot…)` (`services.py:56–61`) — not scoped to item/group; rename/delete/duplicate-name → wrong or missed restore, silent. |
-| **Seed/demo transactions bypass `create_pos_transaction` (no depletion)** | FLAG | Medium | — | `seed_demo._seed_transactions` builds `PosTransaction`/`PosTransactionItem` directly (`canteen/management/commands/seed_demo.py:669+`, `848`, `873`); historical ingredient levels are fictional. Document and/or route seed through the service. |
+| **Seed/demo transactions bypass `create_pos_transaction` (no depletion)** | FLAG | Medium | — | `seed_demo._seed_transactions` builds `PosTransaction`/`PosTransactionItem` directly (`pos/management/commands/seed_demo.py:669+`, `848`, `873`); historical ingredient levels are fictional. Document and/or route seed through the service. |
 | **`Ingredient` lacks `updated_at`/`last_modified`; `current_stock` has no non-negative validator** | FLAG | Low | — | `models.py:817–836`: no timestamp field (Phase 4 could not report `last_modified`); `current_stock` `DecimalField` with no `validate_non_negative_*` — depletion can drive it negative silently. |
 
 **Suggested dependency ordering:** the `IngredientLog`/`StockMovement` FEATURE is the keystone — it unblocks closing the "no ledger" BLOCKER, the silent-`PATCH` ISSUE, the void-restore ISSUE, and makes the coverage-gap FLAG measurable. Recommend it first, then the `ItemLog` sale-logging ISSUE (symmetry), then coverage + variant-authoring fixes.

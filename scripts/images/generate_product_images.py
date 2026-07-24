@@ -5,7 +5,7 @@ Pro Image), using per-product / per-category reference photos.
 Run this on a machine with internet + a Gemini API key (NOT the POS box). It
 reads a products manifest (slug,name,category), finds the most specific
 reference image for each product, and writes one square PNG per product to the
-output dir, named ``<slug>.png`` so canteen.import_product_photos can match it
+output dir, named ``<slug>.png`` so pos.import_product_photos can match it
 back to the Item by re-slugifying Item.name.
 
   pip install "google-genai>=0.3" pillow

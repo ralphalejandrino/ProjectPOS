@@ -115,7 +115,10 @@
 // v146: FEATURE-058 restock corrections — Restock History gains Fix / Move /
 // Void actions (manager self-serve fix for mis-tapped restocks); voided rows
 // stay visible struck-through with a corrected-by audit note.
-const CACHE_NAME = 'tarsierpos-v146'; // canonical cache version
+// v147: internal app rename pos -> pos + API prefix /api/pos/ -> /api/pos/
+// (cache bump forces every kiosk to flush the old shell that still called the
+// pos API paths; no visual change).
+const CACHE_NAME = 'tarsierpos-v147'; // canonical cache version
 const ASSETS = [
   'index.html',
   'login.html',
@@ -171,7 +174,7 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   const req = event.request;
-  if (req.url.includes('/api/') || req.url.includes('/canteen/')) {
+  if (req.url.includes('/api/') || req.url.includes('/pos/')) {
     event.respondWith(fetch(req));
     return;
   }

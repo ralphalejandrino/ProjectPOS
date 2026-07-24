@@ -26,4 +26,4 @@ db.sqlite3.*.bak
 *.bak
 
 # Dev/demo-only seed command — never belongs in the repo (dev/demo DB only)
-canteen/management/commands/seed_demo_v2.py
+pos/management/commands/seed_demo_v2.py

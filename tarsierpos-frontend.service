@@ -1,5 +1,5 @@
 # DEPRECATED — frontend is now served by nginx over HTTPS (FIX-047)
-# nginx site config: /etc/nginx/sites-available/canteen-pos
+# nginx site config: /etc/nginx/sites-available/pos
 # TLS cert: /home/ralph/TarsierPOS/certs/ralph-optiplex-3060.example-tailnet.ts.net.{crt,key}
 # Cert renewal: sudo tailscale cert ralph-optiplex-3060.example-tailnet.ts.net
 #               then: sudo mv ralph-optiplex-3060.*.{crt,key} /home/ralph/TarsierPOS/certs/

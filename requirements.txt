@@ -6,7 +6,7 @@ cryptography==46.0.4
 Django==5.2.14
 django-cors-headers==4.9.0
 # FLAG-009 Option B: dropped django-fernet-fields (unmaintained since 2019).
-# PaymentGatewayConfig credentials now use canteen.fields.FernetEncryptedField,
+# PaymentGatewayConfig credentials now use pos.fields.FernetEncryptedField,
 # a thin wrapper over cryptography.fernet keyed by settings.FERNET_KEY.
 django-money==3.6.0
 djangorestframework==3.15.2

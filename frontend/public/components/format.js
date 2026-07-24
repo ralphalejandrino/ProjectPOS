@@ -1,4 +1,4 @@
-// ISSUE-079 — currency formatter (mirrors canteen/utils/currency.py).
+// ISSUE-079 — currency formatter (mirrors pos/utils/currency.py).
 // Symbol resolved from BusinessProfile.currency (biz_profile in localStorage).
 // Unknown codes fall back to ISO prefix, e.g. "SGD 1,234.50". JPY: 0 decimals.
 (function () {

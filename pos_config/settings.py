@@ -64,7 +64,7 @@ INSTALLED_APPS = [
     'djmoney',
     'rest_framework_simplejwt',
     'rest_framework_simplejwt.token_blacklist',
-    'canteen',
+    'pos',
 ]
 
 MIDDLEWARE = [
@@ -166,7 +166,7 @@ DEFAULT_CURRENCY = 'PHP'
 CURRENCIES = ('PHP',)
 
 # Custom User Model
-AUTH_USER_MODEL = 'canteen.User'
+AUTH_USER_MODEL = 'pos.User'
 
 # FEATURE-039: WiFi network management (admin-only). The privileged state machine
 # lives in a root-owned binary invoked via scoped sudoers; Django only reads the
@@ -268,12 +268,12 @@ LOGGING = {
             'level': 'WARNING',
             'propagate': False,
         },
-        'canteen': {
+        'pos': {
             'handlers': ['file', 'console'],
             'level': 'WARNING',
             'propagate': False,
         },
-        'canteen.receipt_service': {
+        'pos.receipt_service': {
             'handlers': ['file', 'console'],
             'level': 'WARNING',
             'propagate': False,
