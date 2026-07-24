@@ -25,5 +25,7 @@ logs/
 db.sqlite3.*.bak
 *.bak
 
-# Dev/demo-only seed command — never belongs in the repo (dev/demo DB only)
+# Dev/demo-only seed commands — never belong in the repo (dev/demo DB only)
 pos/management/commands/seed_demo_v2.py
+pos/management/commands/seed_demo.py
+pos/management/commands/add_sample_data.py
