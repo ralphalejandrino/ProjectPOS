@@ -1298,6 +1298,14 @@ class IngredientRestockLog(models.Model):
     def save(self, *args, **kwargs):
         # Only apply stock/cost effects on initial insert; editing an existing
         # log must not double-count.
+        # FLAG-078: a genuine restock also appends an IngredientLog(action=
+        # 'restock') row so the append-only movement ledger is complete (it
+        # previously recorded sales/voids/adjustments but never restocks).
+        # ``log_movement=False`` suppresses that row for a caller that writes
+        # its own ledger entry for the SAME movement — reattribute_restock
+        # records the target purchase as a 'correction', so without this the
+        # target would be double-logged.
+        log_movement = kwargs.pop('log_movement', True)
         is_new = self._state.adding
         super().save(*args, **kwargs)
         if is_new:
@@ -1331,6 +1339,22 @@ class IngredientRestockLog(models.Model):
                 # place inside the same transaction).
                 type(self).objects.filter(pk=self.pk).update(cost_before=old_cost)
                 self.cost_before = old_cost
+                # FLAG-078: complete the append-only ledger. The roll above
+                # moved stock old_qty -> new_qty; record it as a 'restock' row
+                # (positive quantity_change) inside this same transaction so the
+                # log commits atomically with the stock/cost update — a failure
+                # here rolls back the whole restock rather than leaving an
+                # unlogged movement. Guarded by is_new (edits use update_fields
+                # and never reach this branch) and log_movement (reattribute
+                # writes its own 'correction' row for the same movement).
+                if log_movement:
+                    IngredientLog.objects.create(
+                        ingredient_id=self.ingredient_id, action='restock',
+                        quantity_change=bought_qty,
+                        stock_before=old_qty, stock_after=new_qty,
+                        performed_by=self.recorded_by,
+                        notes=f'restock #{self.pk}',
+                    )
             # Keep the in-memory ingredient consistent for the caller.
             self.ingredient.current_stock = new_qty
             self.ingredient.cost_per_unit = new_cost

@@ -290,7 +290,10 @@ def reattribute_restock(restock, *, target_ingredient, quantity_added,
             cost_per_unit=cost_per_unit, recorded_by=user, date=restock.date,
             corrected_by=user, corrected_at=timezone.now(),
             notes=f're-attributed from restock #{restock.pk}')
-        new.save()
+        # FLAG-078: this movement is logged below as a 'correction' (a
+        # re-attribution, not a fresh purchase), so suppress save()'s automatic
+        # 'restock' ledger row to avoid double-logging the target.
+        new.save(log_movement=False)
         tgt.refresh_from_db()
         IngredientLog.objects.create(
             ingredient=tgt, action='correction', quantity_change=quantity_added,
