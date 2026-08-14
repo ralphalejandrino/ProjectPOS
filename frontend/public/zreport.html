@@ -223,15 +223,41 @@
             <div class="modal-card__head">
                 <h3 class="modal-card__title">Close Shift</h3>
                 <div class="modal-card__actions">
-                    <button onclick="closeCloseModal()" class="modal-btn modal-btn--secondary">Cancel</button>
-                    <button id="confirm-close-btn" onclick="submitClose()" class="modal-btn modal-btn--warn">Close Shift</button>
+                    <button id="close-back-btn" onclick="closeModalBack()" class="modal-btn modal-btn--secondary">Cancel</button>
+                    <button id="confirm-close-btn" onclick="closeModalNext()" class="modal-btn modal-btn--warn">Review</button>
                 </div>
             </div>
             <div class="modal-card__body">
-            <p class="text-gray-600 mb-4 text-sm">Count the cash in the drawer and enter the total. A final, immutable Z-Report will be generated.</p>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Cash Counted</label>
-            <input aria-label="Cash Counted" type="number" id="cash-counted-input" min="0" step="0.01" placeholder="0.00"
-                class="w-full border border-gray-300 rounded-lg px-3 py-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-orange-400 mb-2">
+            <!-- FEATURE-060 stage 1: entry. Expected cash is deliberately NOT
+                 shown anywhere in this flow — the count stays blind, so the
+                 figure entered is one the counter actually reached. -->
+            <div id="close-stage-entry">
+                <p class="text-gray-600 mb-4 text-sm">Count the cash in the drawer and enter the total. A final, immutable Z-Report will be generated.</p>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Cash Counted</label>
+                <input aria-label="Cash Counted" type="number" id="cash-counted-input" min="0" step="0.01" placeholder="0.00"
+                    class="w-full border border-gray-300 rounded-lg px-3 py-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-orange-400 mb-2">
+            </div>
+            <!-- FEATURE-060 stage 2: read the figure back before it is final.
+                 A mistyped digit used to become a permanent shortage against
+                 the cashier with no way to correct it. -->
+            <div id="close-stage-confirm" class="hidden">
+                <p class="text-gray-600 mb-3 text-sm">Confirm the amount you counted. This cannot be changed afterwards.</p>
+                <div class="text-center mb-3">
+                    <div id="confirm-amount" class="text-3xl font-bold text-gray-800"></div>
+                    <div class="text-gray-500 text-sm mt-1">Cash counted</div>
+                </div>
+            </div>
+            <!-- FEATURE-060 stage 3: the result. Expected/over-short appear
+                 only AFTER the count is committed, so they cannot anchor the
+                 count — but the counter still sees the outcome immediately,
+                 while the drawer and their memory are both still fresh. -->
+            <div id="close-stage-result" class="hidden">
+                <div class="text-center mb-3">
+                    <div id="result-headline" class="text-xl font-bold mb-2"></div>
+                    <div id="result-detail" class="text-gray-600 text-sm"></div>
+                </div>
+                <p id="result-note" class="text-gray-500 text-sm"></p>
+            </div>
             <p id="modal-error" class="hidden text-red-600 text-sm mb-2"></p>
             </div>
         </div>
@@ -299,11 +325,104 @@
             } catch (e) { /* non-fatal — leave button enabled, server re-checks */ }
         }
 
-        // --- Close-shift modal flow ---
+        // --- Close-shift modal flow (FEATURE-060: entry -> confirm -> result) ---
+        // Stage is tracked explicitly rather than inferred from the DOM so the
+        // primary button can never submit while the entry stage is showing.
+        let closeStage = 'entry';
+
+        function setCloseStage(stage) {
+            closeStage = stage;
+            const entry = document.getElementById('close-stage-entry');
+            const confirm = document.getElementById('close-stage-confirm');
+            const primary = document.getElementById('confirm-close-btn');
+            const back = document.getElementById('close-back-btn');
+            document.getElementById('modal-error').classList.add('hidden');
+            if (stage === 'entry') {
+                entry.classList.remove('hidden');
+                confirm.classList.add('hidden');
+                primary.textContent = 'Review';
+                back.textContent = 'Cancel';
+            } else {
+                entry.classList.add('hidden');
+                confirm.classList.remove('hidden');
+                primary.textContent = 'Close Shift';
+                back.textContent = 'Back';
+            }
+        }
+
         function openCloseModal() {
             document.getElementById('cash-counted-input').value = '';
-            document.getElementById('modal-error').classList.add('hidden');
+            document.getElementById('confirm-close-btn').disabled = false;
+            setCloseStage('entry');
             document.getElementById('close-modal').classList.remove('hidden');
+        }
+
+        function closeModalBack() {
+            // From the confirm stage, go back and edit rather than cancelling
+            // outright — a wrong digit spotted here should be cheap to fix.
+            if (closeStage === 'confirm') { setCloseStage('entry'); return; }
+            closeCloseModal();
+        }
+
+        function showCloseResult(z) {
+            const os = parseFloat(z.over_short);
+            const headline = document.getElementById('result-headline');
+            const detail = document.getElementById('result-detail');
+            const note = document.getElementById('result-note');
+
+            document.getElementById('close-stage-entry').classList.add('hidden');
+            document.getElementById('close-stage-confirm').classList.add('hidden');
+            document.getElementById('close-stage-result').classList.remove('hidden');
+            document.getElementById('modal-error').classList.add('hidden');
+
+            if (!isNaN(os) && Math.abs(os) >= 0.01) {
+                const over = os > 0;
+                headline.textContent = (over ? 'Over by ' : 'Short by ') + fmt(Math.abs(os));
+                headline.className = 'text-xl font-bold mb-2 ' +
+                    (over ? 'text-blue-600' : 'text-red-600');
+                note.textContent = over
+                    ? 'There is more cash in the drawer than the sales account for. Tell your manager before leaving.'
+                    : 'There is less cash than the sales account for. If cash was taken out or a customer has an unpaid tab, tell your manager so it can be recorded.';
+            } else {
+                headline.textContent = 'Drawer balanced';
+                headline.className = 'text-xl font-bold mb-2 text-green-600';
+                note.textContent = '';
+            }
+            detail.textContent = 'Counted ' + fmt(z.cash_counted) +
+                ' · Expected ' + fmt(z.cash_expected);
+
+            // The Z is already final at this point, so there is nothing to go
+            // back to — one acknowledge button only.
+            document.getElementById('close-back-btn').classList.add('hidden');
+            const primary = document.getElementById('confirm-close-btn');
+            primary.textContent = 'Done';
+            primary.disabled = false;
+            primary.onclick = function () {
+                const role = getUserRole();
+                // ISSUE-108: cashier returns to POS index; manager sees Z detail.
+                // Kept as an if-block, not a ternary: test_zreport_access
+                // guards this literal, and the redirect it protects is real.
+                if (role === 'cashier') {
+                    window.location.href = '/';
+                } else {
+                    window.location.href = `zreport.html?z=${z.z_counter}`;
+                }
+            };
+        }
+
+        function closeModalNext() {
+            if (closeStage === 'entry') {
+                const raw = document.getElementById('cash-counted-input').value.trim();
+                const val = parseFloat(raw);
+                if (raw === '' || isNaN(val) || val < 0) {
+                    modalErr('Enter a valid cash amount (0 or more).');
+                    return;
+                }
+                document.getElementById('confirm-amount').textContent = fmt(val);
+                setCloseStage('confirm');
+                return;
+            }
+            submitClose();
         }
         function closeCloseModal() {
             document.getElementById('close-modal').classList.add('hidden');
@@ -337,14 +456,11 @@
                 });
                 const data = await res.json().catch(() => ({}));
                 if (res.status === 201) {
-                    closeCloseModal();
-                    // ISSUE-108: cashier returns to POS index; manager/admin sees Z detail.
-                    const role = getUserRole();
-                    if (role === 'cashier') {
-                        window.location.href = '/';
-                    } else {
-                        window.location.href = `zreport.html?z=${data.z_counter}`;
-                    }
+                    // FEATURE-060: show the outcome instead of redirecting
+                    // straight out. A cashier used to never see their own
+                    // over/short — the first they heard of a discrepancy was
+                    // being asked about it later.
+                    showCloseResult(data);
                     return;
                 }
                 // ISSUE-105: MIN is no longer a close-shift blocker.
