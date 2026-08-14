@@ -2933,8 +2933,18 @@ def period_report(request):
     """FEATURE-013 / ISSUE-118: period report, now weekly-first.
 
     ?week=YYYY-MM-DD (any date inside the week) → Weekly Performance Report:
-    Sat–Fri PHT, finalized ZReports + live open-shift data for today, payment
-    mix, top items, and week-over-week delta (see _weekly_report).
+    Sat–Fri PHT, payment mix, top items, and week-over-week delta (see
+    _weekly_report).
+
+    ⚠ FLAG-082, resolved — this docstring used to say the weekly view read
+    "finalized ZReports + live open-shift data for today". It no longer does.
+    Report-basis fix (#2) moved the ENTIRE weekly money path onto
+    _aggregate_transactions, which attributes every sale to the PHT day it was
+    actually rung. That removed the basis mismatch FLAG-082 described (headline
+    gross/net from ZReport rows vs COGS/profit from live transactions): both
+    now come from the same source. ZReport.business_date is the shift's OPEN
+    date, so a midnight-spanning shift mis-filed a whole day's sales — and PROD
+    routinely runs 14-31 hour shifts, so that was not hypothetical.
 
     ?from=&to= keeps the original FEATURE-013 contract: aggregates across the
     immutable ZReports whose business_date (PHT-localdate of the shift's
