@@ -215,6 +215,8 @@ class PosTransactionViewSet(viewsets.ViewSet):
                         'method': pl.method,
                         'amount': float(pl.amount),
                         'note': pl.note or '',
+                        # FEATURE-065: house (a cost) vs charge (a debt).
+                        'credit_kind': pl.credit_kind or '',
                     }
                     for pl in transaction.payment_lines.all()
                 ],
@@ -1718,6 +1720,10 @@ def get_business_profile(request):
         'promo_discount_enabled': profile.promo_discount_enabled,
         'track_inventory': profile.track_inventory,
         'ingredient_management_enabled': profile.ingredient_management_enabled,
+        # FEATURE-065: which way an unpaid sale leans at THIS shop. The
+        # register reads it so "default to house" stays per-shop config
+        # rather than a constant baked into the kiosk.
+        'default_credit_kind': profile.default_credit_kind,
         # FEATURE-011-B: BIR identity (display-only; Session C/D consume these)
         'machine_identification_number': profile.machine_identification_number,
         'machine_serial_number': profile.machine_serial_number,
@@ -1741,6 +1747,8 @@ def update_business_profile(request):
     from .models import BusinessProfile
     profile = BusinessProfile.get_instance()
     fields = ['business_name', 'tagline', 'contact_number', 'email', 'address', 'tin', 'receipt_header', 'receipt_footer', 'low_stock_threshold', 'printer_ip', 'printer_port', 'printer_mode', 'paper_width', 'printer_font', 'color_scheme', 'logo', 'vat_enabled', 'vat_rate', 'vat_inclusive', 'currency', 'sc_discount_enabled', 'sc_discount_rate', 'pwd_discount_enabled', 'pwd_discount_rate', 'promo_discount_enabled', 'track_inventory', 'ingredient_management_enabled',
+              # FEATURE-065: per-shop default for an unpaid sale.
+              'default_credit_kind',
               # FEATURE-011-B: BIR identity fields
               'machine_identification_number', 'machine_serial_number',
               'pos_accreditation_number', 'pos_permit_number',
@@ -2410,6 +2418,9 @@ def _aggregate_zreports(d_from, d_to):
         # mix stops summing to the total and the gap looks like a bug in the
         # report rather than money someone owes the shop.
         'gcash': _Dec('0'), 'maya': _Dec('0'), 'credit': _Dec('0'),
+        # FEATURE-065: from the Z's own frozen figures — credit_extended is
+        # charge-only as of this ticket, house_consumption is its counterpart.
+        'house': _Dec('0'), 'charge': _Dec('0'),
     }
     txn_count = void_count = 0
     daily = []
@@ -2421,6 +2432,8 @@ def _aggregate_zreports(d_from, d_to):
         totals['net'] += z.net_sales
         for method in ('cash', 'card', 'gcash', 'maya', 'credit'):
             totals[method] += _Dec(str(pb.get(method) or 0))
+        totals['charge'] += _Dec(str(z.credit_extended or 0))
+        totals['house'] += _Dec(str(getattr(z, 'house_consumption', 0) or 0))
         txn_count += z.transaction_count
         void_count += z.voided_count
         daily.append({
@@ -2472,6 +2485,8 @@ def _aggregate_transactions(d_from, d_to):
         'net': _Dec('0'), 'cash': _Dec('0'), 'card': _Dec('0'),
         # FEATURE-059-FU: see the note in the ZReport-based aggregation above.
         'gcash': _Dec('0'), 'maya': _Dec('0'), 'credit': _Dec('0'),
+        # FEATURE-065: breakdown of 'credit' — these two sum to it.
+        'house': _Dec('0'), 'charge': _Dec('0'),
     }
     by_day = {}
 
@@ -2511,6 +2526,16 @@ def _aggregate_transactions(d_from, d_to):
               .values('method').annotate(total=Sum('amount'))):
         if r['method'] in ('cash', 'card', 'gcash', 'maya', 'credit'):
             totals[r['method']] += _Dec(str(r['total'] or 0))
+
+    # FEATURE-065: split the credit tender into what the shop expects back
+    # (charge) and what it simply consumed (house). `credit` above stays the
+    # SUM of both so the payment mix still reconciles to net sales; these two
+    # are the breakdown, and house is the figure the owner cannot see today.
+    for r in (PaymentLine.objects
+              .filter(transaction__in=sales, method='credit')
+              .values('credit_kind').annotate(total=Sum('amount'))):
+        key = 'house' if r['credit_kind'] != 'charge' else 'charge'
+        totals[key] += _Dec(str(r['total'] or 0))
 
     return totals, txn_count, void_count, by_day
 
@@ -3002,6 +3027,10 @@ def _weekly_payload(week_param):
             # FEATURE-059-FU: goods sold, not paid for. Reported so the mix
             # reconciles to net sales; deliberately NOT counted as cash.
             'credit_total': _money(totals['credit']),
+            # FEATURE-065: the breakdown — house is consumption (a cost the
+            # owner cannot otherwise see), charge is a real receivable.
+            'house_total': _money(totals['house']),
+            'charge_total': _money(totals['charge']),
             'transaction_count': txn_count,
             'void_count': void_count,
             'avg_ticket': _avg_ticket(totals['gross'], txn_count),
@@ -3092,6 +3121,10 @@ def period_report(request):
             # FEATURE-059-FU: goods sold, not paid for. Reported so the mix
             # reconciles to net sales; deliberately NOT counted as cash.
             'credit_total': _money(totals['credit']),
+            # FEATURE-065: the breakdown — house is consumption (a cost the
+            # owner cannot otherwise see), charge is a real receivable.
+            'house_total': _money(totals['house']),
+            'charge_total': _money(totals['charge']),
             'transaction_count': txn_count,
             'void_count': void_count,
         },

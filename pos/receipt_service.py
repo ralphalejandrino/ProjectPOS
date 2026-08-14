@@ -361,31 +361,38 @@ def print_z_report(z_report):
             # FEATURE-059: receivables opened/closed this shift. Shown apart
             # from the cash block because credit is owed money, not drawer
             # money — folding it in is exactly the confusion this ticket fixes.
+            # FEATURE-065: and split by kind, because "owed" and "consumed"
+            # are different facts. A tab the shop expects back is an asset; the
+            # owner's family drinking the stock is a COST. Printing them as one
+            # number is what makes A/R grow forever and never clear.
             _cr_ext = getattr(z_report, 'credit_extended', 0) or 0
             _cr_set = getattr(z_report, 'credit_settled', 0) or 0
-            if _cr_ext or _cr_set:
+            _house = getattr(z_report, 'house_consumption', 0) or 0
+            if _cr_ext or _cr_set or _house:
                 p.text(_thermal_rule(RECEIPT_WIDTH) + '\n')
-                if _cr_ext:
-                    p.text(rrow('Credit Extended:', money(_cr_ext)))
-                    # FEATURE-059-FU: itemise WHO owes it. A bare total tells
-                    # the owner money is owed but not by whom, and an unnamed
-                    # receivable is one nobody collects. Indented under the
-                    # total so it reads as a breakdown, not more tenders.
-                    try:
-                        from .services import credit_lines_for_shift
-                        _cr_rows = credit_lines_for_shift(
-                            getattr(z_report, 'shift', None)
-                        )
-                    except Exception:
-                        _cr_rows = []
+
+                try:
+                    from .services import credit_lines_for_shift
+                    _cr_rows = credit_lines_for_shift(
+                        getattr(z_report, 'shift', None)
+                    )
+                except Exception:
+                    _cr_rows = []
+
+                def _itemise(kind):
+                    """Indented breakdown under a total, one line per debt.
+
+                    Width guard: the label must not push the amount off 32-col
+                    paper. FEATURE-064 shipped a footer legend that overran at
+                    33 chars, so this is measured, not assumed.
+                    """
                     for _row in _cr_rows:
+                        if _row.get('kind') != kind:
+                            continue
                         _amt = money(_row['amount'])
-                        # Width guard: the label must not push the amount off
-                        # 32-col paper. FEATURE-064 shipped a footer legend
-                        # that overran at 33 chars, so this is measured, not
-                        # assumed. 2 leading spaces + 1 minimum gap.
                         _budget = RECEIPT_WIDTH - len(_amt) - 3
-                        _label = _row['note'] or _row['transaction_no'] or 'Unattributed'
+                        _label = (_row['note'] or _row['transaction_no']
+                                  or 'Unattributed')
                         # Hard truncation, no ellipsis — the house convention
                         # everywhere else in this file, and it keeps printed
                         # output pure ASCII (a '…' depends on the printer's
@@ -393,8 +400,15 @@ def print_z_report(z_report):
                         if _budget > 1:
                             _label = _label[:_budget]
                         p.text(rrow('  ' + _label, _amt))
+
+                if _cr_ext:
+                    p.text(rrow('Credit Extended:', money(_cr_ext)))
+                    _itemise('charge')
                 if _cr_set:
                     p.text(rrow('Credit Settled:', money(_cr_set)))
+                if _house:
+                    p.text(rrow('House Consumption:', money(_house)))
+                    _itemise('house')
 
             # --- Stock movement (FEATURE-008) ---
             # Read live from the IngredientLog ledger; skip the block entirely
@@ -585,9 +599,14 @@ def build_weekly_report_lines(payload, profile):
     for label, key in (('Cash', 'cash_total'), ('GCash', 'gcash_total'),
                        ('Maya', 'maya_total'), ('Card', 'card_total')):
         lines.append(rrow(f'  {label}:', money(s[key])))
-    _credit = s.get('credit_total') or 0
-    if Decimal(str(_credit)) != Decimal('0'):
-        lines.append(rrow('  Credit (unpaid):', money(_credit)))
+    # FEATURE-065: the two halves, not one "Credit" lump — a tab the shop
+    # expects back and stock the house drank are different facts. They sum to
+    # credit_total, so the mix still reconciles to net sales.
+    for _lbl, _key in (('Credit (to collect)', 'charge_total'),
+                       ('House (consumed)', 'house_total')):
+        _v = s.get(_key) or 0
+        if Decimal(str(_v)) != Decimal('0'):
+            lines.append(rrow(f'  {_lbl}:', money(_v)))
 
     # ISSUE-121-FU-B: restock cost (expense side) — per-ingredient summary.
     rc = payload.get('restock_costs') or {}

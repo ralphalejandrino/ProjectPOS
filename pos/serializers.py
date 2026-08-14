@@ -323,7 +323,7 @@ class PaymentLineSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = PaymentLine
-        fields = ['method', 'amount', 'note']
+        fields = ['method', 'amount', 'note', 'credit_kind']
 
 
 class PosTransactionSerializer(serializers.ModelSerializer):

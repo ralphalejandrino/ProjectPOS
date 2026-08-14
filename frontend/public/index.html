@@ -230,11 +230,39 @@
                 📒 Credit
             </button>
             <div id="credit-panel" class="hidden bg-amber-100 text-gray-800 px-4 py-3 rounded mb-4 text-sm">
-                No cash will be recorded for this sale. Stock still moves and
-                the amount is tracked as owed, so the drawer will not read short.
+                <!-- FEATURE-065: the wording follows the kind. Telling the
+                     cashier a house sale is "tracked as owed" is the exact
+                     confusion this ticket removes — nobody is going to be
+                     billed for the owner's family drinking the stock. -->
+                <span id="credit-explainer">
+                    No cash will be recorded for this sale. Stock still moves
+                    and this is recorded as house consumption, so the drawer
+                    will not read short.
+                </span>
                 <!-- FEATURE-059-FU: who owes it. Without this the shift's Z
                      shows that money is owed but not by whom, and an unnamed
                      receivable is one nobody ever collects. -->
+                <!-- FEATURE-065: is this money coming back? At PROD the usual
+                     answer is no — the clinic is the owner's family — so the
+                     default comes from the shop's own setting rather than
+                     being hardcoded. House is a COST; charge is a receivable.
+                     Two buttons, not a dropdown: it is a binary fact and the
+                     register is a touchscreen. -->
+                <div class="mt-3">
+                    <span class="block text-sm font-medium">Will this be paid back?</span>
+                    <div class="grid grid-cols-2 gap-2 mt-1" id="credit-kind-group">
+                        <button type="button" id="credit-kind-house"
+                                data-kind="house" onclick="setCreditKind('house')"
+                                class="touch-target-pos w-full py-2 rounded-lg text-sm font-semibold border-2 transition">
+                            No — House
+                        </button>
+                        <button type="button" id="credit-kind-charge"
+                                data-kind="charge" onclick="setCreditKind('charge')"
+                                class="touch-target-pos w-full py-2 rounded-lg text-sm font-semibold border-2 transition">
+                            Yes — Charge
+                        </button>
+                    </div>
+                </div>
                 <label class="block mt-3 text-sm font-medium" for="credit-note-input">
                     Who is this for? <span class="text-gray-600">(optional)</span>
                 </label>
@@ -635,6 +663,49 @@
 
         function toggleCredit() { setCredit(!creditActive()); }
 
+        // FEATURE-065: house (a cost) vs charge (a receivable). Held in a
+        // module variable rather than read back off the DOM classes, so the
+        // posted value can never depend on whether a style class survived.
+        let _creditKind = 'house';
+
+        function creditKind() { return _creditKind; }
+
+        function setCreditKind(kind) {
+            _creditKind = (kind === 'charge') ? 'charge' : 'house';
+            const on = 'bg-amber-100 border-amber-500 text-amber-800';
+            const off = 'bg-white border-gray-300 text-gray-500';
+            for (const k of ['house', 'charge']) {
+                const el = document.getElementById('credit-kind-' + k);
+                if (!el) continue;
+                const sel = (k === _creditKind);
+                el.className =
+                    'touch-target-pos w-full py-2 rounded-lg text-sm font-semibold '
+                    + 'border-2 transition ' + (sel ? on : off);
+                el.setAttribute('aria-pressed', sel ? 'true' : 'false');
+            }
+            const ex = document.getElementById('credit-explainer');
+            if (ex) {
+                ex.textContent = (_creditKind === 'charge')
+                    ? 'No cash will be recorded for this sale. Stock still '
+                      + 'moves and the amount is tracked as owed, so the '
+                      + 'drawer will not read short.'
+                    : 'No cash will be recorded for this sale. Stock still '
+                      + 'moves and this is recorded as house consumption, so '
+                      + 'the drawer will not read short.';
+            }
+        }
+
+        // The shop's default, NOT a constant: defaulting to "house" is PROD's
+        // business rule (the clinic is the owner's family). Somewhere that
+        // runs real tabs would set 'charge' and this reads it without a code
+        // change. Falls back to house if the profile has not loaded.
+        function defaultCreditKind() {
+            try {
+                const p = JSON.parse(localStorage.getItem('biz_profile') || '{}');
+                return p.default_credit_kind === 'charge' ? 'charge' : 'house';
+            } catch (e) { return 'house'; }
+        }
+
         function setCredit(on) {
             const hide = (id, h) => {
                 const el = document.getElementById(id);
@@ -702,6 +773,11 @@
             setCredit(false);
             const note = document.getElementById('credit-note-input');
             if (note) note.value = '';
+            // FEATURE-065: back to the shop default every time. A kind left
+            // over from the last sale would misclassify this one — booking a
+            // real debt as house writes it off silently, and the reverse
+            // grows an A/R that will never be collected.
+            setCreditKind(defaultCreditKind());
         }
 
         async function completeCashSale() {
@@ -750,7 +826,10 @@
                 // FEATURE-059-FU: carry the attribution onto the credit tender
                 // so the Z report can itemise WHO owes the money.
                 const _note = (document.getElementById('credit-note-input')?.value || '').trim();
-                paymentLines = [{ method: 'credit', amount: +total.toFixed(2), note: _note }];
+                paymentLines = [{
+                    method: 'credit', amount: +total.toFixed(2),
+                    note: _note, credit_kind: creditKind(),
+                }];
             }
 
             // Sync discount ID from DOM so success modal can display it

@@ -601,9 +601,21 @@
                         // anonymous — the very thing the note exists to fix.
                         const line = (t.payment_lines || []).find(l => l.method === 'credit');
                         const who = line && line.note ? escapeHtml(line.note) : 'Not recorded';
-                        return `
+                        // FEATURE-065: a cost the shop absorbed vs a debt it
+                        // expects back. Reading "Owed by" on a house sale
+                        // would be the same wrong story the split fixes.
+                        const isCharge = line && line.credit_kind === 'charge';
+                        const kindRow = `
                             <div class="flex justify-between text-sm">
-                                <span class="text-gray-500">Owed by:</span>
+                                <span class="text-gray-500">Type:</span>
+                                <span class="text-gray-800 font-medium">${
+                                    isCharge ? 'Charge — to be settled'
+                                             : 'House — owner / family / staff'}</span>
+                            </div>`;
+                        return `
+                            ${kindRow}
+                            <div class="flex justify-between text-sm">
+                                <span class="text-gray-500">${isCharge ? 'Owed by:' : 'Consumed by:'}</span>
                                 <span class="text-gray-800 font-medium">${who}</span>
                             </div>
                             <div class="flex justify-between text-sm">

@@ -705,6 +705,33 @@ class PaymentLine(models.Model):
     # ledger without a join.
     note = models.CharField(max_length=200, blank=True, default='')
 
+    # FEATURE-065: is this money actually coming back?
+    #
+    # Ralph, 2026-08-14: PROD's clinic tab will almost certainly never be paid —
+    # the family that runs the clinic owns the cafe. A debt that will never be
+    # collected is not a receivable, it is CONSUMPTION, and calling it a
+    # receivable corrupts three things at once: "Credit Extended" accumulates
+    # forever and never clears (so the owner learns to ignore it), net sales
+    # carries revenue that will never arrive, and — because the milk and cups
+    # really were used — COGS is real while the matching revenue is not, so
+    # the margin reads better than it is.
+    #
+    # KIND_HOUSE is the default (Ralph's call), resolved from
+    # BusinessProfile.default_credit_kind rather than hardcoded: defaulting to
+    # "house" is PROD's business rule, and on a shop that runs genuine
+    # collectible tabs the same default would silently write off real debts.
+    #
+    # Blank on every non-credit tender — a cash line has no such concept.
+    KIND_HOUSE = 'house'
+    KIND_CHARGE = 'charge'
+    CREDIT_KIND_CHOICES = [
+        (KIND_HOUSE, 'House (owner / family / staff)'),
+        (KIND_CHARGE, 'Charge (to be settled)'),
+    ]
+    credit_kind = models.CharField(
+        max_length=8, blank=True, default='', choices=CREDIT_KIND_CHOICES
+    )
+
     class Meta:
         constraints = [
             models.CheckConstraint(
@@ -962,6 +989,21 @@ class BusinessProfile(models.Model):
     # no sale/costing math changes. Default on (café/restaurant default).
     ingredient_management_enabled = models.BooleanField(
         default=True, verbose_name='Ingredient & Recipe Management'
+    )
+    # FEATURE-065: which way an unpaid sale leans by default.
+    #
+    # At PROD the answer is 'house' — the clinic taking drinks is the owner's
+    # own family, so the money is not coming back. That is a property of THIS
+    # shop, not of the product: on a business that runs genuine collectible
+    # tabs the same default would silently write off real debts. So it lives
+    # here as per-shop config rather than as a constant in the register.
+    default_credit_kind = models.CharField(
+        max_length=8, default='house',
+        choices=[
+            ('house', 'House (owner / family / staff)'),
+            ('charge', 'Charge (to be settled)'),
+        ],
+        verbose_name='Default Credit Kind',
     )
     vat_enabled = models.BooleanField(default=False, verbose_name='VAT Enabled')
     vat_rate = models.DecimalField(max_digits=5, decimal_places=2, default=12.0, verbose_name='VAT Rate (%)')
@@ -1222,8 +1264,16 @@ class ZReport(models.Model):
     # settled in cash during it. Reported, never folded into cash_expected —
     # extended credit is a receivable, and its settlement is already counted
     # once via cash_paid_in.
+    # FEATURE-065: credit_extended now counts CHARGE tenders only — money the
+    # shop actually expects back. House consumption (owner / family / staff)
+    # is a separate figure below, because it is a cost, not an asset: rolling
+    # it into a receivable makes A/R grow forever and never clear.
     credit_extended = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     credit_settled = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    # FEATURE-065: goods consumed by the house. Reported so the owner can see
+    # a cost he currently cannot see at all; never a receivable, and never in
+    # cash_expected (nothing was tendered either way).
+    house_consumption = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     cash_expected = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     cash_counted = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     # FEATURE-061: WHEN the drawer was actually counted, which is not the same

@@ -917,7 +917,12 @@ class WeeklyCreditFeature059FUTests(APITestCase):
         self.assertIsNone(error)
         text = '\n'.join(build_weekly_report_lines(payload, self.bp))
 
-        self.assertIn('Credit', text)
+        # FEATURE-065 changed what this prints, deliberately: `_sell_credit`
+        # passes no kind, so the shop default ('house') applies and the line
+        # reads "House (consumed)" rather than a generic "Credit". The
+        # property under test is unchanged — an unpaid sale must reach the
+        # printed weekly and carry its amount.
+        self.assertIn('House (consumed)', text)
         self.assertIn('100.00', text)
 
     def test_NEGATIVE_CONTROL_thermal_omits_credit_on_a_cash_only_week(self):
@@ -934,3 +939,114 @@ class WeeklyCreditFeature059FUTests(APITestCase):
         text = '\n'.join(build_weekly_report_lines(payload, self.bp))
 
         self.assertNotIn('Credit', text)
+
+
+class WeeklyHouseVsChargeFeature065Tests(WeeklyCreditFeature059FUTests):
+    """FEATURE-065 in the weekly report.
+
+    Inherits the FEATURE-059-FU setup so every property proved there — the mix
+    reconciling to net sales, cash flow excluding credit — is re-run against
+    the split, not replaced by it.
+    """
+
+    def _sell_credit_kind(self, qty, kind, note='Clinic'):
+        return create_pos_transaction(
+            [{'item_id': self.coffee.id, 'quantity': qty}],
+            'credit', cashier=self.cashier,
+            payment_lines=[{
+                'method': 'credit',
+                'amount': str(Decimal('50.00') * qty),
+                'note': note,
+                'credit_kind': kind,
+            }],
+        )
+
+    def test_house_and_charge_are_reported_apart(self):
+        self._open_shift()
+        self._sell_cash(4)                        # 200 cash
+        self._sell_credit_kind(2, 'house')        # 100 consumed
+        self._sell_credit_kind(1, 'charge')       # 50 owed
+
+        s = self.client.get(self._this_week()).data['summary']
+
+        self.assertEqual(Decimal(s['house_total']), Decimal('100.00'))
+        self.assertEqual(Decimal(s['charge_total']), Decimal('50.00'))
+
+    def test_the_two_kinds_SUM_to_credit_total(self):
+        """The split must be a breakdown, not a leak — otherwise the mix stops
+        reconciling to net sales again."""
+        self._open_shift()
+        self._sell_cash(4)
+        self._sell_credit_kind(2, 'house')
+        self._sell_credit_kind(1, 'charge')
+
+        s = self.client.get(self._this_week()).data['summary']
+
+        self.assertEqual(
+            Decimal(s['house_total']) + Decimal(s['charge_total']),
+            Decimal(s['credit_total']),
+        )
+
+    def test_the_mix_STILL_sums_to_net_sales_with_both_kinds(self):
+        self._open_shift()
+        self._sell_cash(4)
+        self._sell_credit_kind(2, 'house')
+        self._sell_credit_kind(1, 'charge')
+
+        s = self.client.get(self._this_week()).data['summary']
+        mix = (Decimal(s['cash_total']) + Decimal(s['gcash_total'])
+               + Decimal(s['maya_total']) + Decimal(s['card_total'])
+               + Decimal(s['house_total']) + Decimal(s['charge_total']))
+
+        self.assertEqual(Decimal(s['net_total']), Decimal('350.00'))
+        self.assertEqual(mix, Decimal(s['net_total']))
+
+    def test_net_cash_flow_excludes_BOTH_kinds(self):
+        """🔴 Neither is cash. House is consumed and charge has not been paid
+        yet — counting either as inflow overstates what the shop can spend."""
+        self._open_shift()
+        self._sell_cash(4)                        # 200 real money
+        self._sell_credit_kind(2, 'house')
+        self._sell_credit_kind(1, 'charge')
+
+        data = self.client.get(self._this_week()).data
+
+        self.assertEqual(Decimal(data['summary']['net_total']), Decimal('350.00'))
+        self.assertEqual(Decimal(data['net_cash_flow']), Decimal('200.00'))
+
+    def test_thermal_weekly_prints_the_two_headings_apart(self):
+        from pos.views import _weekly_payload
+        from pos.receipt_service import build_weekly_report_lines
+        from django.utils import timezone
+
+        self._open_shift()
+        self._sell_cash(4)
+        self._sell_credit_kind(2, 'house')
+        self._sell_credit_kind(1, 'charge')
+
+        payload, error = _weekly_payload(f"{timezone.localdate():%Y-%m-%d}")
+        self.assertIsNone(error)
+        text = '\n'.join(build_weekly_report_lines(payload, self.bp))
+
+        self.assertIn('House (consumed)', text)
+        self.assertIn('Credit (to collect)', text)
+        self.assertIn('100.00', text)
+        self.assertIn('50.00', text)
+
+    def test_NEGATIVE_CONTROL_thermal_omits_the_heading_that_has_no_money(self):
+        """House-only week must not print an empty 'Credit (to collect)' line
+        implying the shop is owed something."""
+        from pos.views import _weekly_payload
+        from pos.receipt_service import build_weekly_report_lines
+        from django.utils import timezone
+
+        self._open_shift()
+        self._sell_cash(4)
+        self._sell_credit_kind(2, 'house')
+
+        payload, error = _weekly_payload(f"{timezone.localdate():%Y-%m-%d}")
+        self.assertIsNone(error)
+        text = '\n'.join(build_weekly_report_lines(payload, self.bp))
+
+        self.assertIn('House (consumed)', text)
+        self.assertNotIn('Credit (to collect)', text)

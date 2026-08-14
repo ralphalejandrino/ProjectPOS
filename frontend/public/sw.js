@@ -132,7 +132,10 @@
 // v155: FEATURE-059-FU — credit in the WEEKLY report. The payment mix
 // omitted it (so the mix stopped summing to net sales) and net cash flow
 // counted unpaid sales as cash. period.html changed.
-const CACHE_NAME = 'tarsierpos-v155'; // canonical cache version
+// v156: FEATURE-065 — credit splits into House (owner/family/staff, a cost)
+// and Charge (a real receivable), defaulting to House per BusinessProfile.
+// index.html, dashboard.html and period.html all changed.
+const CACHE_NAME = 'tarsierpos-v156'; // canonical cache version
 const ASSETS = [
   'index.html',
   'login.html',

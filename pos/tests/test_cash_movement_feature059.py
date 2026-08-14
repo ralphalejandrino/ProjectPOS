@@ -102,7 +102,15 @@ class CreditTenderTests(CashMovementTestBase):
 
         z = self._close(shift, Decimal('2000.00'))
 
-        self.assertEqual(z.credit_extended, Decimal('312.00'))
+        # FEATURE-065 split this field: `credit_extended` is now CHARGE only,
+        # and this sale takes no explicit kind so the shop default ('house')
+        # applies. The property under test is unchanged and asserted
+        # kind-agnostically — the ₱312 must be reported SOMEWHERE, whichever
+        # bucket it lands in. Silently dropping it is still the failure.
+        self.assertEqual(
+            z.credit_extended + z.house_consumption, Decimal('312.00')
+        )
+        self.assertEqual(z.house_consumption, Decimal('312.00'))
         self.assertEqual(z.payment_breakdown.get('credit'), '312.00')
 
     def test_mixed_cash_and_credit_splits_correctly(self):
@@ -114,7 +122,12 @@ class CreditTenderTests(CashMovementTestBase):
 
         self.assertEqual(z.cash_collected, Decimal('39.00'))
         self.assertEqual(z.cash_expected, Decimal('2039.00'))
-        self.assertEqual(z.credit_extended, Decimal('312.00'))
+        # FEATURE-065: charge + house, so this stays true regardless of which
+        # kind the shop defaults to. What matters here is that the ₱312 never
+        # reached cash_expected.
+        self.assertEqual(
+            z.credit_extended + z.house_consumption, Decimal('312.00')
+        )
         self.assertEqual(z.over_short, Decimal('0.00'))
         # Gross sales still counts the credit sale — goods did leave.
         self.assertEqual(z.gross_sales, Decimal('351.00'))

@@ -11,6 +11,7 @@ from .models import (
     Item, PosTransaction, PosTransactionItem, Shift,
     VariantOption, TransactionItemVariant,
     RecipeIngredient, Ingredient, IngredientLog, IngredientRestockLog, PaymentLine,
+    BusinessProfile,
 )
 import threading
 from .receipt_service import kick_cash_drawer
@@ -712,10 +713,14 @@ def credit_lines_for_shift(shift):
     one nobody collects. This itemises it: one row per credit tender, with
     the note the cashier attributed it to.
 
-    Returns ``[{'note': str, 'amount': Decimal, 'transaction_no': str}, ...]``
-    ordered oldest first, or ``[]`` when no credit was extended. Notes are
-    NOT aggregated by text: two separate tabs that happen to share a label
-    are two debts, and merging them would hide one of them.
+    Returns ``[{'note', 'amount', 'transaction_no', 'kind'}, ...]`` ordered
+    oldest first, or ``[]`` when no credit was extended. Notes are NOT
+    aggregated by text: two separate tabs that happen to share a label are two
+    debts, and merging them would hide one of them.
+
+    FEATURE-065: ``kind`` is 'house' or 'charge'. Both are listed — the owner
+    needs to see house consumption itemised just as much as a real tab, and
+    arguably more, since it is the one nobody is tracking.
 
     Mirrors ``stock_movements_for_shift``: seed transactions are excluded
     (FLAG-047) so a demo sale can never appear as a real debt, and the
@@ -735,6 +740,7 @@ def credit_lines_for_shift(shift):
             'note': line.note or '',
             'amount': line.amount,
             'transaction_no': getattr(line.transaction, 'transaction_no', '') or '',
+            'kind': line.credit_kind or 'house',
         }
         for line in lines
     ]
@@ -992,6 +998,27 @@ _PAYMENT_CENTS = Decimal('0.01')
 # CharField length — an overlong note would save fine locally and only fail if
 # the shop is ever moved to Postgres.
 _PAYMENT_NOTE_MAX = 200
+# FEATURE-065: house = consumption (never coming back), charge = a real tab.
+_VALID_CREDIT_KINDS = {'house', 'charge'}
+
+
+def _default_credit_kind():
+    """The shop's default for an unpaid sale — PROD's is 'house'.
+
+    Read from BusinessProfile so this stays per-shop config: defaulting to
+    'house' is PROD's business rule (the clinic is the owner's family), and on
+    a shop that runs genuine collectible tabs the same default would silently
+    write off real debts. Falls back to 'house' only if the profile is missing
+    or holds something unrecognised.
+    """
+    try:
+        bp = BusinessProfile.objects.first()
+        kind = getattr(bp, 'default_credit_kind', None)
+        if kind in _VALID_CREDIT_KINDS:
+            return kind
+    except Exception:
+        pass
+    return 'house'
 
 
 def _resolve_payment_lines(payment_lines, fallback_method, charged_total):
@@ -1004,7 +1031,7 @@ def _resolve_payment_lines(payment_lines, fallback_method, charged_total):
     to the charged total (net_total) within ±1 centavo of rounding tolerance.
 
     Returns ``(lines, primary_method)`` where ``lines`` is a list of
-    ``(method, Decimal amount, note)`` and ``primary_method`` is the method of
+    ``(method, Decimal amount, note, credit_kind)`` and ``primary_method`` is the method of
     the largest line (first on a tie) — persisted as
     PosTransaction.payment_method.
     Raises DRFValidationError on any invalid method, non-positive amount, or a
@@ -1022,7 +1049,8 @@ def _resolve_payment_lines(payment_lines, fallback_method, charged_total):
     )
     if not payment_lines:
         method = fallback_method if fallback_method in _VALID_PAYMENT_METHODS else 'cash'
-        return [(method, charged_total, '')], method
+        kind = _default_credit_kind() if method == 'credit' else ''
+        return [(method, charged_total, '', kind)], method
 
     parsed = []
     for line in payment_lines:
@@ -1040,9 +1068,19 @@ def _resolve_payment_lines(payment_lines, fallback_method, charged_total):
         # FEATURE-059-FU: truncate, never reject — see the docstring. A None
         # note is normalised to '' so the column is never NULL.
         note = (line.get('note') or '').strip()[:_PAYMENT_NOTE_MAX]
-        parsed.append((method, amount, note))
+        # FEATURE-065: only a credit tender has a kind, and an unrecognised
+        # value falls back to the shop's default rather than being rejected —
+        # a bad kind must never be the thing that stops a sale on a live
+        # register. Non-credit tenders carry '' (a cash line has no kind).
+        if method == 'credit':
+            kind = line.get('credit_kind')
+            if kind not in _VALID_CREDIT_KINDS:
+                kind = _default_credit_kind()
+        else:
+            kind = ''
+        parsed.append((method, amount, note, kind))
 
-    total = sum((a for _, a, _n in parsed), Decimal('0.00'))
+    total = sum((a for _, a, _n, _k in parsed), Decimal('0.00'))
     if abs(total - charged_total) > _PAYMENT_CENTS:
         raise DRFValidationError(
             f"Split payment total ({format_currency(total)}) must equal the "
@@ -1431,9 +1469,10 @@ def create_pos_transaction(items_data, payment_method, cashier=None, **kwargs):
         # one PaymentLine; split payments get one per method.
         PaymentLine.objects.bulk_create([
             PaymentLine(
-                transaction=transaction, method=method, amount=amount, note=note
+                transaction=transaction, method=method, amount=amount,
+                note=note, credit_kind=kind,
             )
-            for method, amount, note in payment_lines
+            for method, amount, note, kind in payment_lines
         ])
 
         # BUG-009: the receipt print is NO LONGER triggered here. This thread
@@ -1669,7 +1708,28 @@ def close_shift_and_finalize_z(shift_id, cash_counted, cashier_user):
     cash_paid_in = _mv_sum(
         CashMovement.KIND_CASH_IN, CashMovement.KIND_SETTLEMENT
     )
-    credit_extended = _pl('credit')
+    # FEATURE-065: split the credit tender by kind. `credit_extended` is now
+    # ONLY what the shop expects back; house consumption is reported beside it
+    # as the cost it actually is. Both stay out of cash_expected — neither
+    # tendered anything.
+    _credit_by_kind = {
+        r['credit_kind']: r['total']
+        for r in (
+            PaymentLine.objects
+            .filter(transaction__in=non_voided, method='credit')
+            .values('credit_kind')
+            .annotate(total=Sum('amount'))
+        )
+    }
+
+    def _ck(kind):
+        amt = _credit_by_kind.get(kind)
+        return (Decimal(str(amt)) if amt is not None else Decimal('0')).quantize(
+            _Z_CENTS, rounding=ROUND_HALF_UP
+        )
+
+    credit_extended = _ck('charge')
+    house_consumption = _ck('house')
     credit_settled = _mv_sum(CashMovement.KIND_SETTLEMENT)
 
     # Refunded cash left the drawer this shift, so it reduces what we expect.
@@ -1752,6 +1812,7 @@ def close_shift_and_finalize_z(shift_id, cash_counted, cashier_user):
         cash_paid_in=cash_paid_in,
         credit_extended=credit_extended,
         credit_settled=credit_settled,
+        house_consumption=house_consumption,
         cash_counted=counted,
         # FEATURE-061: stamp when the count actually happened. business_date is
         # the shift's OPEN date, so on a shift closed the next day the two

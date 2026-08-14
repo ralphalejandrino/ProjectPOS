@@ -85,7 +85,10 @@
             <div id="ncf-card" class="bg-white rounded-lg shadow-lg p-6 border-l-4 border-emerald-500">
                 <p class="text-sm text-gray-600 mb-1">Net Cash Flow</p>
                 <p id="sum-ncf" class="text-3xl font-bold text-emerald-600">—</p>
-                <p class="text-xs mt-1 text-gray-400">Sales − Restocks · cash basis</p>
+                <!-- FEATURE-059-FU/065: says "paid sales" deliberately. The
+                     figure now excludes credit (house and charge alike), so
+                     "Sales − Restocks" would describe the old, wrong maths. -->
+                <p class="text-xs mt-1 text-gray-400">Paid sales − Restocks · cash basis</p>
             </div>
         </div>
 
@@ -507,8 +510,14 @@
                 ['💵 Cash', s.cash_total], ['📱 GCash', s.gcash_total],
                 ['💳 Maya', s.maya_total], ['💳 Card', s.card_total],
             ];
-            if (parseFloat(s.credit_total || '0') > 0) {
-                methods.push(['📒 Credit (unpaid)', s.credit_total]);
+            // FEATURE-065: charge = a tab the shop expects back; house =
+            // owner/family/staff consumption, a cost rather than an asset.
+            // They sum to credit_total, so the mix still totals net sales.
+            if (parseFloat(s.charge_total || '0') > 0) {
+                methods.push(['📒 Credit (to collect)', s.charge_total]);
+            }
+            if (parseFloat(s.house_total || '0') > 0) {
+                methods.push(['🏠 House (consumed)', s.house_total]);
             }
             const mixTotal = methods.reduce((sum, [, v]) => sum + parseFloat(v), 0);
             document.getElementById('payment-mix').innerHTML = mixTotal

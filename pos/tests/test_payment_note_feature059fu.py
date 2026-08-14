@@ -218,7 +218,11 @@ class CreditLedgerForShiftTests(PaymentNoteTestBase):
 
         self.assertEqual(z.cash_expected, Decimal('2000.00'))
         self.assertEqual(z.over_short, Decimal('0.00'))
-        self.assertEqual(z.credit_extended, Decimal('312.00'))
+        # FEATURE-065: charge + house — kind-agnostic on purpose, since this
+        # test is about the NOTE not moving money, not about which bucket.
+        self.assertEqual(
+            z.credit_extended + z.house_consumption, Decimal('312.00')
+        )
 
 
 class CreditVisibleInTransactionDetailTests(PaymentNoteTestBase):
