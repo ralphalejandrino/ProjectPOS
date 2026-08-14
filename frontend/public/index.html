@@ -185,31 +185,6 @@
                 <div class="text-3xl font-bold text-blue-600" id="cash-total">0.00</div>
             </div>
 
-            <!-- FEATURE-059: goods handed over, nothing paid. Deliberately
-                 placed INSIDE the cash modal rather than as another payment
-                 button: it is not a tender the cashier picks between, it is
-                 what happens when the cash never arrives. Keeping it out of
-                 the main row also stops it being tapped by accident. -->
-            <label class="pos-toggle mb-4" id="cash-unpaid-toggle">
-                <input type="checkbox" id="cash-unpaid" class="sr-only" onchange="toggleUnpaid()">
-                <span class="pos-toggle__box" aria-hidden="true"></span>
-                <span>Unpaid — customer will pay later (charge to account)</span>
-            </label>
-            <div id="unpaid-note" class="hidden bg-amber-100 text-gray-800 px-4 py-3 rounded mb-4 text-sm">
-                No cash will be recorded for this sale. Stock still moves and
-                the amount is tracked as owed, so the drawer will not read short.
-                <!-- FEATURE-059-FU: who owes it. Without this the shift's Z
-                     shows that money is owed but not by whom, and an unnamed
-                     receivable is one nobody ever collects. -->
-                <label class="block mt-3 text-sm font-medium" for="unpaid-note-input">
-                    Who is this for? <span class="text-gray-600">(optional)</span>
-                </label>
-                <input type="text" id="unpaid-note-input" maxlength="200"
-                       class="w-full mt-1 px-3 py-3 border-2 border-gray-300 rounded-lg text-base focus:outline-none focus:border-blue-500"
-                       placeholder="e.g. Clinic, Doc's food, staff name"
-                       autocomplete="off">
-            </div>
-
             <div class="mb-4" id="cash-received-block">
                 <label class="block text-sm font-medium text-gray-700 mb-2">Cash Received:</label>
                 <input aria-label="Cash Received" type="number" id="cash-received"
@@ -240,6 +215,33 @@
             <div id="cash-change-display" class="hidden bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
                 <div class="text-sm font-medium">Change:</div>
                 <div class="text-2xl font-bold" id="cash-change">0.00</div>
+            </div>
+
+            <!-- FEATURE-059: CREDIT — goods handed over, nothing paid.
+                 Sits with Split Payment and Apply Discount, in their exact
+                 shape, because it is the same kind of thing: a secondary way
+                 to settle this sale, not a tender in the main row. Ralph's
+                 call 2026-08-14 — the earlier bespoke toggle was the only
+                 control in the modal that looked like nothing else in it.
+                 Active state is a label swap ("✕ Cancel Credit"), matching
+                 Split Payment, rather than a restyle. -->
+            <button type="button" onclick="toggleCredit()" id="credit-toggle-btn"
+                    class="w-full mt-1 mb-2 py-1.5 border border-dashed border-gray-300 rounded-lg text-sm text-gray-500 hover:border-gray-400 hover:text-gray-700 transition">
+                📒 Credit — customer pays later
+            </button>
+            <div id="credit-panel" class="hidden bg-amber-100 text-gray-800 px-4 py-3 rounded mb-4 text-sm">
+                No cash will be recorded for this sale. Stock still moves and
+                the amount is tracked as owed, so the drawer will not read short.
+                <!-- FEATURE-059-FU: who owes it. Without this the shift's Z
+                     shows that money is owed but not by whom, and an unnamed
+                     receivable is one nobody ever collects. -->
+                <label class="block mt-3 text-sm font-medium" for="credit-note-input">
+                    Who is this for? <span class="text-gray-600">(optional)</span>
+                </label>
+                <input type="text" id="credit-note-input" maxlength="200"
+                       class="w-full mt-1 px-3 py-3 border-2 border-gray-300 rounded-lg text-base focus:outline-none focus:border-blue-500"
+                       placeholder="e.g. Clinic, Doc's food, staff name"
+                       autocomplete="off">
             </div>
 
             <!-- FEATURE-016: SPLIT PAYMENT (V1: cash + one other method) -->
@@ -397,18 +399,10 @@
             document.getElementById('cash-received').value = '';
             document.getElementById('cash-change-display').classList.add('hidden');
             document.getElementById('cash-insufficient').classList.add('hidden');
-            // FEATURE-059: 🔴 ALWAYS reset the unpaid flag on open. If it
-            // persisted between sales the NEXT customer would be silently rung
-            // as unpaid — money taken, nothing recorded against the drawer.
-            // That would be worse than the problem this feature fixes.
-            const _unpaid = document.getElementById('cash-unpaid');
-            if (_unpaid) { _unpaid.checked = false; toggleUnpaid(); }
-            // FEATURE-059-FU: clear the attribution with the flag, for the same
-            // reason the flag itself is reset — a note left over from the last
-            // sale would attach the WRONG customer to this one's debt, which is
-            // worse than no note at all.
-            const _unpaidNote = document.getElementById('unpaid-note-input');
-            if (_unpaidNote) _unpaidNote.value = '';
+            // FEATURE-059: 🔴 ALWAYS reset credit mode on open — the flag AND
+            // the attribution note. A note left over from the last sale would
+            // attach the WRONG customer to this one's debt.
+            resetCredit();
             document.getElementById('cash-received').focus();
         }
 
@@ -619,48 +613,95 @@
 
         let _paymentInProgress = false;
 
-        // FEATURE-059: an unpaid sale takes no cash, so the tender entry,
-        // quick-amounts and split payment are all irrelevant — hide them
-        // rather than leave controls that do nothing.
-        function toggleUnpaid() {
-            const on = document.getElementById('cash-unpaid').checked;
-            // FEATURE-059-FU: the visual state of .pos-toggle. Driven from JS
-            // rather than a CSS :checked selector because the amber
-            // peer-checked variants do not exist in the frozen Tailwind purge
-            // (no build step in this repo) and would be dead at runtime.
-            const tgl = document.getElementById('cash-unpaid-toggle');
-            if (tgl) tgl.classList.toggle('is-on', on);
+        // FEATURE-059 — CREDIT (charge to account).
+        //
+        // State is derived from whether the panel is open, exactly the way
+        // splitActive() reads #split-section. There is no hidden checkbox: a
+        // second source of truth for the same fact is how the two drift apart.
+        const CREDIT_LABEL_OFF = '📒 Credit — customer pays later';
+        const CREDIT_LABEL_ON  = '✕ Cancel Credit';
+
+        function creditActive() {
+            const p = document.getElementById('credit-panel');
+            return !!p && !p.classList.contains('hidden');
+        }
+
+        // Apply Discount is gated on the business profile (initModalDiscount
+        // shows it only when some discount type is enabled), so credit mode
+        // must restore what it found rather than blindly un-hiding it —
+        // otherwise turning credit off would reveal a button that shop has
+        // switched off. null = we have not hidden it during this cycle.
+        let _creditPrevDiscountHidden = null;
+
+        function toggleCredit() { setCredit(!creditActive()); }
+
+        function setCredit(on) {
             const hide = (id, h) => {
                 const el = document.getElementById(id);
                 if (el) el.classList.toggle('hidden', h);
             };
+
+            hide('credit-panel', !on);
+            const btn = document.getElementById('credit-toggle-btn');
+            if (btn) btn.textContent = on ? CREDIT_LABEL_ON : CREDIT_LABEL_OFF;
+
+            // A credit sale takes no cash, so every cash-entry control is
+            // meaningless — the field, the quick amounts, and "Exact amount".
             hide('cash-received-block', on);
             hide('cash-quick-buttons', on);
-            // FEATURE-059-FU: "Exact amount — no change" belongs to the cash
-            // entry too. FEATURE-059 hid the field, the quick amounts and
-            // split payment but missed this one because it had no id, so it
-            // sat there on an unpaid sale offering to fill a box that is not
-            // on screen. Caught by looking at the rendered modal, not by
-            // reading the code.
             hide('cash-exact-btn', on);
-            hide('unpaid-note', !on);
             hide('cash-insufficient', true);
+
+            const st = document.getElementById('split-toggle-btn');
+            const dBtn = document.getElementById('cash-discount-btn');
+
             if (on) {
                 hide('cash-change-display', true);
-                // Split payment makes no sense on an unpaid sale.
-                const st = document.getElementById('split-toggle-btn');
+                // Split payment makes no sense when nothing is tendered.
                 const ss = document.getElementById('split-section');
                 if (ss && !ss.classList.contains('hidden') && typeof toggleSplitPayment === 'function') {
                     toggleSplitPayment();
                 }
                 if (st) st.classList.add('hidden');
+
+                // Ralph 2026-08-14: hide Apply Discount on a credit sale.
+                // ⚠ Any discount already applied is CLEARED, deliberately —
+                // hiding the button while leaving a discount in place would
+                // leave money off the bill with no way to see or undo it.
+                if (dBtn) {
+                    if (_creditPrevDiscountHidden === null) {
+                        _creditPrevDiscountHidden = dBtn.classList.contains('hidden');
+                    }
+                    dBtn.classList.add('hidden');
+                }
+                hide('cash-discount-section', true);
+                if (typeof clearModalDiscount === 'function') clearModalDiscount('cash');
             } else {
-                const st = document.getElementById('split-toggle-btn');
                 if (st) st.classList.remove('hidden');
+                if (dBtn && _creditPrevDiscountHidden !== null) {
+                    dBtn.classList.toggle('hidden', _creditPrevDiscountHidden);
+                }
+                _creditPrevDiscountHidden = null;
                 calculateChange();
             }
-            const btn = document.getElementById('btn-complete-cash');
-            if (btn) btn.textContent = on ? 'Record Unpaid Sale' : 'Complete Sale';
+
+            const done = document.getElementById('btn-complete-cash');
+            // 'Record Credit Sale' is wide enough to wrap the modal title
+            // onto two lines; 'Record Credit' is unambiguous beside the panel
+            // that explains what is about to happen.
+            if (done) done.textContent = on ? 'Record Credit' : 'Complete Sale';
+        }
+
+        // 🔴 Called on every modal open. If credit persisted between sales the
+        // NEXT customer would be silently rung as unpaid — money taken,
+        // nothing recorded — which is worse than the bug this feature fixes.
+        function resetCredit() {
+            // Cleared FIRST so setCredit(false) does not restore a stale
+            // visibility over the state initModalDiscount has just set.
+            _creditPrevDiscountHidden = null;
+            setCredit(false);
+            const note = document.getElementById('credit-note-input');
+            if (note) note.value = '';
         }
 
         async function completeCashSale() {
@@ -676,7 +717,7 @@
             // never reaches cash_expected, so the drawer does not read short
             // for goods that were never paid for. That is the PROD clinic case
             // (OR-20260801-0232, PHP 312) which used to land on the cashier.
-            const isUnpaid = !!document.getElementById('cash-unpaid')?.checked;
+            const isCredit = creditActive();
             // FEATURE-016: build split payment lines when active. The cash
             // portion is the remainder; lines must sum to the total.
             let paymentLines = null;
@@ -696,19 +737,19 @@
                 ];
             }
             const cashDue = isSplit ? +(total - splitAmount()).toFixed(2) : total;
-            const received = isUnpaid ? 0 : (parseFloat(document.getElementById('cash-received').value) || 0);
-            const change = isUnpaid ? 0 : received - cashDue;
+            const received = isCredit ? 0 : (parseFloat(document.getElementById('cash-received').value) || 0);
+            const change = isCredit ? 0 : received - cashDue;
 
             // FEATURE-059: an unpaid sale tenders nothing, so the
             // insufficient-cash guard must not fire on it.
-            if (!isUnpaid && received < cashDue) {
+            if (!isCredit && received < cashDue) {
                 document.getElementById('cash-insufficient').classList.remove('hidden');
                 return;
             }
-            if (isUnpaid) {
+            if (isCredit) {
                 // FEATURE-059-FU: carry the attribution onto the credit tender
                 // so the Z report can itemise WHO owes the money.
-                const _note = (document.getElementById('unpaid-note-input')?.value || '').trim();
+                const _note = (document.getElementById('credit-note-input')?.value || '').trim();
                 paymentLines = [{ method: 'credit', amount: +total.toFixed(2), note: _note }];
             }
 
@@ -739,10 +780,10 @@
                                 option_id: s.option_id,
                             })),
                         })),
-                        payment_method: isUnpaid ? 'credit' : 'cash',
+                        payment_method: isCredit ? 'credit' : 'cash',
                         payment_lines: paymentLines,
-                        cash_received: isUnpaid ? null : received,
-                        change_given: isUnpaid ? null : change,
+                        cash_received: isCredit ? null : received,
+                        change_given: isCredit ? null : change,
                         total_amount: total,
                         discount_amount: window.cart.discountAmount || 0,
                         discount_type: window.cart.discountType || '',
