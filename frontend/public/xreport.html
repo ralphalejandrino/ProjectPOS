@@ -117,6 +117,25 @@
                 </table>
             </div>
 
+            <!-- Cash movements (FEATURE-059; added by the 2026-08-15 audit) —
+                 only shown when non-empty. The manager's mid-shift read had no
+                 sight of a collection or payout, which is precisely the money
+                 that makes a later count look short. -->
+            <details id="rpt-cash-section" class="hidden bg-white rounded-xl shadow p-4 mb-4" open>
+                <summary class="font-bold text-gray-700 text-sm uppercase tracking-wide cursor-pointer select-none">Cash Movements</summary>
+                <table class="w-full text-sm mt-3">
+                    <thead>
+                        <tr class="text-gray-500 border-b">
+                            <th class="text-left pb-2">Time</th>
+                            <th class="text-left pb-2">Type</th>
+                            <th class="text-left pb-2">Reason</th>
+                            <th class="text-right pb-2">Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody id="rpt-cash-movements"></tbody>
+                </table>
+            </details>
+
             <!-- Stock movement (FEATURE-008) — only shown when non-empty -->
             <details id="rpt-stock-section" class="hidden bg-white rounded-xl shadow p-4 mb-4" open>
                 <summary class="font-bold text-gray-700 text-sm uppercase tracking-wide cursor-pointer select-none">Stock Movement</summary>
@@ -198,6 +217,33 @@
 
         // FEATURE-008: render the stock-movement table; hide the whole section
         // when there is nothing to show.
+        // FEATURE-059 (audit 2026-08-15). Label and direction both come from the
+        // server (`kind_display`, `signed_amount`) rather than a map here — a
+        // duplicated enumeration in the client is how 'credit' ended up rendering
+        // as "Cash" on the dashboard.
+        function renderCashMovements(movements) {
+            const section = document.getElementById('rpt-cash-section');
+            const tbody = document.getElementById('rpt-cash-movements');
+            if (!Array.isArray(movements) || movements.length === 0) {
+                section.classList.add('hidden');
+                tbody.innerHTML = '';
+                return;
+            }
+            tbody.innerHTML = movements.map(m => {
+                const signed = parseFloat(m.signed_amount);
+                const out = signed < 0;
+                const who = m.created_by ? ` · ${escapeHtml(m.created_by)}` : '';
+                return `
+                <tr class="border-b last:border-0">
+                    <td class="py-2 text-gray-500">${fmtDatetime(m.created_at)}</td>
+                    <td class="py-2">${escapeHtml(m.kind_display || m.kind)}</td>
+                    <td class="py-2 text-gray-600">${escapeHtml(m.reason || '—')}${who}</td>
+                    <td class="py-2 text-right font-semibold ${out ? 'text-red-500' : 'text-green-600'}">${(out ? '− ' : '+ ') + fmt(Math.abs(signed))}</td>
+                </tr>`;
+            }).join('');
+            section.classList.remove('hidden');
+        }
+
         function renderStockMovements(movements) {
             const section = document.getElementById('rpt-stock-section');
             const tbody = document.getElementById('rpt-stock-movements');
@@ -258,7 +304,11 @@
                 document.getElementById('rpt-refund-total').textContent = fmt(data.refund_total || 0);
                 document.getElementById('rpt-avg').textContent = fmt(data.average_transaction);
 
-                const methodLabels = { cash: '💵 Cash', gcash: '💙 GCash', maya: '💚 Maya' };
+                // Audit 2026-08-15: this map was missing BOTH 'card' and 'credit',
+                // so those tenders rendered as a bare lowercase key on the
+                // manager's mid-shift read.
+                const methodLabels = { cash: '💵 Cash', gcash: '💙 GCash', maya: '💚 Maya',
+                                       card: '💳 Card', credit: '📒 Credit / Unpaid' };
                 const tbody = document.getElementById('rpt-by-method');
                 tbody.innerHTML = '';
                 data.by_payment_method.forEach(row => {
@@ -272,6 +322,7 @@
                 });
 
                 renderStockMovements(data.stock_movements);
+                renderCashMovements(data.cash_movements);
 
             } catch (err) {
                 statusArea.innerHTML = `

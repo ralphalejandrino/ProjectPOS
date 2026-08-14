@@ -77,7 +77,9 @@
     <script>
         loadSiteName();
 
-        const PAY_LABEL = { cash: '💵 Cash', gcash: '🔵 GCash', maya: '🟢 Maya', card: '💳 Card' };
+        // Audit 2026-08-15: 'credit' was missing and fell through to the raw key.
+        const PAY_LABEL = { cash: '💵 Cash', gcash: '🔵 GCash', maya: '🟢 Maya', card: '💳 Card',
+                            credit: '📒 Credit' };
 
         function backupAge(iso) {
             if (!iso) return 'No backup found';

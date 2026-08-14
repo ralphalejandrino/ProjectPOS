@@ -612,6 +612,20 @@
                                     <span>${formatCurrency(changeGiven)}</span>
                                 </div>
                             ` : ''}
+                            ${/* FEATURE-059/065 (audit 2026-08-15): a credit sale fell
+                                  through EVERY branch here, so the cashier saw a total
+                                  and "Thank you for your purchase!" with nothing to say
+                                  no money was taken. On the one screen that confirms a
+                                  sale, silence is the wrong answer. */''}
+                            ${transactionData.payment_method === 'credit' ? `
+                                <div class="bg-amber-100 text-amber-800 rounded px-3 py-2 mt-2 text-sm font-bold text-center">
+                                    UNPAID — no cash received
+                                </div>
+                                <div class="flex justify-between text-sm text-gray-700 mt-2">
+                                    <span>${_lastCreditKind === 'charge' ? 'Owed by:' : 'Consumed by:'}</span>
+                                    <span class="font-medium">${escapeHtml(_lastCreditNote || 'Not recorded')}</span>
+                                </div>
+                            ` : ''}
                             
                             <p class="text-xs text-gray-500 text-center mt-4">${(() => { try { const bp = JSON.parse(localStorage.getItem('biz_profile') || '{}'); return escapeHtml(bp.receipt_header || 'Thank you for your purchase!'); } catch (e) { return 'Thank you for your purchase!'; } })()}</p>
                         </div>
@@ -667,6 +681,12 @@
         // module variable rather than read back off the DOM classes, so the
         // posted value can never depend on whether a style class survived.
         let _creditKind = 'house';
+        // The attribution AND kind of the sale just completed, for the success
+        // modal. Captured at post time rather than read back from live state:
+        // resetCredit() runs on the next modal open, and depending on that
+        // ordering is how a display goes silently stale.
+        let _lastCreditNote = '';
+        let _lastCreditKind = 'house';
 
         function creditKind() { return _creditKind; }
 
@@ -826,6 +846,10 @@
                 // FEATURE-059-FU: carry the attribution onto the credit tender
                 // so the Z report can itemise WHO owes the money.
                 const _note = (document.getElementById('credit-note-input')?.value || '').trim();
+                // Held for the success modal: the input is cleared on the next
+                // modal open, so reading it back there would show nothing.
+                _lastCreditNote = _note;
+                _lastCreditKind = creditKind();
                 paymentLines = [{
                     method: 'credit', amount: +total.toFixed(2),
                     note: _note, credit_kind: creditKind(),

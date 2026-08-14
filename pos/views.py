@@ -518,6 +518,24 @@ class PosTransactionViewSet(viewsets.ViewSet):
             # FEATURE-008: per-ingredient sold/voided from the IngredientLog
             # ledger, scoped to this open shift. Empty list when nothing moved.
             'stock_movements': stock_movements_for_shift(shift),
+            # FEATURE-059 (audit 2026-08-15): the non-sale drawer movements of
+            # THIS shift. The X is the manager's mid-shift read, and a
+            # collection or payout was invisible on it — so the one report he
+            # can consult before the count said nothing about the money that
+            # had already left the drawer. `kind_display` and `signed_amount`
+            # are server-derived so the client needs no enumeration of its own.
+            'cash_movements': [
+                {
+                    'kind': m.kind,
+                    'kind_display': m.get_kind_display(),
+                    'amount': str(m.amount),
+                    'signed_amount': str(m.signed_amount),
+                    'reason': m.reason,
+                    'created_at': m.created_at,
+                    'created_by': getattr(m.created_by, 'username', None),
+                }
+                for m in shift.cash_movements.all().order_by('created_at')
+            ],
         })
 
 # ============================================================================

@@ -135,7 +135,11 @@
 // v156: FEATURE-065 — credit splits into House (owner/family/staff, a cost)
 // and Charge (a real receivable), defaulting to House per BusinessProfile.
 // index.html, dashboard.html and period.html all changed.
-const CACHE_NAME = 'tarsierpos-v156'; // canonical cache version
+// v157: pre-deploy audit fixes — the Z SCREEN now shows the drawer movements
+// and the credit/house split that were on the printed Z only, plus a cash-movement
+// ledger; the X carries cash movements; credit is labelled on the X/Z/remote tender
+// lists; and the success modal states UNPAID. index/zreport/xreport/remote changed.
+const CACHE_NAME = 'tarsierpos-v157'; // canonical cache version
 const ASSETS = [
   'index.html',
   'login.html',

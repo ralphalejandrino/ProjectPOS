@@ -195,11 +195,52 @@
                 <div class="space-y-2 text-sm">
                     <div class="flex justify-between"><span class="text-gray-600">Opening Cash</span><span id="z-open-cash" class="font-medium text-gray-800"></span></div>
                     <div class="flex justify-between"><span class="text-gray-600">Cash Collected</span><span id="z-cash-coll" class="font-medium text-gray-800"></span></div>
+                    <!-- FEATURE-059 (audit 2026-08-15): the drawer movements that
+                         EXPLAIN Expected. They were on the printed Z only, so on
+                         screen the manager saw a bare Expected figure and had no
+                         way to see the collection or payout behind it — the exact
+                         "unexplained discrepancy" this feature exists to remove.
+                         Hidden when zero, like the Stock Movement section. -->
+                    <div id="z-paid-in-row" class="hidden flex justify-between"><span class="text-gray-600">+ Cash Added</span><span id="z-paid-in" class="font-medium text-green-700"></span></div>
+                    <div id="z-paid-out-row" class="hidden flex justify-between"><span class="text-gray-600">− Cash Paid Out</span><span id="z-paid-out" class="font-medium text-red-600"></span></div>
                     <div class="flex justify-between"><span class="text-gray-600">Cash Expected</span><span id="z-cash-exp" class="font-medium text-gray-800"></span></div>
                     <div class="flex justify-between"><span class="text-gray-600">Cash Counted</span><span id="z-cash-cnt" class="font-medium text-gray-800"></span></div>
                     <div class="flex justify-between border-t pt-2"><span class="font-bold text-gray-800">Over / Short</span><span id="z-over-short" class="font-bold"></span></div>
                 </div>
             </div>
+
+            <!-- FEATURE-059/065 (audit 2026-08-15): unpaid goods, kept APART from
+                 the cash block because neither is drawer money — folding them in is
+                 the confusion the whole feature exists to fix. Charge is owed back;
+                 House is consumed and never will be. Hidden when all three are zero. -->
+            <div id="z-credit-section" class="hidden bg-white rounded-lg shadow-lg p-6 mb-4">
+                <h3 class="text-lg font-bold text-gray-800 mb-4 border-b pb-2">Unpaid Goods</h3>
+                <div class="space-y-2 text-sm">
+                    <div id="z-credit-ext-row" class="hidden flex justify-between"><span class="text-gray-600">Credit Extended (to collect)</span><span id="z-credit-ext" class="font-medium text-amber-800"></span></div>
+                    <div id="z-credit-set-row" class="hidden flex justify-between"><span class="text-gray-600">Credit Settled</span><span id="z-credit-set" class="font-medium text-green-700"></span></div>
+                    <div id="z-house-row" class="hidden flex justify-between"><span class="text-gray-600">House Consumption</span><span id="z-house" class="font-medium text-amber-800"></span></div>
+                </div>
+                <p class="text-xs text-gray-500 mt-3">Not drawer money — excluded from Cash Expected.</p>
+            </div>
+
+            <!-- FEATURE-059 (audit 2026-08-15): the cash-movement LEDGER. Before this
+                 a movement could be recorded and never seen again — POST plus a toast,
+                 with the GET endpoint unused. A drop nobody can verify is no better
+                 than a drop nobody recorded. -->
+            <details id="z-movements-section" class="hidden bg-white rounded-lg shadow-lg p-6 mb-4" open>
+                <summary class="text-lg font-bold text-gray-800 border-b pb-2 cursor-pointer select-none">Cash Movements</summary>
+                <table class="w-full text-sm mt-4">
+                    <thead>
+                        <tr class="text-gray-500 border-b">
+                            <th class="text-left pb-2">Time</th>
+                            <th class="text-left pb-2">Type</th>
+                            <th class="text-left pb-2">Reason</th>
+                            <th class="text-right pb-2">Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody id="z-movements"></tbody>
+                </table>
+            </details>
 
             <!-- Stock movement (FEATURE-008) — only shown when non-empty -->
             <details id="z-stock-section" class="hidden bg-white rounded-lg shadow-lg p-6 mb-4" open>
@@ -243,9 +284,16 @@
                 <p class="text-gray-600 mb-4 text-sm">Money that moved without a sale. Recording it here keeps the drawer count honest at close.</p>
                 <label class="block text-sm font-medium text-gray-700 mb-1">What happened</label>
                 <select aria-label="Movement kind" id="mv-kind" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-gray-800 mb-3">
-                    <option value="drop">Cash collected / taken out</option>
-                    <option value="payout">Paid out of the drawer (e.g. restock)</option>
-                    <option value="cash_in">Cash added to the drawer</option>
+                    <!-- Audit 2026-08-15: the leading words now MATCH the model's
+                         own choice labels (CashMovement.KIND_CHOICES), because the
+                         ledger and the printed Z render those. Before this, a manager
+                         picked "Cash collected / taken out" and later read it back as
+                         "Cash drop / collection" — two vocabularies for one fact. The
+                         explanatory tail is kept; it is what makes the right option
+                         obvious at the moment of choosing. -->
+                    <option value="drop">Cash drop / collection — money taken out</option>
+                    <option value="payout">Cash payout — paid out of the drawer (e.g. restock)</option>
+                    <option value="cash_in">Cash added — put into the drawer</option>
                 </select>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Amount</label>
                 <input aria-label="Movement amount" type="number" id="mv-amount" min="0" step="0.01" placeholder="0.00"
@@ -415,6 +463,10 @@
                 }
                 closeMovementModal();
                 if (window.toast) window.toast({message: 'Cash movement recorded', severity: 'success'});
+                // Audit 2026-08-15: a toast was the ONLY feedback, so a manager
+                // could not confirm the drop landed or notice a double entry.
+                // Render the ledger for the shift it was recorded against.
+                loadCashMovements(shift.id);
             } catch (e) {
                 mvErr('Could not reach the server.');
                 btn.disabled = false;
@@ -695,7 +747,10 @@
             document.getElementById('z-zero').textContent = fmt(z.zero_rated_sales);
 
             // Payments — skip zero buckets
-            const labels = { cash: 'Cash', gcash: 'GCash', maya: 'Maya', card: 'Card' };
+            // FEATURE-059 (audit 2026-08-15): 'credit' was missing, so the owner's
+            // own Z document rendered a bare lowercase "credit" beside "Cash".
+            const labels = { cash: 'Cash', gcash: 'GCash', maya: 'Maya', card: 'Card',
+                             credit: 'Credit / Unpaid' };
             const pb = z.payment_breakdown || {};
             let total = 0;
             const rows = Object.keys(pb).map(k => {
@@ -726,8 +781,16 @@
                 osEl.className = 'font-bold text-gray-500';
             }
 
+            // FEATURE-059/065 (audit 2026-08-15): the figures that explain Expected,
+            // and the receivable/house split. Each row hides at zero so an ordinary
+            // all-cash shift's Z looks exactly as it always did.
+            renderDrawerExtras(z);
+
             // FEATURE-008: stock movement — live from the IngredientLog ledger.
             renderStockMovements(z.stock_movements);
+
+            // FEATURE-059: the movement ledger behind those figures.
+            loadCashMovements(z.shift);
 
             document.getElementById('z-grand').textContent = fmt(z.grand_total_sales);
             document.getElementById('z-generated').textContent = formatTS(z.finalized_at);
@@ -737,6 +800,72 @@
             const v = parseFloat(n);
             if (isNaN(v)) return '0';
             return parseFloat(v.toFixed(4)).toString();
+        }
+
+        // FEATURE-059/065 (audit 2026-08-15).
+        function renderDrawerExtras(z) {
+            const row = (rowId, valId, amount, withSign) => {
+                const amt = parseFloat(amount || 0);
+                const r = document.getElementById(rowId);
+                const v = document.getElementById(valId);
+                if (!r || !v) return false;
+                if (!amt) { r.classList.add('hidden'); return false; }
+                v.textContent = (withSign || '') + fmt(amt);
+                r.classList.remove('hidden');
+                return true;
+            };
+
+            row('z-paid-in-row', 'z-paid-in', z.cash_paid_in);
+            row('z-paid-out-row', 'z-paid-out', z.cash_paid_out);
+
+            const any = [
+                row('z-credit-ext-row', 'z-credit-ext', z.credit_extended),
+                row('z-credit-set-row', 'z-credit-set', z.credit_settled),
+                row('z-house-row', 'z-house', z.house_consumption),
+            ].some(Boolean);
+            document.getElementById('z-credit-section')
+                .classList.toggle('hidden', !any);
+        }
+
+        // 🔑 NO client-side label map and NO client-side list of outflow kinds.
+        // The endpoint already returns `kind_display` (the model's own choice
+        // label) and `signed_amount` (direction derived from
+        // CashMovement.OUTFLOW_KINDS), so a kind added later can never render as
+        // a raw key or pick up the wrong sign here. Duplicating those
+        // enumerations in the client is the exact bug this audit was called to
+        // find — it is how 'credit' ended up displayed as "Cash".
+
+        async function loadCashMovements(shiftId) {
+            const section = document.getElementById('z-movements-section');
+            const tbody = document.getElementById('z-movements');
+            if (!shiftId) { section.classList.add('hidden'); return; }
+            try {
+                const res = await authenticatedFetch(
+                    `${API_BASE}/shifts/${shiftId}/cash-movements/`);
+                if (!res.ok) { section.classList.add('hidden'); return; }
+                const rows = await res.json();
+                if (!Array.isArray(rows) || rows.length === 0) {
+                    section.classList.add('hidden');
+                    tbody.innerHTML = '';
+                    return;
+                }
+                tbody.innerHTML = rows.map(m => {
+                    const signed = parseFloat(m.signed_amount);
+                    const out = signed < 0;
+                    const who = m.created_by ? ` · ${escapeHtml(m.created_by)}` : '';
+                    return `
+                    <tr class="border-b border-gray-100 last:border-0">
+                        <td class="py-2 text-gray-500">${formatTS(m.created_at)}</td>
+                        <td class="py-2 text-gray-700">${escapeHtml(m.kind_display || m.kind)}</td>
+                        <td class="py-2 text-gray-600">${escapeHtml(m.reason || '—')}${who}</td>
+                        <td class="py-2 text-right font-medium ${out ? 'text-red-600' : 'text-green-700'}">${(out ? '− ' : '+ ') + fmt(Math.abs(signed))}</td>
+                    </tr>`;
+                }).join('');
+                section.classList.remove('hidden');
+            } catch (e) {
+                // A ledger we cannot load must not break the Z the manager came to read.
+                section.classList.add('hidden');
+            }
         }
 
         function renderStockMovements(movements) {
