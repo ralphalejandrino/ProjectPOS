@@ -224,7 +224,7 @@
                 <button onclick="addCashAmount(500)" class="touch-target-pos bg-gray-100 hover:bg-gray-200 py-2 rounded font-medium text-sm" data-amount="500">500</button>
                 <button onclick="addCashAmount(1000)" class="touch-target-pos bg-gray-100 hover:bg-gray-200 py-2 rounded font-medium text-sm" data-amount="1000">1000</button>
             </div>
-            <button type="button" onclick="setExactCash()" class="touch-target-pos w-full py-2 rounded font-semibold text-sm mb-4" style="background:#EAF2F8; color:#1B4F72; border:1px solid #1B4F72;">Exact amount — no change</button>
+            <button type="button" id="cash-exact-btn" onclick="setExactCash()" class="touch-target-pos w-full py-2 rounded font-semibold text-sm mb-4" style="background:#EAF2F8; color:#1B4F72; border:1px solid #1B4F72;">Exact amount — no change</button>
             <script>
                 (function(){
                     document.querySelectorAll('#cash-quick-buttons button[data-amount]').forEach(btn => {
@@ -636,6 +636,13 @@
             };
             hide('cash-received-block', on);
             hide('cash-quick-buttons', on);
+            // FEATURE-059-FU: "Exact amount — no change" belongs to the cash
+            // entry too. FEATURE-059 hid the field, the quick amounts and
+            // split payment but missed this one because it had no id, so it
+            // sat there on an unpaid sale offering to fill a box that is not
+            // on screen. Caught by looking at the rendered modal, not by
+            // reading the code.
+            hide('cash-exact-btn', on);
             hide('unpaid-note', !on);
             hide('cash-insufficient', true);
             if (on) {
