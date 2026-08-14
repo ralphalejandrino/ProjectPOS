@@ -669,7 +669,9 @@ def stock_movements_for_shift(shift):
         IngredientLog.objects
         .filter(transaction__shift=shift, action__in=['sale', 'void'])
         .exclude(transaction__is_seed=True)
-        .select_related('ingredient')
+        # FEATURE-063: unit pulled in the same query — the receipt prints it,
+        # and an N+1 on a thermal print path is not worth the tidiness.
+        .select_related('ingredient', 'ingredient__unit')
     )
     agg = {}
     for log in logs:
@@ -678,6 +680,10 @@ def stock_movements_for_shift(shift):
             entry = {
                 'ingredient_id': log.ingredient_id,
                 'ingredient_name': log.ingredient.name,
+                # FEATURE-063: the owner's own words — "Nakakalito kung ano
+                # yung mga numero. Dapat merong ml, grams or scoops." A bare
+                # "50" beside an ingredient says nothing about what moved.
+                'unit': getattr(log.ingredient.unit, 'abbreviation', '') or '',
                 'sold': Decimal('0'),
                 'voided': Decimal('0'),
             }
@@ -690,6 +696,7 @@ def stock_movements_for_shift(shift):
         {
             'ingredient_id': e['ingredient_id'],
             'ingredient_name': e['ingredient_name'],
+            'unit': e['unit'],
             'sold': float(e['sold']),
             'voided': float(e['voided']),
         }

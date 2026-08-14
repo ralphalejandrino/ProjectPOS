@@ -388,6 +388,11 @@ def print_z_report(z_report):
                 _pset(p, profile, align='left', bold=False)
                 for mv in movements:
                     qty_str = ('%.4f' % mv['sold']).rstrip('0').rstrip('.') or '0'
+                    # FEATURE-063: append the unit so "50" reads as "50 ml".
+                    # .get() keeps older callers//fixtures without the key safe.
+                    unit = (mv.get('unit') or '').strip()
+                    if unit:
+                        qty_str = f'{qty_str} {unit}'
                     name = mv['ingredient_name']
                     max_name = RECEIPT_WIDTH - len(qty_str) - 1
                     if max_name > 0 and len(name) > max_name:
