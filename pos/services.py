@@ -704,6 +704,42 @@ def stock_movements_for_shift(shift):
     ]
 
 
+def credit_lines_for_shift(shift):
+    """FEATURE-059-FU: the individual receivables opened during a shift.
+
+    The Z report already prints a ``Credit Extended`` total, which tells the
+    owner that money is owed but not BY WHOM — and an unnamed receivable is
+    one nobody collects. This itemises it: one row per credit tender, with
+    the note the cashier attributed it to.
+
+    Returns ``[{'note': str, 'amount': Decimal, 'transaction_no': str}, ...]``
+    ordered oldest first, or ``[]`` when no credit was extended. Notes are
+    NOT aggregated by text: two separate tabs that happen to share a label
+    are two debts, and merging them would hide one of them.
+
+    Mirrors ``stock_movements_for_shift``: seed transactions are excluded
+    (FLAG-047) so a demo sale can never appear as a real debt, and the
+    transaction is pulled in the same query rather than N+1 on a print path.
+    """
+    if shift is None:
+        return []
+    lines = (
+        PaymentLine.objects
+        .filter(transaction__shift=shift, method='credit')
+        .exclude(transaction__is_seed=True)
+        .select_related('transaction')
+        .order_by('transaction__created_at', 'pk')
+    )
+    return [
+        {
+            'note': line.note or '',
+            'amount': line.amount,
+            'transaction_no': getattr(line.transaction, 'transaction_no', '') or '',
+        }
+        for line in lines
+    ]
+
+
 class UnitConversionError(Exception):
     """No conversion defined for this (ingredient, unit) pair."""
 
@@ -951,29 +987,42 @@ def variant_ingredient_conflict(variant_option, ingredient, exclude_pk=None):
 # cash_expected by construction rather than by a special case.
 _VALID_PAYMENT_METHODS = {'cash', 'card', 'gcash', 'maya', 'credit'}
 _PAYMENT_CENTS = Decimal('0.01')
+# FEATURE-059-FU: must match PaymentLine.note's max_length. Overlong notes are
+# truncated here rather than left to the DB, because SQLite does NOT enforce
+# CharField length — an overlong note would save fine locally and only fail if
+# the shop is ever moved to Postgres.
+_PAYMENT_NOTE_MAX = 200
 
 
 def _resolve_payment_lines(payment_lines, fallback_method, charged_total):
     """FEATURE-016: normalise the requested payment lines for a sale.
 
-    ``payment_lines`` is an optional list of ``{method, amount}``. When absent
-    or empty, a single line for ``fallback_method`` covering the whole charged
-    total is synthesised (backward compat — every transaction ends up with at
-    least one line). The amounts represent actual tender and must sum to the
-    charged total (net_total) within ±1 centavo of rounding tolerance.
+    ``payment_lines`` is an optional list of ``{method, amount, note}``. When
+    absent or empty, a single line for ``fallback_method`` covering the whole
+    charged total is synthesised (backward compat — every transaction ends up
+    with at least one line). The amounts represent actual tender and must sum
+    to the charged total (net_total) within ±1 centavo of rounding tolerance.
 
     Returns ``(lines, primary_method)`` where ``lines`` is a list of
-    ``(method, Decimal amount)`` and ``primary_method`` is the method of the
-    largest line (first on a tie) — persisted as PosTransaction.payment_method.
+    ``(method, Decimal amount, note)`` and ``primary_method`` is the method of
+    the largest line (first on a tie) — persisted as
+    PosTransaction.payment_method.
     Raises DRFValidationError on any invalid method, non-positive amount, or a
     sum that does not match the charged total.
+
+    FEATURE-059-FU: ``note`` is free text attributing the tender (a credit
+    sale's "Clinic"). It is accepted on ANY method rather than special-cased
+    to credit — a GCash reference number is the same shape of fact — but only
+    credit sales surface it in reporting today. It is truncated rather than
+    rejected: a note that is too long must never be the thing that stops a
+    sale going through on a live register.
     """
     charged_total = Decimal(str(charged_total)).quantize(
         _PAYMENT_CENTS, rounding=ROUND_HALF_UP
     )
     if not payment_lines:
         method = fallback_method if fallback_method in _VALID_PAYMENT_METHODS else 'cash'
-        return [(method, charged_total)], method
+        return [(method, charged_total, '')], method
 
     parsed = []
     for line in payment_lines:
@@ -988,9 +1037,12 @@ def _resolve_payment_lines(payment_lines, fallback_method, charged_total):
             raise DRFValidationError(f"Invalid payment amount: {line.get('amount')!r}.")
         if amount <= 0:
             raise DRFValidationError("Payment line amounts must be greater than zero.")
-        parsed.append((method, amount))
+        # FEATURE-059-FU: truncate, never reject — see the docstring. A None
+        # note is normalised to '' so the column is never NULL.
+        note = (line.get('note') or '').strip()[:_PAYMENT_NOTE_MAX]
+        parsed.append((method, amount, note))
 
-    total = sum((a for _, a in parsed), Decimal('0.00'))
+    total = sum((a for _, a, _n in parsed), Decimal('0.00'))
     if abs(total - charged_total) > _PAYMENT_CENTS:
         raise DRFValidationError(
             f"Split payment total ({format_currency(total)}) must equal the "
@@ -1378,8 +1430,10 @@ def create_pos_transaction(items_data, payment_method, cashier=None, **kwargs):
         # FEATURE-016: persist the tender breakdown. Every sale gets at least
         # one PaymentLine; split payments get one per method.
         PaymentLine.objects.bulk_create([
-            PaymentLine(transaction=transaction, method=method, amount=amount)
-            for method, amount in payment_lines
+            PaymentLine(
+                transaction=transaction, method=method, amount=amount, note=note
+            )
+            for method, amount, note in payment_lines
         ])
 
         # BUG-009: the receipt print is NO LONGER triggered here. This thread

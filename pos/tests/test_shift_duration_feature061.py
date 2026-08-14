@@ -125,9 +125,25 @@ class StaleShiftSignalTests(APITestCase):
     def test_closed_shift_measures_to_its_close_not_to_now(self):
         """A finished shift's duration must freeze, or every old Z would look
         worse the longer ago it happened."""
+        # 🔴 The open time is PINNED to 08:00 local, not derived from now().
+        #
+        # This test used `now() - 2 days` and then closed 3 hours later, and
+        # asserted the shift does not span two business dates. That holds only
+        # while the suite is run before 21:00 local: run it at 21:37 and the
+        # fixture describes a shift opened 21:37 and closed 00:37, which spans
+        # two dates CORRECTLY, and the test fails on healthy code.
+        #
+        # It went green at 19:19 and red at 21:37 on 2026-08-14 with no code
+        # change between. Caught before the 22:00 deploy pre-flight, which
+        # would have gone red on a clean tree. The product code was never
+        # wrong — the fixture was.
+        opened_local = dj_tz.localtime(dj_tz.now()).replace(
+            hour=8, minute=0, second=0, microsecond=0
+        ) - timedelta(days=2)
         s = self._shift(2)
         Shift.objects.filter(pk=s.pk).update(
-            closed_at=dj_tz.now() - timedelta(days=2) + timedelta(hours=3),
+            opened_at=opened_local,
+            closed_at=opened_local + timedelta(hours=3),
             is_open=False,
         )
         data = ShiftSerializer(Shift.objects.get(pk=s.pk)).data

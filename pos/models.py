@@ -688,6 +688,22 @@ class PaymentLine(models.Model):
     )
     method = models.CharField(max_length=10, choices=METHOD_CHOICES)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
+    # FEATURE-059-FU: who owes it / what it was for.
+    #
+    # A credit tender without attribution is barely better than the bug it
+    # replaces: the shop knows ₱312 is owed but not BY WHOM, and an unnamed
+    # receivable is one nobody ever collects. PROD's actual case is exactly
+    # this — a clinic tab and, separately, "yung sa food ni doc", which the
+    # cashier had been reconciling in her head because the POS gave her
+    # nowhere to write it down.
+    #
+    # Deliberately shaped like `CashMovement.reason` (same max_length, same
+    # blank default) because it is the same idea on the other side of the
+    # ledger: the free-text that explains a non-cash drawer event. Kept on
+    # the tender rather than the transaction so a split sale can attribute
+    # only its credit portion, and so the credit lines ARE the receivables
+    # ledger without a join.
+    note = models.CharField(max_length=200, blank=True, default='')
 
     class Meta:
         constraints = [

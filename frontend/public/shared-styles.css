@@ -982,3 +982,117 @@ body.osk-enabled .modal-card { max-height: calc(100vh - 19rem); }
 /* py-10 was used by the restock-log empty states but never existed in the
    frozen purge output (no Tailwind build — see tarsierpos.md) — hand-added. */
 .py-10 { padding-top: 2.5rem; padding-bottom: 2.5rem; }
+
+/* ============================================================================
+ * FEATURE-059-FU — .pos-toggle: a binary choice at POS scale.
+ *
+ * WHY THIS EXISTS. FEATURE-059 put the "Unpaid" switch on the register as a
+ * bare `<input type="checkbox">`. That was wrong on two counts:
+ *
+ *   1. SCALE. index.html is the touchscreen surface and enforces a 48px hot
+ *      target (--touch-min-pos, ISSUE-086). A native checkbox renders ~16px,
+ *      roughly a third of the contract, on the one screen where a mis-tap
+ *      costs money.
+ *   2. LANGUAGE. It was the ONLY native checkbox on the register — every
+ *      other one in the app lives on an admin surface (settings, ingredients,
+ *      inventory), which are keyboard-and-mouse screens. The register speaks
+ *      in full-width buttons with colour semantics, and the cash modal
+ *      already had the right idiom sitting next to it: Split Payment, a
+ *      toggle button that reveals an alternate mode.
+ *
+ * So this is that idiom, in the amber "unusual, deliberate action" register
+ * the No Sale button already established. Off it reads as an available
+ * option; on, the whole control goes amber so the cashier cannot miss that
+ * this sale is not taking money.
+ *
+ * Written as real CSS rather than utility classes on purpose: there is no
+ * Tailwind build in this repo (styles.css is a frozen purge), and the amber
+ * `peer-checked:` variants this would otherwise need DO NOT EXIST in it —
+ * they would have been dead at runtime, exactly the FEATURE-061 trap.
+ *
+ * The state lives in a real `<input type="checkbox" class="sr-only">` inside
+ * the label, so `#cash-unpaid.checked` keeps working for every existing
+ * caller and for the Playwright harness. `.is-on` is applied by JS in
+ * toggleUnpaid(), which already runs on every state change including the
+ * force-reset on modal open.
+ * ========================================================================= */
+.pos-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  min-height: var(--touch-min-pos);
+  padding: 0.625rem 0.875rem;
+  border: 2px solid #d1d5db;
+  border-radius: 0.5rem;
+  background-color: #ffffff;
+  color: #374151;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.25;
+  text-align: left;
+  cursor: pointer;
+  user-select: none;
+  transition: background-color .15s ease, border-color .15s ease, color .15s ease;
+}
+.pos-toggle:hover { background-color: #f9fafb; }
+
+/* The mark. Sized to read at arm's length on a register, not at desk
+   distance — this is the part a 16px checkbox got wrong. */
+.pos-toggle__box {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border: 2px solid #9ca3af;
+  border-radius: 0.375rem;
+  background-color: #ffffff;
+  color: transparent;
+  font-size: 1.125rem;
+  font-weight: 700;
+  line-height: 1;
+  transition: background-color .15s ease, border-color .15s ease, color .15s ease;
+}
+.pos-toggle__box::after { content: "\2713"; }   /* ✓ — screen only, never printed */
+
+.pos-toggle.is-on {
+  background-color: rgb(254 243 199);   /* amber-100, as .bg-amber-100 */
+  border-color: rgb(245 158 11);        /* amber-500, as .border-amber-500 */
+  color: rgb(146 64 14);                /* amber-800, as .text-amber-800 */
+}
+.pos-toggle.is-on:hover { background-color: rgb(253 230 138); }
+.pos-toggle.is-on .pos-toggle__box {
+  background-color: rgb(217 119 6);
+  border-color: rgb(217 119 6);
+  color: #ffffff;
+}
+
+/* Keyboard focus must survive the sr-only input: the ring goes on the label,
+   which is what a sighted keyboard user actually sees. */
+.pos-toggle:focus-within {
+  outline: 2px solid rgb(245 158 11);
+  outline-offset: 2px;
+}
+
+/* Dark mode follows the file's existing `.dark .x { !important }` convention
+   (the register applies `.dark` on documentElement at line 16 of index.html). */
+.dark .pos-toggle {
+  background-color: #1f2937;
+  border-color: #4b5563;
+  color: #e5e7eb;
+}
+.dark .pos-toggle:hover { background-color: #374151; }
+.dark .pos-toggle__box { background-color: #111827; border-color: #6b7280; }
+.dark .pos-toggle.is-on {
+  background-color: rgb(120 53 15);     /* matches .dark .bg-amber-100 */
+  border-color: rgb(245 158 11);
+  color: #fde68a;
+}
+.dark .pos-toggle.is-on:hover { background-color: rgb(146 64 14); }
+.dark .pos-toggle.is-on .pos-toggle__box {
+  background-color: rgb(245 158 11);
+  border-color: rgb(245 158 11);
+  color: #111827;
+}

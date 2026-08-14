@@ -118,7 +118,13 @@
 // v147: internal app rename pos -> pos + API prefix /api/pos/ -> /api/pos/
 // (cache bump forces every kiosk to flush the old shell that still called the
 // pos API paths; no visual change).
-const CACHE_NAME = 'tarsierpos-v151'; // canonical cache version
+// v152: FEATURE-059-FU — an unpaid sale can say WHO owes it (a note on the
+// credit tender, itemised on the Z), and the Unpaid switch becomes a
+// POS-scale toggle (.pos-toggle, 48px) instead of a ~16px desktop checkbox.
+// Cache bump is REQUIRED: shared-styles.css gained the .pos-toggle rules, and
+// a kiosk serving the old stylesheet would render the new markup unstyled —
+// a 0x0 tick box and a 43px target.
+const CACHE_NAME = 'tarsierpos-v152'; // canonical cache version
 const ASSETS = [
   'index.html',
   'login.html',

@@ -367,6 +367,32 @@ def print_z_report(z_report):
                 p.text(_thermal_rule(RECEIPT_WIDTH) + '\n')
                 if _cr_ext:
                     p.text(rrow('Credit Extended:', money(_cr_ext)))
+                    # FEATURE-059-FU: itemise WHO owes it. A bare total tells
+                    # the owner money is owed but not by whom, and an unnamed
+                    # receivable is one nobody collects. Indented under the
+                    # total so it reads as a breakdown, not more tenders.
+                    try:
+                        from .services import credit_lines_for_shift
+                        _cr_rows = credit_lines_for_shift(
+                            getattr(z_report, 'shift', None)
+                        )
+                    except Exception:
+                        _cr_rows = []
+                    for _row in _cr_rows:
+                        _amt = money(_row['amount'])
+                        # Width guard: the label must not push the amount off
+                        # 32-col paper. FEATURE-064 shipped a footer legend
+                        # that overran at 33 chars, so this is measured, not
+                        # assumed. 2 leading spaces + 1 minimum gap.
+                        _budget = RECEIPT_WIDTH - len(_amt) - 3
+                        _label = _row['note'] or _row['transaction_no'] or 'Unattributed'
+                        # Hard truncation, no ellipsis — the house convention
+                        # everywhere else in this file, and it keeps printed
+                        # output pure ASCII (a '…' depends on the printer's
+                        # codepage and prints as garbage on the wrong one).
+                        if _budget > 1:
+                            _label = _label[:_budget]
+                        p.text(rrow('  ' + _label, _amt))
                 if _cr_set:
                     p.text(rrow('Credit Settled:', money(_cr_set)))
 

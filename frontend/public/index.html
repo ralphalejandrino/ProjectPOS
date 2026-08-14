@@ -190,13 +190,24 @@
                  button: it is not a tender the cashier picks between, it is
                  what happens when the cash never arrives. Keeping it out of
                  the main row also stops it being tapped by accident. -->
-            <label class="flex items-center gap-2 mb-4 text-sm text-gray-700">
-                <input type="checkbox" id="cash-unpaid" class="rounded" onchange="toggleUnpaid()">
+            <label class="pos-toggle mb-4" id="cash-unpaid-toggle">
+                <input type="checkbox" id="cash-unpaid" class="sr-only" onchange="toggleUnpaid()">
+                <span class="pos-toggle__box" aria-hidden="true"></span>
                 <span>Unpaid — customer will pay later (charge to account)</span>
             </label>
             <div id="unpaid-note" class="hidden bg-amber-100 text-gray-800 px-4 py-3 rounded mb-4 text-sm">
                 No cash will be recorded for this sale. Stock still moves and
                 the amount is tracked as owed, so the drawer will not read short.
+                <!-- FEATURE-059-FU: who owes it. Without this the shift's Z
+                     shows that money is owed but not by whom, and an unnamed
+                     receivable is one nobody ever collects. -->
+                <label class="block mt-3 text-sm font-medium" for="unpaid-note-input">
+                    Who is this for? <span class="text-gray-600">(optional)</span>
+                </label>
+                <input type="text" id="unpaid-note-input" maxlength="200"
+                       class="w-full mt-1 px-3 py-3 border-2 border-gray-300 rounded-lg text-base focus:outline-none focus:border-blue-500"
+                       placeholder="e.g. Clinic, Doc's food, staff name"
+                       autocomplete="off">
             </div>
 
             <div class="mb-4" id="cash-received-block">
@@ -392,6 +403,12 @@
             // That would be worse than the problem this feature fixes.
             const _unpaid = document.getElementById('cash-unpaid');
             if (_unpaid) { _unpaid.checked = false; toggleUnpaid(); }
+            // FEATURE-059-FU: clear the attribution with the flag, for the same
+            // reason the flag itself is reset — a note left over from the last
+            // sale would attach the WRONG customer to this one's debt, which is
+            // worse than no note at all.
+            const _unpaidNote = document.getElementById('unpaid-note-input');
+            if (_unpaidNote) _unpaidNote.value = '';
             document.getElementById('cash-received').focus();
         }
 
@@ -607,6 +624,12 @@
         // rather than leave controls that do nothing.
         function toggleUnpaid() {
             const on = document.getElementById('cash-unpaid').checked;
+            // FEATURE-059-FU: the visual state of .pos-toggle. Driven from JS
+            // rather than a CSS :checked selector because the amber
+            // peer-checked variants do not exist in the frozen Tailwind purge
+            // (no build step in this repo) and would be dead at runtime.
+            const tgl = document.getElementById('cash-unpaid-toggle');
+            if (tgl) tgl.classList.toggle('is-on', on);
             const hide = (id, h) => {
                 const el = document.getElementById(id);
                 if (el) el.classList.toggle('hidden', h);
@@ -676,7 +699,10 @@
                 return;
             }
             if (isUnpaid) {
-                paymentLines = [{ method: 'credit', amount: +total.toFixed(2) }];
+                // FEATURE-059-FU: carry the attribution onto the credit tender
+                // so the Z report can itemise WHO owes the money.
+                const _note = (document.getElementById('unpaid-note-input')?.value || '').trim();
+                paymentLines = [{ method: 'credit', amount: +total.toFixed(2), note: _note }];
             }
 
             // Sync discount ID from DOM so success modal can display it
