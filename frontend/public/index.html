@@ -227,7 +227,7 @@
                  Split Payment, rather than a restyle. -->
             <button type="button" onclick="toggleCredit()" id="credit-toggle-btn"
                     class="w-full mt-1 mb-2 py-1.5 border border-dashed border-gray-300 rounded-lg text-sm text-gray-500 hover:border-gray-400 hover:text-gray-700 transition">
-                📒 Credit — customer pays later
+                📒 Credit
             </button>
             <div id="credit-panel" class="hidden bg-amber-100 text-gray-800 px-4 py-3 rounded mb-4 text-sm">
                 No cash will be recorded for this sale. Stock still moves and
@@ -618,7 +618,7 @@
         // State is derived from whether the panel is open, exactly the way
         // splitActive() reads #split-section. There is no hidden checkbox: a
         // second source of truth for the same fact is how the two drift apart.
-        const CREDIT_LABEL_OFF = '📒 Credit — customer pays later';
+        const CREDIT_LABEL_OFF = '📒 Credit';
         const CREDIT_LABEL_ON  = '✕ Cancel Credit';
 
         function creditActive() {

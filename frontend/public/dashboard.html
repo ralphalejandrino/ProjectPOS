@@ -594,6 +594,22 @@
                                 <span class="text-gray-500">Customer Phone:</span>
                                 <span class="text-gray-800">${t.customer_phone ? escapeHtml(t.customer_phone) : 'N/A'}</span>
                             </div>`;
+                    } else if (method === 'credit') {
+                        // FEATURE-059-FU: an unpaid sale must READ as unpaid,
+                        // and must say who owes it. The note was being stored
+                        // and shown nowhere, so the receivable stayed
+                        // anonymous — the very thing the note exists to fix.
+                        const line = (t.payment_lines || []).find(l => l.method === 'credit');
+                        const who = line && line.note ? escapeHtml(line.note) : 'Not recorded';
+                        return `
+                            <div class="flex justify-between text-sm">
+                                <span class="text-gray-500">Owed by:</span>
+                                <span class="text-gray-800 font-medium">${who}</span>
+                            </div>
+                            <div class="flex justify-between text-sm">
+                                <span class="text-gray-500">Cash Received:</span>
+                                <span class="text-amber-800 font-medium">None — unpaid</span>
+                            </div>`;
                     }
                     return '';
                 })();
@@ -812,7 +828,13 @@
                 cash: '<span class="px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded">💵 Cash</span>',
                 gcash: '<span class="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded">📱 GCash</span>',
                 maya: '<span class="px-2 py-1 text-xs font-medium bg-purple-100 text-purple-800 rounded">💳 Maya</span>',
-                card: '<span class="px-2 py-1 text-xs font-medium bg-orange-100 text-orange-800 rounded">💳 Card</span>'
+                card: '<span class="px-2 py-1 text-xs font-medium bg-orange-100 text-orange-800 rounded">💳 Card</span>',
+                // FEATURE-059-FU: credit had no badge, and the fallback below
+                // is `cash` — so an UNPAID sale was displayed as "💵 Cash",
+                // mislabelled as the exact thing this feature exists to tell
+                // it apart from. Amber, matching how credit reads everywhere
+                // else in the app.
+                credit: '<span class="px-2 py-1 text-xs font-medium bg-amber-100 text-amber-800 rounded">📒 Credit</span>'
             };
             return badges[method] || badges.cash;
         }
@@ -822,7 +844,8 @@
                 cash: '💵',
                 gcash: '📱',
                 maya: '💳',
-                card: '💳'
+                card: '💳',
+                credit: '📒'
             };
             return icons[method] || '💵';
         }

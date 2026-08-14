@@ -11,6 +11,7 @@ from .models import (
     ItemLog,
     PosTransaction,
     PosTransactionItem,
+    PaymentLine,
     Cart,
     CartItem,
     User,
@@ -311,10 +312,25 @@ class PosTransactionItemSerializer(serializers.ModelSerializer):
         ]
 
 
+class PaymentLineSerializer(serializers.ModelSerializer):
+    """FEATURE-059-FU: the tender breakdown, including a credit sale's note.
+
+    Exposed so the transaction detail can say WHO a credit sale was for.
+    Without it the note was written to the database and readable nowhere —
+    the receivable existed but stayed anonymous, which is the whole problem
+    the note was added to solve.
+    """
+
+    class Meta:
+        model = PaymentLine
+        fields = ['method', 'amount', 'note']
+
+
 class PosTransactionSerializer(serializers.ModelSerializer):
     items = PosTransactionItemSerializer(many=True, read_only=True)
     cashier_name = serializers.CharField(source='cashier.username', read_only=True)
-    
+    payment_lines = PaymentLineSerializer(many=True, read_only=True)
+
     class Meta:
         model = PosTransaction
         fields = [
@@ -325,7 +341,8 @@ class PosTransactionSerializer(serializers.ModelSerializer):
             'customer_phone', 'items', 'created_at', 'void',
             'purpose_of_void', 'remarks',
             'transaction_type', 'refund_of',
-            'discount_amount', 'discount_type', 'discount_id_number'
+            'discount_amount', 'discount_type', 'discount_id_number',
+            'payment_lines',
         ]
 
 

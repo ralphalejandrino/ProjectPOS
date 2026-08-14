@@ -155,7 +155,11 @@ class PosTransactionViewSet(viewsets.ViewSet):
         try:
             transaction = PosTransaction.objects.select_related(
                 'cashier', 'voided_by', 'shift'
-            ).prefetch_related('items__item', 'items__variant_selections').get(pk=pk)
+            ).prefetch_related(
+                'items__item', 'items__variant_selections',
+                # FEATURE-059-FU: the tender breakdown, for the credit note.
+                'payment_lines',
+            ).get(pk=pk)
             items_data = []
 
             # Get transaction items
@@ -200,6 +204,20 @@ class PosTransactionViewSet(viewsets.ViewSet):
                 'discount_amount':    float(transaction.discount_amount) if transaction.discount_amount else 0.0,
                 'discount_type':      transaction.discount_type or 'none',
                 'discount_id_number': transaction.discount_id_number or '',
+                # FEATURE-059-FU: the per-tender breakdown, so the detail can
+                # say WHO a credit sale was for. This endpoint builds its
+                # response by hand rather than through PosTransactionSerializer
+                # — adding the field to the serializer alone changed nothing
+                # here, which is exactly how the note stayed invisible after
+                # it was already being stored correctly.
+                'payment_lines': [
+                    {
+                        'method': pl.method,
+                        'amount': float(pl.amount),
+                        'note': pl.note or '',
+                    }
+                    for pl in transaction.payment_lines.all()
+                ],
             }
             return Response(data)
         except PosTransaction.DoesNotExist:

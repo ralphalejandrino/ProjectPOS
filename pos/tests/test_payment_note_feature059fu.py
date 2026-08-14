@@ -219,3 +219,103 @@ class CreditLedgerForShiftTests(PaymentNoteTestBase):
         self.assertEqual(z.cash_expected, Decimal('2000.00'))
         self.assertEqual(z.over_short, Decimal('0.00'))
         self.assertEqual(z.credit_extended, Decimal('312.00'))
+
+
+class CreditVisibleInTransactionDetailTests(PaymentNoteTestBase):
+    """The note must be READABLE, not just stored.
+
+    Ralph, looking at the demo: the transaction detail did not show that a
+    sale was credit, and did not show the note. Worse than "missing" —
+    `getPaymentBadge` fell back to `cash`, so an UNPAID sale was displayed as
+    "💵 Cash", labelled as the exact thing this feature exists to tell it
+    apart from. The API half of that fix is asserted here.
+    """
+
+    def test_api_exposes_the_credit_tender_and_its_note(self):
+        from pos.serializers import PosTransactionSerializer
+
+        self._open_shift()
+        t = self._sell_lines([
+            {'method': 'credit', 'amount': '312.00', 'note': 'Clinic'},
+        ])
+
+        data = PosTransactionSerializer(t).data
+
+        self.assertEqual(data['payment_method'], 'credit')
+        lines = data['payment_lines']
+        self.assertEqual(len(lines), 1)
+        self.assertEqual(lines[0]['method'], 'credit')
+        self.assertEqual(lines[0]['note'], 'Clinic')
+
+    def test_NEGATIVE_CONTROL_a_cash_sale_exposes_a_cash_tender_with_no_note(self):
+        """Proves the assertion above reads real per-tender data rather than
+        echoing the transaction's own payment_method."""
+        from pos.serializers import PosTransactionSerializer
+
+        self._open_shift()
+        t = create_pos_transaction(
+            [{'item_id': self.milk_tea.id, 'quantity': 8}],
+            'cash', cashier=self.cashier,
+        )
+
+        data = PosTransactionSerializer(t).data
+
+        self.assertEqual(data['payment_method'], 'cash')
+        self.assertEqual(data['payment_lines'][0]['method'], 'cash')
+        self.assertEqual(data['payment_lines'][0]['note'], '')
+
+    def test_split_exposes_both_tenders_so_the_credit_half_is_attributable(self):
+        from pos.serializers import PosTransactionSerializer
+
+        self._open_shift()
+        t = self._sell_lines([
+            {'method': 'cash', 'amount': '112.00'},
+            {'method': 'credit', 'amount': '200.00', 'note': "Doc's food"},
+        ])
+
+        lines = PosTransactionSerializer(t).data['payment_lines']
+        by_method = {l['method']: l for l in lines}
+
+        self.assertEqual(set(by_method), {'cash', 'credit'})
+        self.assertEqual(by_method['credit']['note'], "Doc's food")
+        self.assertEqual(by_method['cash']['note'], '')
+
+    def test_the_RETRIEVE_ENDPOINT_returns_the_note(self):
+        """🔴 The serializer alone is not enough, and that is the whole lesson.
+
+        `PosTransactionViewSet` is a plain ViewSet whose `retrieve` builds its
+        response dict BY HAND. Adding `payment_lines` to
+        PosTransactionSerializer made the in-process serializer test pass while
+        the live endpoint kept returning nothing — the note was stored
+        correctly, exposed correctly in one place, and still invisible in the
+        UI. This test hits the endpoint the dashboard actually calls.
+        """
+        self._open_shift()
+        t = self._sell_lines([
+            {'method': 'credit', 'amount': '312.00', 'note': 'Clinic'},
+        ])
+        self.client.force_authenticate(user=self.cashier)
+
+        resp = self.client.get(f'/api/pos/transactions/{t.id}/')
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['payment_method'], 'credit')
+        lines = resp.data['payment_lines']
+        self.assertEqual(len(lines), 1)
+        self.assertEqual(lines[0]['method'], 'credit')
+        self.assertEqual(lines[0]['note'], 'Clinic')
+
+    def test_NEGATIVE_CONTROL_retrieve_on_a_cash_sale_has_no_credit_line(self):
+        self._open_shift()
+        t = create_pos_transaction(
+            [{'item_id': self.milk_tea.id, 'quantity': 8}],
+            'cash', cashier=self.cashier,
+        )
+        self.client.force_authenticate(user=self.cashier)
+
+        resp = self.client.get(f'/api/pos/transactions/{t.id}/')
+
+        self.assertEqual(resp.status_code, 200)
+        methods = [l['method'] for l in resp.data['payment_lines']]
+        self.assertEqual(methods, ['cash'])
+        self.assertNotIn('credit', methods)

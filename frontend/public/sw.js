@@ -125,7 +125,11 @@
 // above them, instead of a bespoke toggle. Apply Discount is hidden while
 // credit is active. Cache bump is REQUIRED: index.html and shared-styles.css
 // both changed, and a kiosk on the old shell would show the old control.
-const CACHE_NAME = 'tarsierpos-v153'; // canonical cache version
+// v154: FEATURE-059-FU — credit is now visible in the transaction detail
+// (badge, "Owed by", "None — unpaid"); dashboard.html changed. Credit had NO
+// badge and getPaymentBadge falls back to cash, so an unpaid sale was being
+// displayed as "💵 Cash".
+const CACHE_NAME = 'tarsierpos-v154'; // canonical cache version
 const ASSETS = [
   'index.html',
   'login.html',
