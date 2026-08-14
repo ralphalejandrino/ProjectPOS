@@ -3009,6 +3009,28 @@ def period_print(request):
     return Response({'status': 'print queued'})
 
 
+@api_view(['POST'])
+@permission_classes([IsManagerOrAbove])
+def count_worksheet_print(request):
+    """FEATURE-064: print the weekly-count worksheet on the thermal printer.
+
+    Same fire-and-forget threading as the X/Z/weekly prints so a slow or absent
+    printer never blocks the ingredients page. The flagged list is recomputed
+    SERVER-side (services.ingredients_flagged_for_count) rather than accepted
+    from the client, so the paper and the on-screen table cannot disagree about
+    what needs counting.
+    """
+    from .services import ingredients_flagged_for_count
+    from .receipt_service import print_count_worksheet
+    import threading
+
+    rows = ingredients_flagged_for_count()
+    threading.Thread(
+        target=print_count_worksheet, args=(rows,), daemon=True
+    ).start()
+    return Response({'status': 'print queued', 'count': len(rows)})
+
+
 @api_view(['GET'])
 @permission_classes([IsManagerOrAbove])
 def insights_report(request):

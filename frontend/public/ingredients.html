@@ -257,8 +257,13 @@
           <h2 class="text-lg font-semibold text-gray-700">Weekly Count &amp; Reconcile</h2>
           <p class="text-gray-500 text-sm mt-0.5">A close-of-week ritual — count the flagged items, enter what's physically there. Variance vs expected is recorded as waste. Counted-type ingredients and anything at/below par are flagged.</p>
         </div>
-        <button onclick="loadCountTab()"
-          class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm transition">↻ Refresh list</button>
+        <div class="flex gap-2">
+          <!-- FEATURE-064: the count happens at the shelf, not at the screen. -->
+          <button onclick="printCountWorksheet()"
+            class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm transition">🖨 Print worksheet</button>
+          <button onclick="loadCountTab()"
+            class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm transition">↻ Refresh list</button>
+        </div>
       </div>
       <div class="overflow-x-auto">
         <table class="w-full text-sm">
@@ -907,6 +912,24 @@ function loadCountTab() {
         <td class="px-4 py-3 text-right font-mono text-gray-400" id="countVar-${i.id}">—</td>
       </tr>`;
   }).join('');
+}
+
+// FEATURE-064: hand the counting off to paper. The server recomputes the
+// flagged list, so the strip and this table cannot disagree.
+async function printCountWorksheet() {
+  try {
+    const res = await authenticatedFetch(`${API_BASE}/ingredients/count-worksheet/print/`, {
+      method: 'POST', body: JSON.stringify({})
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      window.toast({message: data.error || 'Could not queue the worksheet', severity: 'error'});
+      return;
+    }
+    window.toast({message: `Worksheet queued — ${data.count} item(s)`, severity: 'success'});
+  } catch (e) {
+    window.toast({message: 'Could not reach the printer service', severity: 'error'});
+  }
 }
 
 function updateCountVariance(id) {

@@ -646,6 +646,93 @@ def print_weekly_report(payload):
         return False
 
 
+def build_count_worksheet_lines(rows, profile=None):
+    """FEATURE-064: the printable weekly-count worksheet, as text lines.
+
+    Split from the printer call so the layout is testable without a printer.
+
+    Physical workflow this exists for: the manager counts at the counter, and
+    the stock is not next to the screen. Walking back and forth to read the
+    system figure is how a count gets rushed or transcribed wrong. A printed
+    strip with a blank write-in line lets the whole count happen at the shelf,
+    then get keyed in once.
+
+    The system quantity IS printed. That is a deliberate trade: it makes the
+    count faster and lets the counter spot a gross mismatch on the spot, at the
+    cost of anchoring. Unlike the cash count -- where the expected figure is
+    hidden precisely so the number cannot be back-filled -- ingredient counts
+    are reconciled against a variance the app computes anyway, and a manager
+    who wanted to fudge one can already read it off the screen.
+    """
+    # Width is profile-derived (paper size), not a module constant.
+    width = _receipt_cols(profile)
+    lines = [(getattr(profile, 'business_name', None) or 'COUNT WORKSHEET')]
+    lines.append('COUNT WORKSHEET'.center(width))
+    from django.utils import timezone as dj_tz
+    lines.append(dj_tz.localtime(dj_tz.now()).strftime('%Y-%m-%d %H:%M').center(width))
+    lines.append(_thermal_rule(width))
+    if not rows:
+        lines.append('Nothing flagged for counting.')
+        lines.append(_thermal_rule(width))
+        return lines
+
+    for r in rows:
+        name = r['name']
+        if r.get('counted_type'):
+            name += ' *'
+        if len(name) > width:
+            name = name[:width]
+        lines.append(name)
+        qty = ('%.3f' % float(r['system_qty'])).rstrip('0').rstrip('.') or '0'
+        unit = (r.get('unit') or '').strip()
+        sys_label = f"  system: {qty}{(' ' + unit) if unit else ''}"
+        pkg = (r.get('package') or '').strip()
+        if pkg:
+            sys_label += f"  (buys: {pkg})"
+        lines.append(sys_label[:width])
+        # The write-in line — the whole point of the strip.
+        lines.append('  counted: ' + '_' * max(4, width - 11))
+        lines.append('')
+
+    lines.append(_thermal_rule(width))
+    # Kept short deliberately: 32-col paper is the narrow case and an
+    # overrunning line wraps mid-word on the strip.
+    lines.append('* = counted-type')
+    lines.append(f'{len(rows)} item(s) flagged')
+    return lines
+
+
+def print_count_worksheet(rows):
+    """FEATURE-064: emit the count worksheet on the thermal printer.
+
+    Same non-fatal contract as every other print_* here: returns False and logs
+    on any printer error, never raises. A failed worksheet must not take down
+    the ingredients page.
+    """
+    try:
+        profile = BusinessProfile.objects.first()
+        if not _is_printer_enabled(profile):
+            logger.warning('Count worksheet print skipped: printer not configured.')
+            return False
+        p = _get_transport(profile)
+        try:
+            lines = build_count_worksheet_lines(rows, profile)
+            _pset(p, profile, align='center', bold=True,
+                  double_height=True, double_width=True)
+            p.text((lines[0] if lines else 'COUNT WORKSHEET') + '\n')
+            _pset(p, profile, normal_textsize=True, align='left', bold=False)
+            for ln in lines[1:]:
+                p.text(ln + '\n')
+            _pset(p, profile, align='center')
+            p.cut()
+        finally:
+            p.close()
+        return True
+    except Exception as e:
+        logger.warning(f'Count worksheet print failed (non-fatal): {e}')
+        return False
+
+
 def kick_cash_drawer():
     """Send cashbox kick pulse via printer. Non-fatal.
     Pin configurable via settings.CASH_DRAWER_PIN: 0=pin2 (default), 1=pin5.

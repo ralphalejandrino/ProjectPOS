@@ -118,7 +118,7 @@
 // v147: internal app rename pos -> pos + API prefix /api/pos/ -> /api/pos/
 // (cache bump forces every kiosk to flush the old shell that still called the
 // pos API paths; no visual change).
-const CACHE_NAME = 'tarsierpos-v148'; // canonical cache version
+const CACHE_NAME = 'tarsierpos-v149'; // canonical cache version
 const ASSETS = [
   'index.html',
   'login.html',

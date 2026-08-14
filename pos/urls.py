@@ -29,6 +29,9 @@ urlpatterns = [
     # B13: reporting + remote ops
     path('reports/period/', views.period_report, name='reports-period'),
     path('reports/period/print/', views.period_print, name='reports-period-print'),
+    # FEATURE-064: printed worksheet for the weekly physical count.
+    path('ingredients/count-worksheet/print/', views.count_worksheet_print,
+         name='ingredients-count-worksheet-print'),
     path('reports/insights/', views.insights_report, name='reports-insights'),
     path('remote/', views.remote_status, name='remote-status'),
     # FEATURE-040: on-screen receipt preview (parity with printed layout)

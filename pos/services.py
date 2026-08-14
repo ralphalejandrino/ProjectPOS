@@ -704,6 +704,45 @@ def stock_movements_for_shift(shift):
     ]
 
 
+def ingredients_flagged_for_count():
+    """FEATURE-064: the ingredients the weekly count should cover.
+
+    Mirrors the Weekly Count tab's predicate exactly (FEATURE-055,
+    ingredients.html:loadCountTab): counted-type items always need a physical
+    count, plus anything at or below its par level.
+
+    Server-side on purpose — the printed worksheet and the on-screen table must
+    be the same list. Two implementations of "what needs counting" would drift,
+    and the manager would be counting a different set of things than the app
+    expects back.
+    """
+    from .models import Ingredient
+    qs = (
+        Ingredient.objects
+        .filter(is_active=True)
+        .select_related('unit', 'purchase_unit')
+        .order_by('name')
+    )
+    out = []
+    for ing in qs:
+        counted_type = not ing.track_depletion
+        at_or_below_par = (
+            ing.par_level is not None and ing.par_level > 0
+            and ing.current_stock <= ing.par_level
+        )
+        if not (counted_type or at_or_below_par):
+            continue
+        out.append({
+            'id': ing.id,
+            'name': ing.name,
+            'unit': getattr(ing.unit, 'abbreviation', '') or '',
+            'package': getattr(ing.purchase_unit, 'abbreviation', '') or '',
+            'system_qty': ing.current_stock,
+            'counted_type': counted_type,
+        })
+    return out
+
+
 @db_transaction.atomic
 def open_shift(cashier_user, opening_cash):
     """ISSUE-107: open a new shift for the cashier.
