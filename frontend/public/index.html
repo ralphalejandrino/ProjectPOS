@@ -185,7 +185,21 @@
                 <div class="text-3xl font-bold text-blue-600" id="cash-total">0.00</div>
             </div>
 
-            <div class="mb-4">
+            <!-- FEATURE-059: goods handed over, nothing paid. Deliberately
+                 placed INSIDE the cash modal rather than as another payment
+                 button: it is not a tender the cashier picks between, it is
+                 what happens when the cash never arrives. Keeping it out of
+                 the main row also stops it being tapped by accident. -->
+            <label class="flex items-center gap-2 mb-4 text-sm text-gray-700">
+                <input type="checkbox" id="cash-unpaid" class="rounded" onchange="toggleUnpaid()">
+                <span>Unpaid — customer will pay later (charge to account)</span>
+            </label>
+            <div id="unpaid-note" class="hidden bg-amber-100 text-gray-800 px-4 py-3 rounded mb-4 text-sm">
+                No cash will be recorded for this sale. Stock still moves and
+                the amount is tracked as owed, so the drawer will not read short.
+            </div>
+
+            <div class="mb-4" id="cash-received-block">
                 <label class="block text-sm font-medium text-gray-700 mb-2">Cash Received:</label>
                 <input aria-label="Cash Received" type="number" id="cash-received"
                        class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg text-2xl font-bold text-center focus:outline-none focus:border-blue-500"
@@ -372,6 +386,12 @@
             document.getElementById('cash-received').value = '';
             document.getElementById('cash-change-display').classList.add('hidden');
             document.getElementById('cash-insufficient').classList.add('hidden');
+            // FEATURE-059: 🔴 ALWAYS reset the unpaid flag on open. If it
+            // persisted between sales the NEXT customer would be silently rung
+            // as unpaid — money taken, nothing recorded against the drawer.
+            // That would be worse than the problem this feature fixes.
+            const _unpaid = document.getElementById('cash-unpaid');
+            if (_unpaid) { _unpaid.checked = false; toggleUnpaid(); }
             document.getElementById('cash-received').focus();
         }
 
@@ -582,6 +602,37 @@
 
         let _paymentInProgress = false;
 
+        // FEATURE-059: an unpaid sale takes no cash, so the tender entry,
+        // quick-amounts and split payment are all irrelevant — hide them
+        // rather than leave controls that do nothing.
+        function toggleUnpaid() {
+            const on = document.getElementById('cash-unpaid').checked;
+            const hide = (id, h) => {
+                const el = document.getElementById(id);
+                if (el) el.classList.toggle('hidden', h);
+            };
+            hide('cash-received-block', on);
+            hide('cash-quick-buttons', on);
+            hide('unpaid-note', !on);
+            hide('cash-insufficient', true);
+            if (on) {
+                hide('cash-change-display', true);
+                // Split payment makes no sense on an unpaid sale.
+                const st = document.getElementById('split-toggle-btn');
+                const ss = document.getElementById('split-section');
+                if (ss && !ss.classList.contains('hidden') && typeof toggleSplitPayment === 'function') {
+                    toggleSplitPayment();
+                }
+                if (st) st.classList.add('hidden');
+            } else {
+                const st = document.getElementById('split-toggle-btn');
+                if (st) st.classList.remove('hidden');
+                calculateChange();
+            }
+            const btn = document.getElementById('btn-complete-cash');
+            if (btn) btn.textContent = on ? 'Record Unpaid Sale' : 'Complete Sale';
+        }
+
         async function completeCashSale() {
             if (_paymentInProgress) return;
             if (!window.cart || !window.cart.items) {
@@ -589,6 +640,13 @@
                 return;
             }
             const total = window.cart.total;
+
+            // FEATURE-059: unpaid sale — a single 'credit' tender for the whole
+            // amount. Because the Z reconciliation reads _pl('cash') only, this
+            // never reaches cash_expected, so the drawer does not read short
+            // for goods that were never paid for. That is the PROD clinic case
+            // (OR-20260801-0232, PHP 312) which used to land on the cashier.
+            const isUnpaid = !!document.getElementById('cash-unpaid')?.checked;
             // FEATURE-016: build split payment lines when active. The cash
             // portion is the remainder; lines must sum to the total.
             let paymentLines = null;
@@ -608,12 +666,17 @@
                 ];
             }
             const cashDue = isSplit ? +(total - splitAmount()).toFixed(2) : total;
-            const received = parseFloat(document.getElementById('cash-received').value) || 0;
-            const change = received - cashDue;
+            const received = isUnpaid ? 0 : (parseFloat(document.getElementById('cash-received').value) || 0);
+            const change = isUnpaid ? 0 : received - cashDue;
 
-            if (received < cashDue) {
+            // FEATURE-059: an unpaid sale tenders nothing, so the
+            // insufficient-cash guard must not fire on it.
+            if (!isUnpaid && received < cashDue) {
                 document.getElementById('cash-insufficient').classList.remove('hidden');
                 return;
+            }
+            if (isUnpaid) {
+                paymentLines = [{ method: 'credit', amount: +total.toFixed(2) }];
             }
 
             // Sync discount ID from DOM so success modal can display it
@@ -643,10 +706,10 @@
                                 option_id: s.option_id,
                             })),
                         })),
-                        payment_method: 'cash',
+                        payment_method: isUnpaid ? 'credit' : 'cash',
                         payment_lines: paymentLines,
-                        cash_received: received,
-                        change_given: change,
+                        cash_received: isUnpaid ? null : received,
+                        change_given: isUnpaid ? null : change,
                         total_amount: total,
                         discount_amount: window.cart.discountAmount || 0,
                         discount_type: window.cart.discountType || '',
