@@ -2405,7 +2405,11 @@ def _aggregate_zreports(d_from, d_to):
     totals = {
         'gross': _Dec('0'), 'discount': _Dec('0'), 'vat': _Dec('0'),
         'net': _Dec('0'), 'cash': _Dec('0'), 'card': _Dec('0'),
-        'gcash': _Dec('0'), 'maya': _Dec('0'),
+        # FEATURE-059-FU: 'credit' belongs in the mix. Without it the payment
+        # breakdown silently omits a tender that IS part of net sales, so the
+        # mix stops summing to the total and the gap looks like a bug in the
+        # report rather than money someone owes the shop.
+        'gcash': _Dec('0'), 'maya': _Dec('0'), 'credit': _Dec('0'),
     }
     txn_count = void_count = 0
     daily = []
@@ -2415,7 +2419,7 @@ def _aggregate_zreports(d_from, d_to):
         totals['discount'] += z.discount_total
         totals['vat'] += z.output_vat
         totals['net'] += z.net_sales
-        for method in ('cash', 'card', 'gcash', 'maya'):
+        for method in ('cash', 'card', 'gcash', 'maya', 'credit'):
             totals[method] += _Dec(str(pb.get(method) or 0))
         txn_count += z.transaction_count
         void_count += z.voided_count
@@ -2466,7 +2470,8 @@ def _aggregate_transactions(d_from, d_to):
     totals = {
         'gross': _Dec('0'), 'discount': _Dec('0'), 'vat': _Dec('0'),
         'net': _Dec('0'), 'cash': _Dec('0'), 'card': _Dec('0'),
-        'gcash': _Dec('0'), 'maya': _Dec('0'),
+        # FEATURE-059-FU: see the note in the ZReport-based aggregation above.
+        'gcash': _Dec('0'), 'maya': _Dec('0'), 'credit': _Dec('0'),
     }
     by_day = {}
 
@@ -2504,7 +2509,7 @@ def _aggregate_transactions(d_from, d_to):
     # Payment mix from the tender lines of those completed sales.
     for r in (PaymentLine.objects.filter(transaction__in=sales)
               .values('method').annotate(total=Sum('amount'))):
-        if r['method'] in ('cash', 'card', 'gcash', 'maya'):
+        if r['method'] in ('cash', 'card', 'gcash', 'maya', 'credit'):
             totals[r['method']] += _Dec(str(r['total'] or 0))
 
     return totals, txn_count, void_count, by_day
@@ -2940,7 +2945,24 @@ def _weekly_payload(week_param):
     # negative on a heavy-restock week and that is expected.
     restock_costs = _weekly_restock_costs(week_start, week_end)
     restock_detail = _weekly_restock_detail(week_start, week_end)
-    net_cash_flow = _money(_Dec(_money(totals['net'])) - _Dec(restock_costs['total']))
+    # 🔴 FEATURE-059-FU: subtract credit. This figure is documented two lines
+    # above as cash-basis, "drawer in − drawer out" — but `totals['net']` is
+    # NET SALES, which includes credit sales, i.e. goods handed over with no
+    # money received. Counting them as cash inflow overstates the headline by
+    # exactly the amount the shop is owed, which is the same confusion between
+    # "sold" and "paid" that FEATURE-059 exists to remove; it just survived
+    # here because this figure is derived from sales rather than tenders.
+    #
+    # ⚠ NOT included: a later cash SETTLEMENT of an earlier credit sale. That
+    # is real drawer-in on the week it is paid (CashMovement KIND_SETTLEMENT)
+    # and it is currently counted nowhere. Left for Ralph to decide, because
+    # folding it in changes what the week's figure MEANS — deliberately not
+    # decided silently.
+    net_cash_flow = _money(
+        _Dec(_money(totals['net']))
+        - _Dec(_money(totals['credit']))
+        - _Dec(restock_costs['total'])
+    )
 
     # FEATURE-054: recipe-valued COGS + gross profit/margin. This is a
     # PROFITABILITY view (what the cafe earns after the cost of goods actually
@@ -2977,6 +2999,9 @@ def _weekly_payload(week_param):
             'card_total': _money(totals['card']),
             'gcash_total': _money(totals['gcash']),
             'maya_total': _money(totals['maya']),
+            # FEATURE-059-FU: goods sold, not paid for. Reported so the mix
+            # reconciles to net sales; deliberately NOT counted as cash.
+            'credit_total': _money(totals['credit']),
             'transaction_count': txn_count,
             'void_count': void_count,
             'avg_ticket': _avg_ticket(totals['gross'], txn_count),
@@ -3064,6 +3089,9 @@ def period_report(request):
             'card_total': _money(totals['card']),
             'gcash_total': _money(totals['gcash']),
             'maya_total': _money(totals['maya']),
+            # FEATURE-059-FU: goods sold, not paid for. Reported so the mix
+            # reconciles to net sales; deliberately NOT counted as cash.
+            'credit_total': _money(totals['credit']),
             'transaction_count': txn_count,
             'void_count': void_count,
         },

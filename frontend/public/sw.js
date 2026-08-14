@@ -129,7 +129,10 @@
 // (badge, "Owed by", "None — unpaid"); dashboard.html changed. Credit had NO
 // badge and getPaymentBadge falls back to cash, so an unpaid sale was being
 // displayed as "💵 Cash".
-const CACHE_NAME = 'tarsierpos-v154'; // canonical cache version
+// v155: FEATURE-059-FU — credit in the WEEKLY report. The payment mix
+// omitted it (so the mix stopped summing to net sales) and net cash flow
+// counted unpaid sales as cash. period.html changed.
+const CACHE_NAME = 'tarsierpos-v155'; // canonical cache version
 const ASSETS = [
   'index.html',
   'login.html',

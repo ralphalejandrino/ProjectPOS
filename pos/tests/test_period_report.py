@@ -759,3 +759,178 @@ class ISSUE121WeeklyReportTests(APITestCase):
         self.assertEqual(len(centered), width)
         self.assertIn('SUMMARY', centered)
         self.assertTrue(centered.startswith(' '))
+
+
+class WeeklyCreditFeature059FUTests(APITestCase):
+    """FEATURE-059-FU — a credit sale in the WEEKLY report.
+
+    Ralph's question: does credit show up correctly in the weekly report, the
+    X and Z readings, and the receipts? The Z reconciliation was already right
+    (credit never reaches cash_expected, so no phantom short) and X carries no
+    cash reconciliation at all. The weekly report was NOT right, in two ways:
+
+      1. The payment mix summed only cash/gcash/maya/card, while gross and net
+         are derived from the TRANSACTIONS and so include credit. The mix
+         therefore stopped adding up to net sales, with the gap looking like a
+         reporting bug instead of money the shop is owed.
+      2. `net_cash_flow` was `net sales − restock spend`. Its own docstring
+         calls it cash-basis, "drawer in − drawer out" — but net sales includes
+         goods handed over unpaid, so the headline overstated cash by exactly
+         what was owed. Same "sold" vs "paid" confusion FEATURE-059 exists to
+         remove, surviving in a figure derived from sales rather than tenders.
+    """
+
+    def setUp(self):
+        self.bp = BusinessProfile.objects.create(
+            business_name='Test Pos', currency='PHP',
+            vat_enabled=False, track_inventory=False, printer_mode='disabled',
+        )
+        self.cashier = User.objects.create_user(
+            username='cashier', password='x', role='cashier'
+        )
+        self.manager = User.objects.create_user(
+            username='manager', password='x', role='manager'
+        )
+        self.coffee = Item.objects.create(
+            name='Brewed Coffee', price=Decimal('50.00'), stock=1000
+        )
+        self.client.force_authenticate(self.manager)
+
+    def _open_shift(self):
+        return Shift.objects.create(
+            cashier=self.cashier, opening_cash=Decimal('0.00'), is_open=True,
+        )
+
+    def _sell_cash(self, qty):
+        return create_pos_transaction(
+            [{'item_id': self.coffee.id, 'quantity': qty}],
+            'cash', cashier=self.cashier, cash_received=Decimal('1000.00'),
+        )
+
+    def _sell_credit(self, qty, note='Clinic'):
+        return create_pos_transaction(
+            [{'item_id': self.coffee.id, 'quantity': qty}],
+            'credit', cashier=self.cashier,
+            payment_lines=[{
+                'method': 'credit',
+                'amount': str(Decimal('50.00') * qty),
+                'note': note,
+            }],
+        )
+
+    def _this_week(self):
+        from django.utils import timezone
+        return f"/api/pos/reports/period/?week={timezone.localdate():%Y-%m-%d}"
+
+    # --- the payment mix must reconcile ----------------------------------
+
+    def test_credit_appears_in_the_payment_mix(self):
+        self._open_shift()
+        self._sell_cash(4)      # 200 cash
+        self._sell_credit(2)    # 100 credit
+
+        s = self.client.get(self._this_week()).data['summary']
+
+        self.assertEqual(Decimal(s['cash_total']), Decimal('200.00'))
+        self.assertEqual(Decimal(s['credit_total']), Decimal('100.00'))
+
+    def test_the_mix_SUMS_to_net_sales_when_credit_is_present(self):
+        """The property that was broken: mix == net. Without credit in the
+        mix this fails by exactly the amount owed."""
+        self._open_shift()
+        self._sell_cash(4)
+        self._sell_credit(2)
+
+        data = self.client.get(self._this_week()).data
+        s = data['summary']
+        mix = sum(
+            Decimal(s[k]) for k in
+            ('cash_total', 'gcash_total', 'maya_total', 'card_total',
+             'credit_total')
+        )
+
+        self.assertEqual(Decimal(s['net_total']), Decimal('300.00'))
+        self.assertEqual(mix, Decimal(s['net_total']))
+
+    def test_NEGATIVE_CONTROL_a_cash_only_week_reports_zero_credit(self):
+        """Proves credit_total reads real data rather than echoing a total."""
+        self._open_shift()
+        self._sell_cash(4)
+
+        s = self.client.get(self._this_week()).data['summary']
+
+        self.assertEqual(Decimal(s['credit_total']), Decimal('0.00'))
+        self.assertEqual(Decimal(s['cash_total']), Decimal('200.00'))
+
+    # --- the headline must be cash-basis ---------------------------------
+
+    def test_net_cash_flow_EXCLUDES_credit(self):
+        """🔴 The bug that mattered. ₱200 cash + ₱100 unpaid is ₱200 of cash,
+        not ₱300 — the shop cannot spend what it has not been paid."""
+        self._open_shift()
+        self._sell_cash(4)      # 200 real money
+        self._sell_credit(2)    # 100 owed
+
+        data = self.client.get(self._this_week()).data
+
+        self.assertEqual(Decimal(data['summary']['net_total']), Decimal('300.00'))
+        self.assertEqual(Decimal(data['net_cash_flow']), Decimal('200.00'))
+
+    def test_NEGATIVE_CONTROL_same_sale_as_cash_gives_the_higher_figure(self):
+        """The control that proves the test above is not vacuous: rung as
+        cash, the very same goods DO belong in cash flow."""
+        self._open_shift()
+        self._sell_cash(4)
+        self._sell_cash(2)      # the same 100, but paid for
+
+        data = self.client.get(self._this_week()).data
+
+        self.assertEqual(Decimal(data['summary']['net_total']), Decimal('300.00'))
+        self.assertEqual(Decimal(data['net_cash_flow']), Decimal('300.00'))
+
+    def test_net_cash_flow_still_subtracts_restock(self):
+        """Credit must not disturb the existing expense side."""
+        self._open_shift()
+        self._sell_cash(4)      # 200 cash
+        self._sell_credit(2)    # 100 owed, excluded
+
+        data = self.client.get(self._this_week()).data
+        rc = Decimal(data['restock_costs']['total'])
+
+        self.assertEqual(
+            Decimal(data['net_cash_flow']),
+            Decimal('200.00') - rc,
+        )
+
+    # --- the printed weekly report ---------------------------------------
+
+    def test_thermal_weekly_report_shows_credit_when_present(self):
+        from pos.views import _weekly_payload
+        from pos.receipt_service import build_weekly_report_lines
+        from django.utils import timezone
+
+        self._open_shift()
+        self._sell_cash(4)
+        self._sell_credit(2)
+
+        payload, error = _weekly_payload(f"{timezone.localdate():%Y-%m-%d}")
+        self.assertIsNone(error)
+        text = '\n'.join(build_weekly_report_lines(payload, self.bp))
+
+        self.assertIn('Credit', text)
+        self.assertIn('100.00', text)
+
+    def test_NEGATIVE_CONTROL_thermal_omits_credit_on_a_cash_only_week(self):
+        """A permanent 'Credit: 0.00' would imply the shop runs accounts."""
+        from pos.views import _weekly_payload
+        from pos.receipt_service import build_weekly_report_lines
+        from django.utils import timezone
+
+        self._open_shift()
+        self._sell_cash(4)
+
+        payload, error = _weekly_payload(f"{timezone.localdate():%Y-%m-%d}")
+        self.assertIsNone(error)
+        text = '\n'.join(build_weekly_report_lines(payload, self.bp))
+
+        self.assertNotIn('Credit', text)

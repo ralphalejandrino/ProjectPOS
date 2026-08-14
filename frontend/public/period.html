@@ -499,10 +499,17 @@
             document.getElementById('daily-card').classList.remove('hidden');
 
             // Payment mix — bars (chart) + table.
+            // FEATURE-059-FU: credit is part of net sales, so leaving it out
+            // made the mix fail to add up to the total for no visible reason.
+            // Shown only when there IS credit — a permanent "Credit ₱0.00" row
+            // would imply the shop runs accounts when it does not.
             const methods = [
                 ['💵 Cash', s.cash_total], ['📱 GCash', s.gcash_total],
                 ['💳 Maya', s.maya_total], ['💳 Card', s.card_total],
             ];
+            if (parseFloat(s.credit_total || '0') > 0) {
+                methods.push(['📒 Credit (unpaid)', s.credit_total]);
+            }
             const mixTotal = methods.reduce((sum, [, v]) => sum + parseFloat(v), 0);
             document.getElementById('payment-mix').innerHTML = mixTotal
                 ? methods.map(([label, v]) => {

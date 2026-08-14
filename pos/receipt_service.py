@@ -577,9 +577,17 @@ def build_weekly_report_lines(payload, profile):
     # Payments
     lines.append(rule())
     lines.append(title('PAYMENTS'))
+    # FEATURE-059-FU: 'Credit' last, and only when non-zero — it is not a
+    # tender the shop receives, it is what it is still owed. Printing a
+    # permanent "Credit: 0.00" on a week with no tabs would imply the shop
+    # runs accounts when it does not. `.get` with a default keeps an older
+    # cached payload (no credit_total key) printing instead of raising.
     for label, key in (('Cash', 'cash_total'), ('GCash', 'gcash_total'),
                        ('Maya', 'maya_total'), ('Card', 'card_total')):
         lines.append(rrow(f'  {label}:', money(s[key])))
+    _credit = s.get('credit_total') or 0
+    if Decimal(str(_credit)) != Decimal('0'):
+        lines.append(rrow('  Credit (unpaid):', money(_credit)))
 
     # ISSUE-121-FU-B: restock cost (expense side) — per-ingredient summary.
     rc = payload.get('restock_costs') or {}
