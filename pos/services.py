@@ -714,7 +714,26 @@ def convert_to_base_units(ingredient, quantity, unit=None):
     `unit=None`, or a unit that already IS the ingredient's base unit, is the
     identity — so entering in base units keeps working untouched.
 
-    Raises UnitConversionError when no conversion row exists. Failing loudly is
+    🔑 RESOLUTION ORDER, and why it matters:
+      1. base unit / None            -> identity
+      2. the ingredient's PURCHASE unit (FEATURE-050) -> its
+         purchase_to_base_factor
+      3. an explicit IngredientUnitConversion row
+      4. otherwise raise
+
+    Step 2 exists because FEATURE-050 ALREADY stores a per-ingredient
+    package->base factor, and the restock form converts with it
+    (serializers.py:~652). If recipes carried a second copy of "1 sack = 25000
+    g", the two could be edited apart and restock would disagree with
+    depletion — the same figure meaning different things in different screens.
+    So the purchase factor is authoritative for the purchase unit, and a
+    duplicate conversion row for it is rejected at write time rather than
+    silently shadowed.
+
+    A useful side effect: any ingredient that already has a purchase unit can
+    be used in a recipe in that unit immediately, with no new data entry.
+
+    Raises UnitConversionError when nothing defines the unit. Failing loudly is
     the point: silently assuming 1:1 would under-deplete stock by whatever the
     real factor is, and the error would only surface weeks later as inventory
     drift nobody can trace.
@@ -723,6 +742,15 @@ def convert_to_base_units(ingredient, quantity, unit=None):
     qty = Decimal(str(quantity))
     if unit is None or unit.pk == ingredient.unit_id:
         return qty
+
+    # 2. FEATURE-050's purchasing layer is the single source of truth for the
+    #    package unit. Do NOT duplicate it here.
+    if (ingredient.purchase_unit_id == unit.pk
+            and ingredient.purchase_to_base_factor):
+        return (qty * ingredient.purchase_to_base_factor).quantize(
+            Decimal('0.0001'), rounding=ROUND_HALF_UP
+        )
+
     try:
         conv = IngredientUnitConversion.objects.get(
             ingredient=ingredient, unit=unit

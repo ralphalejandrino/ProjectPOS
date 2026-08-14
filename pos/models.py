@@ -1491,6 +1491,35 @@ class IngredientUnitConversion(models.Model):
         ]
         ordering = ['ingredient__name', 'unit__abbreviation']
 
+    def clean(self):
+        """Refuse to shadow something already defined elsewhere.
+
+        The ingredient's own base unit is 1:1 by definition, and its PURCHASE
+        unit already carries a factor via FEATURE-050 which the restock form
+        converts with. A second copy of either is a value that can be edited
+        apart from the original, after which restock and depletion would
+        silently disagree about what a sack is.
+        """
+        from django.core.exceptions import ValidationError
+        if self.ingredient_id and self.unit_id:
+            if self.unit_id == self.ingredient.unit_id:
+                raise ValidationError(
+                    f"{self.ingredient.name} is already measured in "
+                    f"'{self.unit.abbreviation}' — no conversion needed."
+                )
+            if (self.ingredient.purchase_unit_id == self.unit_id
+                    and self.ingredient.purchase_to_base_factor):
+                raise ValidationError(
+                    f"'{self.unit.abbreviation}' is already this ingredient's "
+                    f"purchase unit (1 = {self.ingredient.purchase_to_base_factor} "
+                    f"{self.ingredient.unit.abbreviation}). Edit it there, so "
+                    f"restock and recipes cannot disagree."
+                )
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
     def __str__(self):
         return (f"1 {self.unit.abbreviation} {self.ingredient.name} "
                 f"= {self.to_base_factor} {self.ingredient.unit.abbreviation}")

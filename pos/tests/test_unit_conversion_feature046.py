@@ -78,6 +78,44 @@ class ConversionTests(TestCase):
             convert_to_base_units(self.matcha, Decimal('7'), None),
             Decimal('7'))
 
+    def test_PURCHASE_unit_works_with_NO_conversion_row(self):
+        """FEATURE-050 already stores a per-ingredient package->base factor and
+        the restock form converts with it. Recipes must reuse THAT, not a
+        second copy — so an ingredient bought by the sack is usable in a recipe
+        by the sack immediately, with no new data entry."""
+        sack = IngredientUnit.objects.get_or_create(
+            abbreviation='sack', defaults={'name': 'Sack'})[0]
+        self.sugar.purchase_unit = sack
+        self.sugar.purchase_to_base_factor = Decimal('25000')
+        self.sugar.save()
+
+        self.assertEqual(
+            convert_to_base_units(self.sugar, Decimal('2'), sack),
+            Decimal('50000.0000'))
+
+    def test_cannot_shadow_the_purchase_unit_with_a_conversion_row(self):
+        """🔴 Two copies of "1 sack = 25000 g" could be edited apart, after
+        which restock and depletion would silently disagree about what a sack
+        is. Blocked at write time."""
+        from django.core.exceptions import ValidationError
+        sack = IngredientUnit.objects.get_or_create(
+            abbreviation='sack', defaults={'name': 'Sack'})[0]
+        self.sugar.purchase_unit = sack
+        self.sugar.purchase_to_base_factor = Decimal('25000')
+        self.sugar.save()
+
+        with self.assertRaises(ValidationError):
+            IngredientUnitConversion.objects.create(
+                ingredient=self.sugar, unit=sack,
+                to_base_factor=Decimal('9999'))
+
+    def test_cannot_add_a_conversion_for_the_base_unit(self):
+        from django.core.exceptions import ValidationError
+        with self.assertRaises(ValidationError):
+            IngredientUnitConversion.objects.create(
+                ingredient=self.sugar, unit=self.g,
+                to_base_factor=Decimal('1'))
+
     def test_undefined_conversion_FAILS_LOUDLY(self):
         """🔴 The important one. Assuming 1:1 would under-deplete stock by the
         whole real factor, and would only surface weeks later as untraceable
@@ -145,8 +183,11 @@ class RecipeEntryTests(TestCase):
             )
 
     def test_conversion_is_unique_per_ingredient_unit_pair(self):
-        from django.db.utils import IntegrityError
-        with self.assertRaises(IntegrityError):
+        # save() calls full_clean(), so the duplicate surfaces as a
+        # ValidationError before the DB constraint fires. The constraint is
+        # still there as the backstop for raw/bulk writes.
+        from django.core.exceptions import ValidationError
+        with self.assertRaises(ValidationError):
             IngredientUnitConversion.objects.create(
                 ingredient=self.matcha, unit=self.scoop,
                 to_base_factor=Decimal('9'))
