@@ -773,18 +773,49 @@ class RecipeIngredientSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = RecipeIngredient
-        fields = ['id', 'item', 'variant', 'ingredient', 'ingredient_detail', 'quantity_used', 'depletion_mode']
+        fields = ['id', 'item', 'variant', 'ingredient', 'ingredient_detail',
+                  'quantity_used', 'depletion_mode',
+                  # FEATURE-046 / ISSUE-122
+                  'entry_unit', 'entry_quantity']
+        # quantity_used is DERIVED whenever entry_* are supplied (model.save),
+        # so it must stay writable for direct base-unit entry but is never the
+        # thing the client sends alongside an entry unit.
+        extra_kwargs = {
+            'entry_unit': {'required': False, 'allow_null': True},
+            'entry_quantity': {'required': False, 'allow_null': True},
+        }
 
     def validate_quantity_used(self, value):
         # ISSUE-113: a zero/negative per-serving quantity silently disables or
-        # inverts depletion. The quantity is always in the ingredient's own
-        # unit (no conversion exists anywhere in the depletion path).
+        # inverts depletion. quantity_used is ALWAYS in the ingredient's base
+        # unit — FEATURE-046 lets the user TYPE another unit, but conversion
+        # happens on the way in so this field's meaning never changed.
         if value <= 0:
             raise serializers.ValidationError(
                 'Quantity per serving must be greater than 0 '
                 "(in the ingredient's unit)."
             )
         return value
+
+    def validate(self, attrs):
+        """FEATURE-046: surface a missing conversion as a 400 with a usable
+        message, instead of letting the model raise and become a 500."""
+        unit = attrs.get('entry_unit')
+        qty = attrs.get('entry_quantity')
+        if (unit is None) != (qty is None):
+            raise serializers.ValidationError(
+                'entry_unit and entry_quantity must be supplied together.'
+            )
+        if unit is not None:
+            ingredient = attrs.get('ingredient') or getattr(
+                self.instance, 'ingredient', None)
+            if ingredient is not None:
+                from .services import convert_to_base_units, UnitConversionError
+                try:
+                    convert_to_base_units(ingredient, qty, unit)
+                except UnitConversionError as e:
+                    raise serializers.ValidationError({'entry_unit': str(e)})
+        return attrs
 
     def validate(self, attrs):
         # BUG-013: every recipe line is owned by an Item (recipe_item_required).

@@ -704,6 +704,40 @@ def stock_movements_for_shift(shift):
     ]
 
 
+class UnitConversionError(Exception):
+    """No conversion defined for this (ingredient, unit) pair."""
+
+
+def convert_to_base_units(ingredient, quantity, unit=None):
+    """FEATURE-046: express `quantity` of `unit` in the ingredient's BASE unit.
+
+    `unit=None`, or a unit that already IS the ingredient's base unit, is the
+    identity — so entering in base units keeps working untouched.
+
+    Raises UnitConversionError when no conversion row exists. Failing loudly is
+    the point: silently assuming 1:1 would under-deplete stock by whatever the
+    real factor is, and the error would only surface weeks later as inventory
+    drift nobody can trace.
+    """
+    from .models import IngredientUnitConversion
+    qty = Decimal(str(quantity))
+    if unit is None or unit.pk == ingredient.unit_id:
+        return qty
+    try:
+        conv = IngredientUnitConversion.objects.get(
+            ingredient=ingredient, unit=unit
+        )
+    except IngredientUnitConversion.DoesNotExist:
+        raise UnitConversionError(
+            f"No conversion from '{unit.abbreviation}' to "
+            f"'{ingredient.unit.abbreviation}' for {ingredient.name}. "
+            f"Add one before using this unit in a recipe."
+        )
+    return (qty * conv.to_base_factor).quantize(
+        Decimal('0.0001'), rounding=ROUND_HALF_UP
+    )
+
+
 def ingredients_flagged_for_count():
     """FEATURE-064: the ingredients the weekly count should cover.
 

@@ -1460,12 +1460,79 @@ class IngredientRestockLog(models.Model):
         return f"+{self.quantity_added} {self.ingredient.unit.abbreviation} of {self.ingredient.name}"
 
 
+class IngredientUnitConversion(models.Model):
+    """FEATURE-046: how many BASE units one alternate unit is, per ingredient.
+
+    Conversions cannot be global. A scoop of matcha powder and a scoop of sugar
+    are different masses, so the factor belongs to the (ingredient, unit) pair —
+    "1 scoop of Matcha = 2.5 g", not "1 scoop = 2.5 g".
+
+    This is the recipe-entry sibling of the FEATURE-050 purchasing layer
+    (Ingredient.purchase_unit / purchase_to_base_factor). Purchasing asks "how
+    many grams in the sack I buy"; this asks "how many grams in the scoop I
+    cook with". Same shape, different question, deliberately not shared.
+    """
+    ingredient = models.ForeignKey(
+        Ingredient, on_delete=models.CASCADE, related_name='unit_conversions'
+    )
+    unit = models.ForeignKey(IngredientUnit, on_delete=models.PROTECT)
+    # How many of the ingredient's BASE units one `unit` equals.
+    to_base_factor = models.DecimalField(max_digits=12, decimal_places=6)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['ingredient', 'unit'], name='uniq_ingredient_unit_conv'
+            ),
+            models.CheckConstraint(
+                check=models.Q(to_base_factor__gt=0),
+                name='unit_conv_factor_positive',
+            ),
+        ]
+        ordering = ['ingredient__name', 'unit__abbreviation']
+
+    def __str__(self):
+        return (f"1 {self.unit.abbreviation} {self.ingredient.name} "
+                f"= {self.to_base_factor} {self.ingredient.unit.abbreviation}")
+
+
 class RecipeIngredient(models.Model):
     """Ingredients used in recipes for menu items"""
     item = models.ForeignKey('Item', null=True, blank=True, on_delete=models.CASCADE, related_name='recipe_ingredients')
     variant = models.ForeignKey('VariantOption', null=True, blank=True, on_delete=models.CASCADE, related_name='recipe_ingredients')
     ingredient = models.ForeignKey(Ingredient, on_delete=models.CASCADE, related_name='recipes')
+    # 🔴 quantity_used REMAINS THE SINGLE SOURCE OF TRUTH, always in the
+    # ingredient's BASE unit. Every depletion and costing path reads this field
+    # and none of them knows about entry units. FEATURE-046 adds the entry
+    # fields BELOW as an input/display convenience that is converted into this
+    # one on save — so a conversion bug can never silently change what a sale
+    # depletes or what a recipe costs.
     quantity_used = models.DecimalField(max_digits=10, decimal_places=4)
+    # FEATURE-046 / ISSUE-122: what the user actually typed, and in which unit.
+    # Both null => the row was entered directly in base units (every existing
+    # row, and still a valid way to enter one).
+    entry_unit = models.ForeignKey(
+        IngredientUnit, null=True, blank=True, on_delete=models.PROTECT,
+        related_name='recipe_entries',
+    )
+    entry_quantity = models.DecimalField(
+        max_digits=10, decimal_places=4, null=True, blank=True
+    )
+
+    def save(self, *args, **kwargs):
+        """Derive quantity_used from the entry fields when they are supplied.
+
+        Done here rather than in a serializer so EVERY write path — admin,
+        management command, fixture, future endpoint — goes through the same
+        conversion. A second implementation elsewhere is how the base-unit
+        invariant would quietly break.
+        """
+        if self.entry_unit_id and self.entry_quantity is not None:
+            from .services import convert_to_base_units  # circular at module load
+            self.quantity_used = convert_to_base_units(
+                self.ingredient, self.entry_quantity, self.entry_unit
+            )
+        super().save(*args, **kwargs)
     # BUG-003: how a variant line interacts with the item-level line for the same
     # ingredient. 'replace' (default) suppresses the base line — substitution,
     # e.g. Oat milk replaces Regular milk. 'add' depletes alongside the base —
