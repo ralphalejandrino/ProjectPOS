@@ -1591,6 +1591,10 @@ def close_shift_and_finalize_z(shift_id, cash_counted, cashier_user):
         credit_extended=credit_extended,
         credit_settled=credit_settled,
         cash_counted=counted,
+        # FEATURE-061: stamp when the count actually happened. business_date is
+        # the shift's OPEN date, so on a shift closed the next day the two
+        # differ — and that gap is exactly when cash goes missing unrecorded.
+        counted_at=dj_tz.now() if counted is not None else None,
         over_short=over_short,
         grand_total_sales=counter.grand_total,
         currency=(bp.currency or 'PHP'),

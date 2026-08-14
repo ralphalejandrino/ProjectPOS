@@ -794,6 +794,37 @@ function renderShiftBar() {
     if (typeof window.renderShiftIndicator === 'function') {
         window.renderShiftIndicator(currentShift);
     }
+    renderStaleShiftNotice();
+}
+
+// FEATURE-061: a shift that has crossed into another business day is flagged,
+// NOT blocked. PROD shifts routinely ran 14-31 hours and were closed the next
+// day, so the cash count was taken long after the money was earned — often
+// after the owner had already collected from the drawer, which makes the
+// count unreconcilable through no fault of whoever typed it.
+//
+// Deliberately non-blocking, and deliberately not auto-closing:
+//   * blocking sales is the worst possible failure for a cafe;
+//   * auto-closing would write an immutable Z with no human count, i.e.
+//     fabricate the exact number this whole batch of work exists to protect.
+// So it prompts, and the timing is recorded (ZReport.counted_at) either way.
+function renderStaleShiftNotice() {
+    const el = document.getElementById('stale-shift-notice');
+    if (!el) return;
+    const s = currentShift;
+    if (!s || !s.is_open || !s.spans_business_date) {
+        el.classList.add('hidden');
+        return;
+    }
+    const hrs = (typeof s.hours_open === 'number') ? s.hours_open : null;
+    const txt = document.getElementById('stale-shift-text');
+    if (txt) {
+        txt.textContent =
+            'This shift opened on an earlier day' +
+            (hrs !== null ? ` and has been open ${hrs} hours` : '') +
+            '. Close it and count the drawer so today starts clean.';
+    }
+    el.classList.remove('hidden');
 }
 
 // Refetch /shifts/current/ and re-render the header. Called on POS mount

@@ -55,6 +55,17 @@
     <div id="nav-mount"></div>
     <script>renderNav({ activePage: 'pos' });</script>
 
+    <!-- FEATURE-061: stale-shift notice. Informational only — selling is never
+         blocked, because a register that refuses to sell is a worse failure
+         than a late count. Rendered by renderStaleShiftNotice() in app.js. -->
+    <!-- No border-amber-200: there is no Tailwind build, so a class absent
+         from styles.css/shared-styles.css is dead at runtime. bg-amber-100 is
+         present and carries the emphasis on its own. -->
+    <div id="stale-shift-notice" class="hidden bg-amber-100 text-gray-800 px-4 py-2 text-sm">
+        <span class="font-semibold">Shift still open from an earlier day.</span>
+        <span id="stale-shift-text"></span>
+    </div>
+
     <!-- FEATURE-036: shift status moved into header indicator + ☰ dropdown;
          sticky shift-bar removed (state lives in nav.js). -->
 

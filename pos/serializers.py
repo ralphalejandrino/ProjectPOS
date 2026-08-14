@@ -464,14 +464,33 @@ class PaymentGatewayConfigSerializer(serializers.ModelSerializer):
 
 class ShiftSerializer(serializers.ModelSerializer):
     cashier_name = serializers.CharField(source='cashier.username', read_only=True)
+    # FEATURE-061: computed SERVER-side on purpose. "Has this shift crossed
+    # into another business day" is a timezone question, and the server holds
+    # TIME_ZONE; letting the kiosk decide invites an off-by-one-day banner.
+    spans_business_date = serializers.SerializerMethodField()
+    hours_open = serializers.SerializerMethodField()
 
     class Meta:
         model = Shift
         fields = [
             'id', 'cashier', 'cashier_name', 'opened_at', 'closed_at',
-            'opening_cash', 'closing_cash', 'is_open'
+            'opening_cash', 'closing_cash', 'is_open',
+            'spans_business_date', 'hours_open',
         ]
         read_only_fields = ['cashier', 'opened_at', 'closed_at', 'is_open']
+
+    def _elapsed(self, obj):
+        from django.utils import timezone as dj_tz
+        end = obj.closed_at or dj_tz.now()
+        return end - obj.opened_at
+
+    def get_spans_business_date(self, obj):
+        from django.utils import timezone as dj_tz
+        end = obj.closed_at or dj_tz.now()
+        return dj_tz.localdate(end) != dj_tz.localdate(obj.opened_at)
+
+    def get_hours_open(self, obj):
+        return round(self._elapsed(obj).total_seconds() / 3600.0, 1)
 
 
 # ============================================================================

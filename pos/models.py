@@ -1210,6 +1210,12 @@ class ZReport(models.Model):
     credit_settled = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     cash_expected = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     cash_counted = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    # FEATURE-061: WHEN the drawer was actually counted, which is not the same
+    # as business_date. PROD shifts routinely run 14-31 hours and are closed the
+    # next day, so a Z stamped 2026-08-11 could carry a count taken on 08-12
+    # after the cash had already been collected. Recording it makes a late
+    # count visible instead of quietly misleading.
+    counted_at = models.DateTimeField(null=True, blank=True)
     over_short = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
 
     grand_total_sales = models.DecimalField(max_digits=16, decimal_places=2, default=0)
