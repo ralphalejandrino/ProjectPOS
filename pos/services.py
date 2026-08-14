@@ -837,7 +837,11 @@ def variant_ingredient_conflict(variant_option, ingredient, exclude_pk=None):
     return None
 
 
-_VALID_PAYMENT_METHODS = {'cash', 'card', 'gcash', 'maya'}
+# FEATURE-059: 'credit' is a valid tender — it settles the sale so the line
+# amounts still sum to the charged total — but it puts no money in the drawer.
+# The cash reconciliation reads _pl('cash') only, so credit is excluded from
+# cash_expected by construction rather than by a special case.
+_VALID_PAYMENT_METHODS = {'cash', 'card', 'gcash', 'maya', 'credit'}
 _PAYMENT_CENTS = Decimal('0.01')
 
 
@@ -1462,7 +1466,10 @@ def close_shift_and_finalize_z(shift_id, cash_counted, cashier_user):
         )
 
     payment_breakdown = {}
-    for method in ['cash', 'gcash', 'maya', 'card']:
+    # FEATURE-059: 'credit' is listed so the breakdown is exhaustive and the
+    # tender totals still sum to sales. It is deliberately NOT added to
+    # cash_collected below — credit is a receivable, not money in the drawer.
+    for method in ['cash', 'gcash', 'maya', 'card', 'credit']:
         payment_breakdown[method] = str(_pl(method))
 
     # FEATURE-015: refund aggregates. refund_total is a positive magnitude
@@ -1480,10 +1487,34 @@ def close_shift_and_finalize_z(shift_id, cash_counted, cashier_user):
     opening_cash = (
         Decimal(str(shift.opening_cash or 0))
     ).quantize(_Z_CENTS, rounding=ROUND_HALF_UP)
-    # Refunded cash left the drawer this shift, so it reduces what we expect.
-    cash_expected = (opening_cash + cash_collected - refund_cash).quantize(
-        _Z_CENTS, rounding=ROUND_HALF_UP
+    # FEATURE-059: non-sale drawer movements. Before this, an owner collecting
+    # cash mid-shift or a restock paid from the drawer was invisible here and
+    # surfaced as an unexplained short against the cashier.
+    from .models import CashMovement
+    _mv = (
+        CashMovement.objects.filter(shift=shift)
+        .values('kind')
+        .annotate(total=Sum('amount'))
     )
+    _mv_by_kind = {r['kind']: Decimal(str(r['total'] or 0)) for r in _mv}
+
+    def _mv_sum(*kinds):
+        return sum(
+            (_mv_by_kind.get(k, Decimal('0')) for k in kinds), Decimal('0')
+        ).quantize(_Z_CENTS, rounding=ROUND_HALF_UP)
+
+    cash_paid_out = _mv_sum(*CashMovement.OUTFLOW_KINDS)
+    cash_paid_in = _mv_sum(
+        CashMovement.KIND_CASH_IN, CashMovement.KIND_SETTLEMENT
+    )
+    credit_extended = _pl('credit')
+    credit_settled = _mv_sum(CashMovement.KIND_SETTLEMENT)
+
+    # Refunded cash left the drawer this shift, so it reduces what we expect.
+    cash_expected = (
+        opening_cash + cash_collected - refund_cash
+        + cash_paid_in - cash_paid_out
+    ).quantize(_Z_CENTS, rounding=ROUND_HALF_UP)
     counted = (
         Decimal(str(cash_counted)).quantize(_Z_CENTS, rounding=ROUND_HALF_UP)
         if cash_counted is not None else None
@@ -1555,6 +1586,10 @@ def close_shift_and_finalize_z(shift_id, cash_counted, cashier_user):
         opening_cash=opening_cash,
         cash_collected=cash_collected,
         cash_expected=cash_expected,
+        cash_paid_out=cash_paid_out,
+        cash_paid_in=cash_paid_in,
+        credit_extended=credit_extended,
+        credit_settled=credit_settled,
         cash_counted=counted,
         over_short=over_short,
         grand_total_sales=counter.grand_total,

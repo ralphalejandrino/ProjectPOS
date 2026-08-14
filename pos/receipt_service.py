@@ -340,6 +340,16 @@ def print_z_report(z_report):
             p.text(_thermal_rule(RECEIPT_WIDTH) + '\n')
             p.text(rrow('Opening Cash:', money(z_report.opening_cash)))
             p.text(rrow('Cash Collected:', money(z_report.cash_collected)))
+            # FEATURE-059: print non-sale drawer movements so a discrepancy is
+            # explained on the slip itself rather than argued over later.
+            # getattr keeps this safe against Z rows written before the fields
+            # existed.
+            _paid_in = getattr(z_report, 'cash_paid_in', 0) or 0
+            _paid_out = getattr(z_report, 'cash_paid_out', 0) or 0
+            if _paid_in:
+                p.text(rrow('Cash Added:', money(_paid_in)))
+            if _paid_out:
+                p.text(rrow('Cash Paid Out:', '-' + money(_paid_out)))
             p.text(rrow('Cash Expected:', money(z_report.cash_expected)))
             if z_report.cash_counted is not None:
                 p.text(rrow('Cash Counted:', money(z_report.cash_counted)))
@@ -348,6 +358,17 @@ def print_z_report(z_report):
                 if z_report.over_short >= 0:
                     os_val = '+' + os_val
                 p.text(rrow('Over/Short:', os_val))
+            # FEATURE-059: receivables opened/closed this shift. Shown apart
+            # from the cash block because credit is owed money, not drawer
+            # money — folding it in is exactly the confusion this ticket fixes.
+            _cr_ext = getattr(z_report, 'credit_extended', 0) or 0
+            _cr_set = getattr(z_report, 'credit_settled', 0) or 0
+            if _cr_ext or _cr_set:
+                p.text(_thermal_rule(RECEIPT_WIDTH) + '\n')
+                if _cr_ext:
+                    p.text(rrow('Credit Extended:', money(_cr_ext)))
+                if _cr_set:
+                    p.text(rrow('Credit Settled:', money(_cr_set)))
 
             # --- Stock movement (FEATURE-008) ---
             # Read live from the IngredientLog ledger; skip the block entirely
@@ -438,7 +459,10 @@ def print_xreport_summary(data):
             p.text(rrow('Transactions:', str(data.get('transaction_count', 0))))
             p.text(_thermal_rule(RECEIPT_WIDTH) + '\n')
             for row in data.get('by_payment_method', []):
-                method = {'cash': 'Cash', 'gcash': 'GCash', 'maya': 'Maya'}.get(
+                method = {
+                    'cash': 'Cash', 'gcash': 'GCash', 'maya': 'Maya',
+                    'card': 'Card', 'credit': 'Credit/Unpaid',  # FEATURE-059
+                }.get(
                     row.get('payment_method', ''), row.get('payment_method', 'Other'))
                 p.text(rrow(f"  {method} ({row.get('count', 0)}):",
                             format_currency(row.get('subtotal', 0), ccode, ascii_only=True)))

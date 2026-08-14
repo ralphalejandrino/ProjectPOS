@@ -470,7 +470,9 @@ class PosTransactionViewSet(viewsets.ViewSet):
         )
         pl_by_method = {r['method']: r for r in pl_rows}
         by_method = []
-        for method in ['cash', 'gcash', 'maya', 'card']:
+        # FEATURE-059: 'credit' included so the X-report tender list is
+        # exhaustive and matches the Z breakdown.
+        for method in ['cash', 'gcash', 'maya', 'card', 'credit']:
             row = pl_by_method.get(method)
             by_method.append({
                 'payment_method': method,
@@ -1503,6 +1505,106 @@ class ShiftViewSet(viewsets.ModelViewSet):
 
         return Response(ZReportSerializer(z_report).data,
                         status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['get', 'post'], url_path='cash-movements',
+            permission_classes=[IsManagerOrAbove])
+    def cash_movements(self, request, pk=None):
+        """FEATURE-059: record/list non-sale cash movements on a shift.
+
+        POST body: {"kind": drop|payout|cash_in|settlement,
+                    "amount": <decimal > 0>, "reason": <str>,
+                    "settles": <transaction id, settlement only>}
+
+        🔴 MANAGER/ADMIN ONLY, DELIBERATELY. A cashier who could record a
+        payout at will could zero out any shortage by inventing one — which is
+        the exact fabrication risk this whole ticket exists to close. A reason
+        is required for outflows for the same reason: an unexplained drop is
+        indistinguishable from a cover-up.
+
+        Movements are append-only. There is no edit or delete: a mistake is
+        corrected by recording the opposite movement, so the ledger always
+        reconstructs how the drawer reached its closing figure.
+        """
+        from decimal import Decimal, InvalidOperation
+        from .models import CashMovement
+
+        try:
+            shift = Shift.objects.get(pk=pk)
+        except Shift.DoesNotExist:
+            return Response({'error': 'Shift not found.'},
+                            status=status.HTTP_404_NOT_FOUND)
+
+        if request.method == 'GET':
+            rows = shift.cash_movements.all().order_by('created_at')
+            return Response([
+                {
+                    'id': m.id, 'kind': m.kind,
+                    'kind_display': m.get_kind_display(),
+                    'amount': str(m.amount),
+                    'signed_amount': str(m.signed_amount),
+                    'reason': m.reason,
+                    'settles': m.settles_id,
+                    'created_at': m.created_at,
+                    'created_by': getattr(m.created_by, 'username', None),
+                }
+                for m in rows
+            ])
+
+        # A closed shift is finalized into an immutable Z; letting a movement
+        # land afterwards would silently contradict a report already printed.
+        if not shift.is_open:
+            return Response(
+                {'error': 'Shift is closed; its Z-Report is already final.'},
+                status=status.HTTP_400_BAD_REQUEST)
+
+        kind = request.data.get('kind')
+        valid = {k for k, _ in CashMovement.KIND_CHOICES}
+        if kind not in valid:
+            return Response({'error': f"kind must be one of {sorted(valid)}."},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            amount = Decimal(str(request.data.get('amount')))
+        except (TypeError, ValueError, InvalidOperation):
+            return Response({'error': 'amount must be a decimal.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        if amount <= 0:
+            return Response({'error': 'amount must be greater than zero.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        reason = (request.data.get('reason') or '').strip()
+        if not reason and kind in CashMovement.OUTFLOW_KINDS:
+            return Response(
+                {'error': 'reason is required when cash leaves the drawer.'},
+                status=status.HTTP_400_BAD_REQUEST)
+
+        settles_id = request.data.get('settles')
+        settles = None
+        if kind == CashMovement.KIND_SETTLEMENT:
+            if not settles_id:
+                return Response(
+                    {'error': 'settles (transaction id) is required for a '
+                              'settlement.'},
+                    status=status.HTTP_400_BAD_REQUEST)
+            try:
+                settles = PosTransaction.objects.get(pk=settles_id)
+            except PosTransaction.DoesNotExist:
+                return Response({'error': 'settles transaction not found.'},
+                                status=status.HTTP_404_NOT_FOUND)
+        elif settles_id:
+            return Response(
+                {'error': 'settles is only valid on a settlement.'},
+                status=status.HTTP_400_BAD_REQUEST)
+
+        m = CashMovement.objects.create(
+            shift=shift, kind=kind, amount=amount, reason=reason,
+            settles=settles, created_by=request.user,
+        )
+        return Response(
+            {'id': m.id, 'kind': m.kind, 'amount': str(m.amount),
+             'signed_amount': str(m.signed_amount), 'reason': m.reason,
+             'settles': m.settles_id},
+            status=status.HTTP_201_CREATED)
 
 
 class ZReportPagination(PageNumberPagination):

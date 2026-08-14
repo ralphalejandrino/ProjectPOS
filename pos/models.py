@@ -360,6 +360,8 @@ class PosTransaction(Transaction):
         ('gcash', 'GCash'),
         ('maya', 'Maya'),
         ('card', 'Card'),
+        # FEATURE-059: see PaymentLine.METHOD_CHOICES.
+        ('credit', 'Credit / Unpaid'),
     ]
 
     # Payment details
@@ -674,6 +676,11 @@ class PaymentLine(models.Model):
         ('card', 'Card'),
         ('gcash', 'GCash'),
         ('maya', 'Maya'),
+        # FEATURE-059: goods handed over, payment owed. A credit tender is a
+        # real tender (it settles the sale so the transaction balances) but it
+        # is NOT cash, so it must never reach `cash_expected`. That falls out
+        # for free because the reconciliation reads _pl('cash') only.
+        ('credit', 'Credit / Unpaid'),
     ]
 
     transaction = models.ForeignKey(
@@ -1021,6 +1028,79 @@ class Shift(models.Model):
         return f"Shift {self.id} — {self.cashier.username} ({'open' if self.is_open else 'closed'})"
 
 
+class CashMovement(models.Model):
+    """FEATURE-059: money that enters or leaves the drawer WITHOUT being a sale.
+
+    Before this model the drawer reconciliation knew only two things: cash
+    collected on sales (in) and cash refunded (out). Anything else that touched
+    the drawer was invisible to `cash_expected`, so it surfaced as an
+    unexplained over/short against whoever happened to close the shift.
+
+    Three real cases at PROD, all previously unrepresentable:
+      * the owner collecting cash mid-shift          -> KIND_DROP
+      * a restock paid out of the drawer (FLAG-081)  -> KIND_PAYOUT
+      * a credit sale later settled in cash          -> KIND_SETTLEMENT
+
+    Rows are append-only by convention: a mistake is corrected by recording the
+    opposite movement, never by editing or deleting, so the ledger always
+    reconstructs how the drawer got to its closing figure.
+    """
+
+    KIND_DROP = 'drop'
+    KIND_PAYOUT = 'payout'
+    KIND_CASH_IN = 'cash_in'
+    KIND_SETTLEMENT = 'settlement'
+
+    KIND_CHOICES = [
+        (KIND_DROP, 'Cash drop / collection'),
+        (KIND_PAYOUT, 'Cash payout'),
+        (KIND_CASH_IN, 'Cash added'),
+        (KIND_SETTLEMENT, 'Credit settlement'),
+    ]
+
+    # Movements that REMOVE cash from the drawer. Everything else adds.
+    OUTFLOW_KINDS = frozenset({KIND_DROP, KIND_PAYOUT})
+
+    shift = models.ForeignKey(
+        Shift, on_delete=models.CASCADE, related_name='cash_movements'
+    )
+    kind = models.CharField(max_length=12, choices=KIND_CHOICES)
+    # Always a POSITIVE magnitude. Direction is derived from `kind` so a sign
+    # error cannot silently invert a movement.
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    reason = models.CharField(max_length=200, blank=True, default='')
+    # For KIND_SETTLEMENT: which credit sale this pays off.
+    settles = models.ForeignKey(
+        'PosTransaction',
+        null=True, blank=True,
+        on_delete=models.PROTECT,
+        related_name='settlements',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name='cash_movements',
+    )
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                check=models.Q(amount__gt=0), name='cashmovement_positive'
+            ),
+        ]
+        indexes = [models.Index(fields=['shift', 'kind'])]
+
+    @property
+    def signed_amount(self):
+        """+ adds to the drawer, - removes from it."""
+        return -self.amount if self.kind in self.OUTFLOW_KINDS else self.amount
+
+    def __str__(self):
+        return f"{self.get_kind_display()}: {format_currency(self.amount)}"
+
+
 # ============================================================================
 # FEATURE-011-C: Z-REPORT (BIR end-of-shift finalization)
 # ============================================================================
@@ -1117,6 +1197,17 @@ class ZReport(models.Model):
     # Cash reconciliation — fixes ISSUE-078 (opening float exclusion)
     opening_cash = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     cash_collected = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    # FEATURE-059: non-sale drawer movements, frozen onto the Z so the report
+    # explains its own expected figure instead of leaving a bare discrepancy.
+    # Both are POSITIVE magnitudes; direction is carried by the field name.
+    cash_paid_out = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    cash_paid_in = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    # Credit extended during this shift (goods out, money owed) and credit
+    # settled in cash during it. Reported, never folded into cash_expected —
+    # extended credit is a receivable, and its settlement is already counted
+    # once via cash_paid_in.
+    credit_extended = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    credit_settled = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     cash_expected = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     cash_counted = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     over_short = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
