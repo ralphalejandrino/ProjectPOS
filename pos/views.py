@@ -31,6 +31,7 @@ from .serializers import (
     IngredientUnitSerializer,
     SupplierSerializer,
     IngredientSerializer,
+    IngredientUnitConversionSerializer,
     IngredientRestockLogSerializer,
     RestockVoidInputSerializer,
     RestockEditInputSerializer,
@@ -1815,6 +1816,27 @@ class SupplierViewSet(viewsets.ModelViewSet):
     pagination_class = None
 
 
+class IngredientUnitConversionViewSet(viewsets.ModelViewSet):
+    """FEATURE-046 / ISSUE-122: CRUD for extra measuring units per ingredient.
+
+    ?ingredient=<id> filters to one ingredient — which is how the recipe-row
+    selector loads its options.
+    """
+    serializer_class = IngredientUnitConversionSerializer
+    permission_classes = [HasPageAccess('ingredients')]
+    pagination_class = None  # reference data, small; the UI reads the array
+
+    def get_queryset(self):
+        from .models import IngredientUnitConversion
+        qs = (IngredientUnitConversion.objects
+              .select_related('unit', 'ingredient', 'ingredient__unit')
+              .order_by('unit__abbreviation'))
+        ing = self.request.query_params.get('ingredient')
+        if ing:
+            qs = qs.filter(ingredient_id=ing)
+        return qs
+
+
 class IngredientViewSet(viewsets.ModelViewSet):
     queryset = Ingredient.objects.filter(is_active=True).select_related('unit','supplier').order_by('name')
     serializer_class = IngredientSerializer
@@ -1826,6 +1848,42 @@ class IngredientViewSet(viewsets.ModelViewSet):
     # sort past the page-1 cutoff (e.g. "wintermelon") saved fine (201) but
     # never appeared in the list or recipe dropdown. Same fix as ItemViewSet.
     pagination_class = None
+
+    @action(detail=True, methods=['get'], url_path='units')
+    def units(self, request, pk=None):
+        """FEATURE-046 / ISSUE-122: every unit a recipe line may be entered in.
+
+        Computed SERVER-side and in the same precedence as
+        services.convert_to_base_units, so the selector can never offer a unit
+        the backend would then reject. Re-deriving this list in JS would be a
+        second implementation of the resolution order — the exact duplication
+        the FEATURE-050 reconciliation just removed.
+
+        `factor` is how many BASE units one of that unit is, so the UI can show
+        the converted amount live without a round-trip.
+        """
+        ing = self.get_object()
+        out = [{
+            'unit': ing.unit_id,
+            'abbreviation': ing.unit.abbreviation,
+            'factor': '1',
+            'source': 'base',
+        }]
+        if ing.purchase_unit_id and ing.purchase_to_base_factor:
+            out.append({
+                'unit': ing.purchase_unit_id,
+                'abbreviation': ing.purchase_unit.abbreviation,
+                'factor': str(ing.purchase_to_base_factor),
+                'source': 'purchase',
+            })
+        for c in ing.unit_conversions.select_related('unit').all():
+            out.append({
+                'unit': c.unit_id,
+                'abbreviation': c.unit.abbreviation,
+                'factor': str(c.to_base_factor),
+                'source': 'conversion',
+            })
+        return Response({'base_unit': ing.unit.abbreviation, 'units': out})
 
     @action(detail=True, methods=['post'])
     def restock(self, request, pk=None):

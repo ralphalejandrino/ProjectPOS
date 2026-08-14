@@ -15,6 +15,8 @@ router.register(r'variant-groups', views.VariantGroupViewSet, basename='variant-
 router.register(r'ingredient-units', views.IngredientUnitViewSet, basename='ingredient-units')
 router.register(r'suppliers', views.SupplierViewSet, basename='suppliers')
 router.register(r'ingredients', views.IngredientViewSet, basename='ingredients')
+# FEATURE-046 / ISSUE-122: extra measuring units per ingredient.
+router.register(r'unit-conversions', views.IngredientUnitConversionViewSet, basename='unit-conversions')
 # FEATURE-058: restock corrections (void/edit/reattribute only — no list/CRUD)
 router.register(r'restock-logs', views.IngredientRestockLogViewSet, basename='restock-logs')
 router.register(r'recipe-ingredients', views.RecipeIngredientViewSet, basename='recipe-ingredients')

@@ -27,6 +27,7 @@ from .models import (
     Supplier,
     Ingredient,
     IngredientRestockLog,
+    IngredientUnitConversion,
     RecipeIngredient,
     BusinessProfile,
     ZReport,
@@ -766,6 +767,47 @@ class RestockReattributeInputSerializer(serializers.Serializer):
             raise serializers.ValidationError(
                 'Price must be greater than 0.')
         return value
+
+
+class IngredientUnitConversionSerializer(serializers.ModelSerializer):
+    """FEATURE-046 / ISSUE-122: extra units an ingredient can be measured in.
+
+    Only for units you MEASURE with but do not buy in — a scoop, a pump, a
+    sachet. The base unit is 1:1 by definition and the purchase unit already
+    carries its factor (FEATURE-050), so the model refuses rows that would
+    shadow either; that ValidationError is surfaced here as a 400.
+    """
+    unit_detail = IngredientUnitSerializer(source='unit', read_only=True)
+    base_unit = serializers.CharField(
+        source='ingredient.unit.abbreviation', read_only=True)
+
+    class Meta:
+        model = IngredientUnitConversion
+        fields = ['id', 'ingredient', 'unit', 'unit_detail', 'base_unit',
+                  'to_base_factor']
+
+    def validate_to_base_factor(self, value):
+        if value <= 0:
+            raise serializers.ValidationError(
+                'One of this unit must equal more than zero base units.')
+        return value
+
+    def validate(self, attrs):
+        from django.core.exceptions import ValidationError as DjangoVE
+        inst = IngredientUnitConversion(
+            ingredient=attrs.get('ingredient') or getattr(self.instance, 'ingredient', None),
+            unit=attrs.get('unit') or getattr(self.instance, 'unit', None),
+            to_base_factor=attrs.get('to_base_factor')
+            or getattr(self.instance, 'to_base_factor', None),
+        )
+        if self.instance is not None:
+            inst.pk = self.instance.pk
+        try:
+            inst.clean()
+        except DjangoVE as e:
+            raise serializers.ValidationError(
+                {'unit': e.messages if hasattr(e, 'messages') else str(e)})
+        return attrs
 
 
 class RecipeIngredientSerializer(serializers.ModelSerializer):

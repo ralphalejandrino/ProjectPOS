@@ -356,9 +356,17 @@
                      selected ingredient so the expected unit is never ambiguous. -->
                 <div class="flex items-center justify-end gap-1">
                   <input aria-label="Quantity per serving" type="number" id="newRecipeQty" min="0" step="0.001" placeholder="0.000"
+                    oninput="updateRecipeUnitPreview()"
                     class="w-24 border border-gray-200 rounded px-2 py-1 text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-300" />
-                  <span id="newRecipeQtyUnit" class="text-xs text-gray-500">—</span>
+                  <!-- ISSUE-122: enter in a working unit (scoop/pump) or the
+                       package you buy in. Options come from the server so the
+                       selector can only offer units the backend will accept. -->
+                  <select aria-label="Unit" id="newRecipeQtyUnit" onchange="updateRecipeUnitPreview()"
+                    class="border border-gray-200 rounded px-1 py-1 text-xs text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-300">
+                    <option value="">—</option>
+                  </select>
                 </div>
+                <div id="newRecipeConverted" class="text-xs text-gray-400 text-right mt-1"></div>
               </td>
               <td class="px-4 py-2 text-gray-400 text-xs" id="newRecipeUnit">—</td>
               <td class="px-4 py-2 text-center">
@@ -506,6 +514,29 @@
           <input aria-label="Last price per package" type="number" id="ingredientPkgPrice" min="0" step="0.01"
             class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
         </div>
+      </div>
+      <!-- ISSUE-122: extra MEASURING units — a scoop, a pump, a sachet.
+           Only for units you measure with but do not buy in: the base unit is
+           1:1 and the package above already carries its own factor, so the
+           server refuses a row that would shadow either. Hidden until the
+           ingredient exists, because a conversion needs something to hang on. -->
+      <div id="ingredientConvBlock" class="hidden border-t border-gray-100 pt-3">
+        <label class="block text-xs font-medium text-gray-600 mb-1">
+          Also measured in
+          <span class="text-gray-400 font-normal">— optional; for scoops, pumps, sachets</span>
+        </label>
+        <div id="ingredientConvList" class="text-sm text-gray-600 mb-2"></div>
+        <div class="flex items-end gap-2">
+          <select aria-label="Extra unit" id="convUnit"
+            class="border border-gray-200 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"></select>
+          <span class="text-xs text-gray-500 pb-2">=</span>
+          <input aria-label="Base units per extra unit" type="number" id="convFactor" min="0" step="0.0001" placeholder="0"
+            class="w-28 border border-gray-200 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+          <span id="convBaseLabel" class="text-xs text-gray-500 pb-2">—</span>
+          <button type="button" onclick="addUnitConversion()"
+            class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded-lg text-sm transition">Add</button>
+        </div>
+        <p id="convError" class="hidden text-red-600 text-xs mt-1"></p>
       </div>
       <div class="flex items-center gap-2 pt-1">
         <input type="checkbox" id="ingredientActive" class="rounded" checked />
@@ -1377,14 +1408,145 @@ function populateNewRecipeIngredientSelect() {
   sel.onchange = () => {
     const opt  = sel.options[sel.selectedIndex];
     const unit = opt?.dataset?.unit || '—';
-    // ISSUE-113: keep the unit column, the input suffix, and the input's
-    // accessible label in sync with the selected ingredient's unit.
-    document.getElementById('newRecipeUnit').textContent    = unit;
-    document.getElementById('newRecipeQtyUnit').textContent = unit;
+    // ISSUE-113: keep the unit column and the input's accessible label in sync
+    // with the selected ingredient's BASE unit — that is what quantity_used is
+    // always stored in, whatever unit was typed.
+    document.getElementById('newRecipeUnit').textContent = unit;
     const qtyInput = document.getElementById('newRecipeQty');
     qtyInput.setAttribute('aria-label',
       unit !== '—' ? `Quantity per serving (${unit})` : 'Quantity per serving');
+    loadRecipeUnitOptions(sel.value);
   };
+}
+
+// ISSUE-122: which units this ingredient may be entered in. Fetched per
+// ingredient because conversions are per ingredient — a scoop of matcha is not
+// a scoop of sugar. The server computes the list in the same precedence as
+// services.convert_to_base_units, so the selector cannot offer a unit the
+// backend would reject.
+let recipeUnitOptions = [];
+
+// ─── ISSUE-122: extra measuring units, per ingredient ───────────────
+let convIngredientId = null;
+
+function _convErr(msg) {
+  const el = document.getElementById('convError');
+  if (!el) return;
+  if (!msg) { el.classList.add('hidden'); return; }
+  el.textContent = msg; el.classList.remove('hidden');
+}
+
+async function loadUnitConversions(ingredientId, baseAbbr) {
+  convIngredientId = ingredientId || null;
+  const block = document.getElementById('ingredientConvBlock');
+  if (!block) return;
+  _convErr('');
+  // A conversion needs an ingredient to hang on, so this is edit-only.
+  block.classList.toggle('hidden', !ingredientId);
+  if (!ingredientId) return;
+
+  document.getElementById('convBaseLabel').textContent = baseAbbr || '—';
+  document.getElementById('convUnit').innerHTML = (units || [])
+    .map(u => `<option value="${u.id}">${esc(u.abbreviation)}</option>`).join('');
+
+  let rows = [];
+  try {
+    rows = await apiFetch(`/unit-conversions/?ingredient=${ingredientId}`) || [];
+  } catch (e) { rows = []; }
+  const list = document.getElementById('ingredientConvList');
+  list.innerHTML = rows.length
+    ? rows.map(r => `
+        <div class="flex items-center justify-between py-1">
+          <span>1 ${esc(r.unit_detail?.abbreviation || '')} = ${parseFloat(r.to_base_factor)} ${esc(r.base_unit || '')}</span>
+          <button type="button" onclick="deleteUnitConversion(${r.id})"
+            class="text-red-600 text-xs hover:underline">Remove</button>
+        </div>`).join('')
+    : '<span class="text-xs text-gray-400">None yet.</span>';
+}
+
+async function addUnitConversion() {
+  if (!convIngredientId) return;
+  const unit = document.getElementById('convUnit').value;
+  const factor = document.getElementById('convFactor').value;
+  if (!unit || !(parseFloat(factor) > 0)) {
+    _convErr('Pick a unit and how many base units it equals.');
+    return;
+  }
+  try {
+    await apiFetch('/unit-conversions/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ingredient: convIngredientId, unit: unit, to_base_factor: factor,
+      }),
+    });
+    document.getElementById('convFactor').value = '';
+    await loadUnitConversions(convIngredientId,
+      document.getElementById('convBaseLabel').textContent);
+  } catch (e) {
+    // The server refuses a row that shadows the base or purchase unit, and
+    // its message says where the value already lives — surface it verbatim.
+    _convErr(e.message || 'Could not add that unit.');
+  }
+}
+
+async function deleteUnitConversion(id) {
+  try {
+    await apiFetch(`/unit-conversions/${id}/`, { method: 'DELETE' });
+    await loadUnitConversions(convIngredientId,
+      document.getElementById('convBaseLabel').textContent);
+  } catch (e) {
+    _convErr(e.message || 'Could not remove that unit.');
+  }
+}
+
+// ISSUE-122: show what was actually TYPED alongside the stored base amount.
+// Without this a line entered as "2 scoop" renders only as "5.000 g", so the
+// next person to edit it sees grams, re-enters grams, and the working unit is
+// lost after one edit cycle — the feature would quietly evaporate.
+function entryNote(r) {
+  if (!r || !r.entry_quantity || !r.entry_unit) return '';
+  // `units` is the page's already-loaded /ingredient-units/ list.
+  const u = (units || []).find(x => String(x.id) === String(r.entry_unit));
+  const abbr = u?.abbreviation || '';
+  const qty = parseFloat(r.entry_quantity);
+  if (!(qty > 0) || !abbr) return '';
+  return ` <span class="text-xs text-gray-400">(entered ${qty} ${esc(abbr)})</span>`;
+}
+
+async function loadRecipeUnitOptions(ingredientId) {
+  const box = document.getElementById('newRecipeQtyUnit');
+  recipeUnitOptions = [];
+  if (!ingredientId) {
+    box.innerHTML = '<option value="">—</option>';
+    updateRecipeUnitPreview();
+    return;
+  }
+  try {
+    const data = await apiFetch(`/ingredients/${ingredientId}/units/`);
+    recipeUnitOptions = data?.units || [];
+  } catch (e) {
+    recipeUnitOptions = [];
+  }
+  box.innerHTML = recipeUnitOptions.map(u =>
+    `<option value="${u.unit}" data-factor="${esc(u.factor)}">${esc(u.abbreviation)}</option>`
+  ).join('') || '<option value="">—</option>';
+  updateRecipeUnitPreview();
+}
+
+// Show what the typed amount becomes in base units. quantity_used is always
+// stored in base units, so seeing the conversion before saving is the only way
+// to catch a wrong factor at entry time rather than as stock drift weeks later.
+function updateRecipeUnitPreview() {
+  const out = document.getElementById('newRecipeConverted');
+  if (!out) return;
+  const qty = parseFloat(document.getElementById('newRecipeQty').value);
+  const box = document.getElementById('newRecipeQtyUnit');
+  const opt = box.options[box.selectedIndex];
+  const factor = parseFloat(opt?.dataset?.factor || '1');
+  const base = document.getElementById('newRecipeUnit').textContent;
+  if (!(qty > 0) || !opt || factor === 1) { out.textContent = ''; return; }
+  out.textContent = `= ${(qty * factor).toFixed(3)} ${base}`;
 }
 
 async function onRecipeItemChange() {
@@ -1441,7 +1603,7 @@ async function loadRecipeIngredients() {
         <tr class="border-b border-gray-50 hover:bg-gray-50">
           <td class="px-4 py-3 font-medium text-gray-800">${esc(ing.name || '—')}</td>
           <td class="px-4 py-3 text-right font-mono">${parseFloat(r.quantity_used || 0).toFixed(3)}</td>
-          <td class="px-4 py-3 text-gray-500">${esc(unit)}</td>
+          <td class="px-4 py-3 text-gray-500">${esc(unit)}${entryNote(r)}</td>
           <td class="px-4 py-3 text-center">${r.depletion_mode === 'add' ? 'Add' : 'Replace'}</td>
           <td class="px-4 py-3 text-center">
             <button onclick="deleteRecipeIngredient(${r.id})"
@@ -1488,7 +1650,10 @@ function cancelAddRecipeRow() {
   document.getElementById('newRecipeQty').value = '';
   document.getElementById('newRecipeMode').value = 'replace';
   document.getElementById('newRecipeUnit').textContent = '—';
-  document.getElementById('newRecipeQtyUnit').textContent = '—';
+  // ISSUE-122: it is a <select> now, not a text suffix.
+  document.getElementById('newRecipeQtyUnit').innerHTML = '<option value="">—</option>';
+  document.getElementById('newRecipeConverted').textContent = '';
+  recipeUnitOptions = [];
   document.getElementById('newRecipeQty').setAttribute('aria-label', 'Quantity per serving');
 }
 
@@ -1500,7 +1665,8 @@ async function saveRecipeIngredient() {
   if (!ingId || !qty) { window.toast({message: 'Select an ingredient and quantity', severity: 'error'}); return; }
   // ISSUE-113: quantity must be a positive amount of the ingredient's unit.
   if (!(parseFloat(qty) > 0)) {
-    const unit = document.getElementById('newRecipeQtyUnit').textContent;
+    const _b = document.getElementById('newRecipeQtyUnit');
+    const unit = _b.options[_b.selectedIndex]?.textContent || '—';
     window.toast({message: `Quantity per serving must be greater than 0${unit !== '—' ? ' ' + unit : ''}`, severity: 'error'});
     return;
   }
@@ -1513,9 +1679,31 @@ async function saveRecipeIngredient() {
   // BUG-003: depletion_mode controls whether a variant line replaces or adds to
   // the base ingredient. Default 'replace' preserves substitution behaviour.
   const mode = document.getElementById('newRecipeMode').value || 'replace';
-  const payload = variantId
-    ? { item: itemId, variant: variantId, ingredient: ingId, quantity_used: qty, depletion_mode: mode }
-    : { item: itemId, variant: null, ingredient: ingId, quantity_used: qty, depletion_mode: mode };
+
+  // ISSUE-122: when a non-base unit is chosen, send the entry fields and let
+  // the SERVER convert (RecipeIngredient.save -> convert_to_base_units).
+  // Converting here and posting quantity_used would put a second copy of the
+  // factor in the browser, which is exactly the duplication the FEATURE-050
+  // reconciliation removed. quantity_used is still sent so the serializer's
+  // ISSUE-113 positive check has something to validate; the model overwrites
+  // it with the converted value.
+  const unitBox = document.getElementById('newRecipeQtyUnit');
+  const unitOpt = unitBox.options[unitBox.selectedIndex];
+  const unitId  = unitOpt?.value || '';
+  const factor  = parseFloat(unitOpt?.dataset?.factor || '1');
+  const isBase  = !unitId || factor === 1;
+
+  const payload = {
+    item: itemId,
+    variant: variantId || null,
+    ingredient: ingId,
+    quantity_used: isBase ? qty : String(parseFloat(qty) * factor),
+    depletion_mode: mode,
+  };
+  if (!isBase) {
+    payload.entry_unit = unitId;
+    payload.entry_quantity = qty;
+  }
 
   try {
     await apiFetch('/recipe-ingredients/', {
@@ -1562,6 +1750,8 @@ function openIngredientModal(id) {
   document.getElementById('ingredientType').value = 'metered';  // FEATURE-053
   // FEATURE-050: reset the purchasing-unit fields.
   document.getElementById('ingredientPkgFactor').value = '';
+  // ISSUE-122: hide the conversions editor until an ingredient exists.
+  loadUnitConversions(null, null);
   document.getElementById('ingredientPkgPrice').value  = '';
   // FEATURE-056: reset the preparation editor.
   document.getElementById('ingredientIsPrep').checked = false;
@@ -1598,6 +1788,8 @@ function openIngredientModal(id) {
       // FEATURE-050: purchasing-unit config.
       document.getElementById('ingredientPurchaseUnit').value = ing.purchase_unit || '';
       document.getElementById('ingredientPkgFactor').value    = ing.purchase_to_base_factor || '';
+      // ISSUE-122: load this ingredient's extra measuring units.
+      loadUnitConversions(ing.id, ing.unit_detail?.abbreviation || '');
       document.getElementById('ingredientPkgPrice').value     = ing.last_purchase_price || '';
       // FEATURE-056: populate the preparation editor from the saved BOM.
       if (ing.is_preparation) {
