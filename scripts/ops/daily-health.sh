@@ -8,29 +8,15 @@ set -uo pipefail
 
 TARSIERPOS_DIR=${TARSIERPOS_DIR:-$(cd "$(dirname "$(realpath "$0")")/../.." && pwd)}
 
-# 🔴 FIX 2026-08-15: this used to `.` (source) .env, which is BASH — and .env
-# holds an unquoted Django secret like DJANGO_SECRET_KEY=2jem(th$hr32... so bash
-# died on `syntax error near unexpected token '('` BEFORE setting anything.
-# Every variable then fell back to a wrong default, producing two FALSE warnings
-# every single day (wrong service name, cert "not found"). Those false alarms are
-# why the one TRUE warning — no backups since 2026-07-19 — was ignored for a
-# month. systemd's EnvironmentFile parser does no shell expansion, which is why
-# the same file works fine for the gunicorn unit.
-# Parse it safely instead: literal KEY=VALUE only, no evaluation, allowlisted.
-if [ -f "$TARSIERPOS_DIR/.env" ]; then
-  while IFS= read -r _line || [ -n "$_line" ]; do
-    case "$_line" in ''|\#*) continue ;; esac
-    _key=${_line%%=*}
-    _val=${_line#*=}
-    [ "$_key" = "$_line" ] && continue          # no '=' on the line
-    _val=${_val%\"}; _val=${_val#\"}
-    _val=${_val%\'}; _val=${_val#\'}
-    case "$_key" in
-      TARSIERPOS_SERVICE|TAILSCALE_HOSTNAME|TARSIERPOS_BACKUP_DIR)
-        printf -v "$_key" '%s' "$_val" ;;
-    esac
-  done < "$TARSIERPOS_DIR/.env"
-fi
+# 🔴 OPS-003: .env is parsed as DATA, never executed — `. .env` dies on the
+# unquoted `(` in the Django secret before setting anything, which is what made
+# this check report two FALSE warnings daily and drown the one true one.
+# Shared implementation so the next script cannot repeat it.
+_LIBDIR="$(cd "$(dirname "$(realpath "$0")")" && pwd)"
+for _c in "$_LIBDIR/../lib/load-env.sh" "$TARSIERPOS_DIR/scripts/lib/load-env.sh"; do
+  [ -f "$_c" ] && { . "$_c"; break; }
+done
+tarsierpos_load_env "$TARSIERPOS_DIR/.env" TARSIERPOS_SERVICE TAILSCALE_HOSTNAME TARSIERPOS_BACKUP_DIR
 
 # 🔴 FIX 2026-08-15: default was `tarsierpos-backend` — the DEV box's unit name.
 # The client box runs `tarsierpos.service`, so this reported "not active" every

@@ -9,12 +9,14 @@
 set -uo pipefail
 
 TARSIERPOS_DIR=${TARSIERPOS_DIR:-$(cd "$(dirname "$(realpath "$0")")/../.." && pwd)}
-if [ -f "$TARSIERPOS_DIR/.env" ]; then
-  set -a
-  # shellcheck disable=SC1090,SC1091
-  . "$TARSIERPOS_DIR/.env"
-  set +a
-fi
+# OPS-003: parse .env as DATA, never execute it. See scripts/lib/load-env.sh --
+# `. .env` makes bash evaluate a file that contains an unquoted `(` in the Django
+# secret, which aborts the script before any variable is set.
+_LIBDIR="$(cd "$(dirname "$(realpath "$0")")" && pwd)"
+for _c in "$_LIBDIR/../lib/load-env.sh" "$_LIBDIR/../../scripts/lib/load-env.sh" "$TARSIERPOS_DIR/scripts/lib/load-env.sh"; do
+  [ -f "$_c" ] && { . "$_c"; break; }
+done
+tarsierpos_load_env "$TARSIERPOS_DIR/.env" TARSIERPOS_SERVICE TAILSCALE_HOSTNAME
 SERVICE=${TARSIERPOS_SERVICE:-tarsierpos-backend}
 
 # Default to today's logs when no args are given.

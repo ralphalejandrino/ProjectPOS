@@ -1,8 +1,15 @@
 [Unit]
-Description=Monthly TarsierPOS Tailscale cert renewal
+Description=Weekly TarsierPOS Tailscale cert renewal
 
 [Timer]
-OnCalendar=monthly
+# OPS-003 (2026-08-15): was `monthly`. Let's Encrypt certs are 90-day and
+# renew-cert.sh only acts inside the last 30 days (--min-validity=720h), so a
+# monthly timer gave the renewal exactly ONE attempt roughly two days before
+# expiry. If that attempt failed -- and it HAD been failing every run on the
+# .env parse bug -- the cert died and took https://localhost, and therefore the
+# kiosk, with it. Weekly gives ~4 attempts inside the window at no cost: the
+# command is a no-op while the cert still has >30 days left.
+OnCalendar=weekly
 Persistent=true
 RandomizedDelaySec=30min
 
