@@ -15,7 +15,41 @@ hardcoded (hard rule; ISSUE-079).
 """
 from decimal import Decimal, ROUND_HALF_UP
 
+from django.utils import timezone as dj_tz
+from django.utils.dateparse import parse_datetime
+
 from .utils.currency import format_currency
+
+DT_FMT = '%Y-%m-%d %H:%M'
+
+
+def fmt_dt(value, fmt=DT_FMT):
+    """ISSUE-123: render a stored datetime in the shop's LOCAL timezone.
+
+    Stored datetimes are timezone-aware UTC (``USE_TZ = True``), and a bare
+    ``value.strftime(...)`` formats the UTC wall clock. Django only converts to
+    ``TIME_ZONE`` inside templates, so every print path has to ask for it
+    explicitly — which none of them did. The customer receipt, the Z report
+    period and the X report open-time all printed 8 hours behind Manila, on
+    documents carrying a BIR serial number.
+
+    Accepts an aware datetime, a naive datetime, or an ISO-8601 string (the X
+    report receives ``shift.opened_at.isoformat()`` over the API).
+
+    NAIVE values are passed through untouched: they are already wall-clock by
+    construction (the layout preview's sample transaction), and
+    ``timezone.localtime`` raises ValueError on them.
+    """
+    if value is None or value == '':
+        return ''
+    if isinstance(value, str):
+        parsed = parse_datetime(value)
+        if parsed is None:          # not a datetime we understand — show it raw
+            return value[:len(fmt) + 2]
+        value = parsed
+    if dj_tz.is_aware(value):
+        value = dj_tz.localtime(value)
+    return value.strftime(fmt)
 
 # ESC/POS printable columns per paper width + font. Font A is 12 dots wide,
 # Font B is 9 dots; 58mm carriage = 384 dots, 80mm = 576 dots. (Corrected in
@@ -128,7 +162,7 @@ def build_receipt_rows(transaction, profile, ascii_currency=False):
 
     # --- Transaction info (left) ---
     rows.append(_row(f'Receipt #: {transaction.transaction_no}'))
-    rows.append(_row(f'Date: {transaction.created_at.strftime("%Y-%m-%d %H:%M")}'))
+    rows.append(_row(f'Date: {fmt_dt(transaction.created_at)}'))
     if transaction.cashier:
         rows.append(_row(f'Cashier: {transaction.cashier.username}'))
     rows.append(_row('-' * cols))

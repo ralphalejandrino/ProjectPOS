@@ -3,7 +3,7 @@ from django.conf import settings
 from escpos.printer import File, Network
 from .models import BusinessProfile
 from .utils.currency import format_currency
-from .receipt_layout import build_receipt_rows, receipt_cols
+from .receipt_layout import build_receipt_rows, receipt_cols, fmt_dt
 import logging
 
 # ISSUE-095 / BUG-004: USB printer device auto-detect.
@@ -281,8 +281,9 @@ def print_z_report(z_report):
             p.text(rrow(f'Z #: {z_report.z_counter}',
                         f'Reset: {z_report.reset_counter}'))
             p.text(f'Business Date: {z_report.business_date}\n')
-            started = z_report.started_at.strftime('%Y-%m-%d %H:%M')
-            finalized = z_report.finalized_at.strftime('%Y-%m-%d %H:%M')
+            # ISSUE-123: local time, not the stored UTC. See receipt_layout.fmt_dt.
+            started = fmt_dt(z_report.started_at)
+            finalized = fmt_dt(z_report.finalized_at)
             p.text(f'Period: {started} - {finalized}\n')
             p.text(f'Cashier: {z_report.cashier.username}\n')
             # ISSUE-094: explicit shift attribution. Opener comes from the
@@ -490,7 +491,8 @@ def print_xreport_summary(data):
                 # on the Z-report at finalization, not here.
                 p.text(f"Opened by: {data['cashier']}\n")
             if data.get('opened_at'):
-                p.text(f"Opened: {str(data['opened_at'])[:16]}\n")
+                # ISSUE-123: arrives as an ISO-8601 UTC string from the API.
+                p.text(f"Opened: {fmt_dt(data['opened_at'])}\n")
             p.text(_thermal_rule(RECEIPT_WIDTH) + '\n')
 
             def rrow(label, val):
