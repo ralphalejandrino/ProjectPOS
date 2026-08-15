@@ -10,6 +10,14 @@ set -euo pipefail
 # Repo root: this script lives in scripts/, so root is one level up.
 TARSIERPOS_DIR=${TARSIERPOS_DIR:-$(cd "$(dirname "$(realpath "$0")")/.." && pwd)}
 DEPLOY_USER=${SUDO_USER:-$(whoami)}
+# OPS-002 (2026-08-15): units that TOUCH THE DATABASE must run as its OWNER, not
+# as whoever happened to run this installer. On pos-01 the installer was run
+# by posadmin, so the backup unit got User=posadmin -- a user that cannot write
+# db.sqlite3. The DB is WAL, and a WAL reader must be able to create the -shm
+# sidecar, so the backup failed with "attempt to write a readonly database"
+# whenever that sidecar was absent. 25 runs, 0 successes, a month with no backup.
+# On a dev box there is no `tarsier`, so fall back to the deploy user.
+if id -u tarsier >/dev/null 2>&1; then APP_USER=tarsier; else APP_USER="$DEPLOY_USER"; fi
 SRC="$TARSIERPOS_DIR/scripts/systemd"
 DST="/etc/systemd/system"
 
@@ -45,6 +53,7 @@ UNITS=(
 
 echo "TARSIERPOS_DIR=$TARSIERPOS_DIR"
 echo "DEPLOY_USER=$DEPLOY_USER"
+echo "APP_USER=$APP_USER  (units touching the DB run as this)"
 
 # Ensure scripts are executable (git preserves the bit, but be safe).
 chmod +x "$TARSIERPOS_DIR"/scripts/cert/*.sh \
@@ -57,6 +66,7 @@ for u in "${UNITS[@]}"; do
     continue
   fi
   sed -e "s|__TARSIERPOS_DIR__|$TARSIERPOS_DIR|g" \
+      -e "s|__APP_USER__|$APP_USER|g" \
       -e "s|__DEPLOY_USER__|$DEPLOY_USER|g" \
       "$SRC/$u" > "$DST/$u"
   echo "  installed: $DST/$u"

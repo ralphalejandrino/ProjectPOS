@@ -1,12 +1,20 @@
 [Unit]
 Description=TarsierPOS local DB snapshot (time-anchored, GFS retention)
 # Installed by scripts/install-ops-units.sh (substitutes __TARSIERPOS_DIR__ /
-# __DEPLOY_USER__). Runs backup_db.sh, which snapshots db.sqlite3 and prunes to
+# __APP_USER__). Runs backup_db.sh, which snapshots db.sqlite3 and prunes to
 # the GFS policy (7 daily + 4 weekly).
+#
+# 🔴 OPS-002 (2026-08-15): this ran as __DEPLOY_USER__ -- whoever happened to run
+# the installer (posadmin on pos-01). That user does NOT own db.sqlite3, and
+# the DB is in WAL mode: a WAL reader must be able to create/write the -shm
+# sidecar, so even READING it fails with "attempt to write a readonly database"
+# whenever the sidecar is absent (i.e. after any clean shutdown). It appeared to
+# work only while the service happened to be running. The backup must therefore
+# run as the user that OWNS the database.
 
 [Service]
 Type=oneshot
-User=__DEPLOY_USER__
-Group=__DEPLOY_USER__
+User=__APP_USER__
+Group=__APP_USER__
 Environment=TARSIERPOS_DIR=__TARSIERPOS_DIR__
 ExecStart=__TARSIERPOS_DIR__/backup_db.sh
