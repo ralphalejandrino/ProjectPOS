@@ -3,18 +3,43 @@
 # Reports disk usage, last backup timestamp, cert expiry days, service status.
 # Portable: no hardcoded paths or service names.
 #   Repo root  -> $TARSIERPOS_DIR (env) or this script's location.
-#   Service    -> $TARSIERPOS_SERVICE from .env (default tarsierpos-backend).
+#   Service    -> $TARSIERPOS_SERVICE from .env (default tarsierpos).
 set -uo pipefail
 
 TARSIERPOS_DIR=${TARSIERPOS_DIR:-$(cd "$(dirname "$(realpath "$0")")/../.." && pwd)}
+
+# 🔴 FIX 2026-08-15: this used to `.` (source) .env, which is BASH — and .env
+# holds an unquoted Django secret like DJANGO_SECRET_KEY=2jem(th$hr32... so bash
+# died on `syntax error near unexpected token '('` BEFORE setting anything.
+# Every variable then fell back to a wrong default, producing two FALSE warnings
+# every single day (wrong service name, cert "not found"). Those false alarms are
+# why the one TRUE warning — no backups since 2026-07-19 — was ignored for a
+# month. systemd's EnvironmentFile parser does no shell expansion, which is why
+# the same file works fine for the gunicorn unit.
+# Parse it safely instead: literal KEY=VALUE only, no evaluation, allowlisted.
 if [ -f "$TARSIERPOS_DIR/.env" ]; then
-  set -a
-  # shellcheck disable=SC1090,SC1091
-  . "$TARSIERPOS_DIR/.env"
-  set +a
+  while IFS= read -r _line || [ -n "$_line" ]; do
+    case "$_line" in ''|\#*) continue ;; esac
+    _key=${_line%%=*}
+    _val=${_line#*=}
+    [ "$_key" = "$_line" ] && continue          # no '=' on the line
+    _val=${_val%\"}; _val=${_val#\"}
+    _val=${_val%\'}; _val=${_val#\'}
+    case "$_key" in
+      TARSIERPOS_SERVICE|TAILSCALE_HOSTNAME|TARSIERPOS_BACKUP_DIR)
+        printf -v "$_key" '%s' "$_val" ;;
+    esac
+  done < "$TARSIERPOS_DIR/.env"
 fi
-SERVICE=${TARSIERPOS_SERVICE:-tarsierpos-backend}
-BACKUP_DIR="$TARSIERPOS_DIR/backups"
+
+# 🔴 FIX 2026-08-15: default was `tarsierpos-backend` — the DEV box's unit name.
+# The client box runs `tarsierpos.service`, so this reported "not active" every
+# day about a service that was running perfectly.
+SERVICE=${TARSIERPOS_SERVICE:-tarsierpos}
+# 🔴 FIX 2026-08-15: was "$TARSIERPOS_DIR/backups" (inside the repo, unwritable
+# by the service user). Must match backup_db.sh or health reports on a directory
+# nothing writes to.
+BACKUP_DIR="${TARSIERPOS_BACKUP_DIR:-$(dirname "$TARSIERPOS_DIR")/backups}"
 CERT_DIR="$TARSIERPOS_DIR/certs"
 
 echo "===== TarsierPOS daily health summary $(date -Iseconds) ====="
@@ -27,14 +52,38 @@ df -h "$TARSIERPOS_DIR" 2>/dev/null | awk 'NR==2 {print "disk: filesystem "$5" u
 # 2. Last local backup snapshot.
 last=$(ls -1t "$BACKUP_DIR"/db_*.sqlite3 2>/dev/null | head -1)
 if [ -n "$last" ]; then
-  echo "backup: last local snapshot $(basename "$last") @ $(date -r "$last" -Iseconds 2>/dev/null)"
+  age_h=$(( ( $(date +%s) - $(date -r "$last" +%s 2>/dev/null || echo 0) ) / 3600 ))
+  # A backup that stopped running is far more dangerous than one that never
+  # started: the folder still looks populated. Age it explicitly.
+  if [ "$age_h" -gt 48 ]; then
+    echo "backup: WARNING newest snapshot is ${age_h}h old — $(basename "$last")"
+  else
+    echo "backup: OK $(basename "$last") @ $(date -r "$last" -Iseconds 2>/dev/null) (${age_h}h old)"
+  fi
 else
   echo "backup: WARNING no local snapshots in $BACKUP_DIR"
 fi
+# backup_db.sh writes this on every run; surface a FAIL verbatim so the reason
+# appears in the summary instead of only in the unit's own journal.
+if [ -f "$BACKUP_DIR/.backup_status" ]; then
+  echo "backup: last run -> $(head -c 300 "$BACKUP_DIR/.backup_status")"
+else
+  echo "backup: WARNING no .backup_status — backup_db.sh has not completed a run"
+fi
 
 # 3. Tailscale cert expiry (days remaining).
+# 🔴 FIX 2026-08-15: this depended entirely on TAILSCALE_HOSTNAME, which the
+# broken .env sourcing never set — so it cried "cert not found" every day while
+# the cert sat right there in certs/. Fall back to discovering the newest .crt
+# in CERT_DIR. Three lines of this summary were warnings and only ONE was true;
+# that is what trained everyone to ignore it, and it is why a month of failed
+# backups went unnoticed. A health check is only worth having if its warnings
+# mean something.
 crt="$CERT_DIR/${TAILSCALE_HOSTNAME:-}.crt"
-if [ -n "${TAILSCALE_HOSTNAME:-}" ] && [ -f "$crt" ]; then
+if [ -z "${TAILSCALE_HOSTNAME:-}" ] || [ ! -f "$crt" ]; then
+  crt=$(ls -1t "$CERT_DIR"/*.crt 2>/dev/null | head -1)
+fi
+if [ -n "${crt:-}" ] && [ -f "$crt" ]; then
   na=$(openssl x509 -enddate -noout -in "$crt" 2>/dev/null | cut -d= -f2)
   if [ -n "$na" ]; then
     days=$(( ( $(date -d "$na" +%s) - $(date +%s) ) / 86400 ))
@@ -47,7 +96,7 @@ if [ -n "${TAILSCALE_HOSTNAME:-}" ] && [ -f "$crt" ]; then
     echo "cert: WARNING could not parse NotAfter from $crt"
   fi
 else
-  echo "cert: WARNING cert not found (TAILSCALE_HOSTNAME=${TAILSCALE_HOSTNAME:-unset})"
+  echo "cert: WARNING no .crt found in $CERT_DIR (TAILSCALE_HOSTNAME=${TAILSCALE_HOSTNAME:-unset})"
 fi
 
 # 4. Backend service status.

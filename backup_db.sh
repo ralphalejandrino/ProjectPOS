@@ -13,7 +13,15 @@ set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DB_SRC="$SCRIPT_DIR/db.sqlite3"
-BACKUP_DIR="$SCRIPT_DIR/backups"
+# #2 backup fix (2026-08-15): BACKUP_DIR pointed INSIDE the repo
+# ("$SCRIPT_DIR/backups"), which the service user cannot write — the repo is
+# tarsier:tarsier mode 750 and the unit runs as posadmin. So `mkdir -p` failed,
+# the sqlite destination could not be created ("unable to open database file"),
+# and the status file could not be written either. Result: 25 runs, 0 successes,
+# no automated backup on the live register from 2026-07-19 to 2026-08-15.
+# Now defaults to the SIBLING dir /opt/tarsierpos/backups — where the manual
+# pre-deploy snapshots already live — and is overridable for other installs.
+BACKUP_DIR="${TARSIERPOS_BACKUP_DIR:-$(dirname "$SCRIPT_DIR")/backups}"
 LOG_DIR="$SCRIPT_DIR/logs"
 LOG="$LOG_DIR/backup.log"
 STATUS="$BACKUP_DIR/.backup_status"          # "OK <ts> ..." | "FAIL <ts> <reason>"
@@ -39,6 +47,15 @@ fail() {
 
 [ -f "$DB_SRC" ] || fail "db.sqlite3 not found at $DB_SRC"
 [ -n "$PY" ]     || fail "no python interpreter found (venv or python3)"
+
+# #2 backup fix: probe writability EXPLICITLY and fail with the exact remedy.
+# The old code swallowed the mkdir error with `|| true` and then died deep in
+# sqlite with "unable to open database file", which reads like a corrupt DB
+# rather than a permissions problem — and buried the one thing an operator
+# needs to know. A backup that cannot be written must say so in one line.
+if [ ! -d "$BACKUP_DIR" ] || [ ! -w "$BACKUP_DIR" ]; then
+    fail "backup dir not writable by $(id -un): $BACKUP_DIR — fix with: sudo install -d -o $(id -un) -g $(id -gn) $BACKUP_DIR"
+fi
 
 # Consistent online backup + integrity check, entirely in Python (no CLI).
 if ! "$PY" - "$DB_SRC" "$DEST" <<'PYEOF'
