@@ -7,6 +7,10 @@ to keep taking orders when the internet drops, which in Baguio it does.
 **This is production software.** It runs a café's register daily: real orders, real
 receipts, real inventory, real end-of-day reconciliation.
 
+![The sale screen — order entry with cart, variants and payment methods](docs/screenshots/01-sale-screen.jpg)
+
+<sub>Screenshots are from the demo instance. No client data appears anywhere in this repository.</sub>
+
 ---
 
 ## Why it looks like this
@@ -41,6 +45,13 @@ credentials are encrypted at rest with Fernet (`pos.fields.FernetEncryptedField`
 | **Reporting** | Z-report, period reports, COGS reporting, end-of-day reconciliation |
 | **Access** | JWT auth with role-based permissions and per-scope serializers |
 | **Ops** | systemd units, kiosk mode, network watchdog, TLS cert renewal, backup rotation |
+
+### End of day, and where the cost comes from
+
+| | |
+|---|---|
+| ![Z-report](docs/screenshots/02-z-report.png) | ![Recipe builder](docs/screenshots/03-recipe-builder.png) |
+| **Z-report.** An immutable end-of-shift close with the BIR fields a Philippine register is required to print — MIN, serial, accreditation and permit numbers, and SC/PWD discount lines broken out separately. | **Recipe builder.** Ingredients per serving, per menu item and per variant. This is what makes COGS derivable rather than guessed, and it is where the per-serving vs. per-batch bug came from. |
 
 ---
 
