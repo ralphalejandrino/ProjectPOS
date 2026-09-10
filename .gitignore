@@ -16,6 +16,9 @@ db.sqlite3-wal
 certs/
 media/
 
+# ── Build output — regenerate with `manage.py collectstatic` ──
+staticfiles/
+
 # ── Tool & runtime artifacts ─────────────────────
 .claude-flow/
 frontend/public/.claude-flow/

@@ -1,0 +1,7 @@
+# Django collectstatic output and third-party assets are not this project's code.
+# Without this, GitHub reports a Django codebase as majority JavaScript.
+staticfiles/**            linguist-vendored
+frontend/public/vendor/** linguist-vendored
+*.min.js                  linguist-vendored
+*.min.css                 linguist-vendored
+docs/**                   linguist-documentation
