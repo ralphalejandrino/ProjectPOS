@@ -1,4 +1,4 @@
-# TarsierPOS
+# ProjectPOS
 
 An offline-first point-of-sale system for small cafés and restaurants. Django + DRF
 on the back, a vanilla-JS progressive web app on the front, SQLite underneath — built
